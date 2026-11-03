@@ -216,6 +216,8 @@ const courtBoundary: Polygon = [courtBankBoundary.map(([x, z]) => [x, z])];
 const courtBoundaryEdges = courtBankBoundary.slice(1).map((b, index) => {
   const a = courtBankBoundary[index];
   return {
+    a,
+    b,
     minX: Math.min(a[0], b[0]),
     maxX: Math.max(a[0], b[0]),
     minZ: Math.min(a[1], b[1]),
@@ -255,7 +257,9 @@ function crossesCourtBoundary(
               edge.minX <= x + width &&
               edge.maxX >= x &&
               edge.minZ <= z + depth &&
-              edge.maxZ >= z,
+              edge.maxZ >= z &&
+              segmentDistance([x + width / 2, z + depth / 2], edge.a, edge.b) <=
+                Math.hypot(width, depth) / 2 + 1e-8,
           )
       )
         return true;

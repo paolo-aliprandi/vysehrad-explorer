@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: ubuntu-24.04
     env:
       NX_NO_CLOUD: 'true'
       VITE_BASE_PATH: /${{ github.event.repository.name }}/
@@ -27,7 +27,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npx nx test vysehrad-explorer --args='--maxWorkers=1' --output-style=static
+      - run: npx nx test vysehrad-explorer --args='--maxWorkers=2' --output-style=static
       - run: npx nx build vysehrad-explorer --output-style=static
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
