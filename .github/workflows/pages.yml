@@ -19,15 +19,16 @@ jobs:
       NX_NO_CLOUD: 'true'
       VITE_BASE_PATH: /${{ github.event.repository.name }}/
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      - run: npx nx run-many -t test build -p vysehrad-explorer --parallel=1 --output-style=static
+      - run: npx nx test vysehrad-explorer --args='--maxWorkers=1' --output-style=static
+      - run: npx nx build vysehrad-explorer --output-style=static
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
