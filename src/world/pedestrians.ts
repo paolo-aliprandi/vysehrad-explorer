@@ -1,0 +1,214 @@
+import { blocked, gateBuildings, standingElevation, type Point } from './geo';
+import { explorationPaths as paths } from './landscape';
+
+type Node = { point: Point; edges: Map<number, number> };
+const distance = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const gate = gateBuildings.find((item) => item.feature.id === 49811189);
+if (!gate) throw new Error('Táborská Gate is missing from the visitor routes.');
+export const visitorExit = {
+  center: gate.center,
+  axis: gate.axis,
+  depth: gate.depth,
+  point: [
+    gate.center[0] + gate.axis[1] * (gate.depth / 2 + 0.6),
+    gate.center[1] - gate.axis[0] * (gate.depth / 2 + 0.6),
+  ] as Point,
+};
+
+export function visitorRouteClear(a: Point, b: Point) {
+  const steps = Math.max(1, Math.ceil(distance(a, b) / 0.6));
+  let previous = standingElevation(a);
+  for (let i = 0; i <= steps; i++) {
+    const point: Point = [
+      a[0] + ((b[0] - a[0]) * i) / steps,
+      a[1] + ((b[1] - a[1]) * i) / steps,
+    ];
+    const height = standingElevation(point);
+    if (blocked(point, height) || Math.abs(height - previous) > 0.8)
+      return false;
+    previous = height;
+  }
+  return true;
+}
+
+export function createVisitorRoutes(random = Math.random): Point[][] {
+  const nodes: Node[] = [];
+  const indices = new Map<string, number>();
+  const node = (point: Point) => {
+    const key = point.map((value) => value.toFixed(2)).join(',');
+    const existing = indices.get(key);
+    if (existing !== undefined) return existing;
+    const index = nodes.length;
+    indices.set(key, index);
+    nodes.push({ point, edges: new Map() });
+    return index;
+  };
+  const connect = (a: number, b: number) => {
+    const length = distance(nodes[a].point, nodes[b].point);
+    if (!length || !visitorRouteClear(nodes[a].point, nodes[b].point)) return;
+    nodes[a].edges.set(b, length);
+    nodes[b].edges.set(a, length);
+  };
+  const insideCastle = ([x, z]: Point) => {
+    const v =
+      -(x - visitorExit.center[0]) * visitorExit.axis[1] +
+      (z - visitorExit.center[1]) * visitorExit.axis[0];
+    return (
+      x > -315 &&
+      x < 280 &&
+      z > -195 &&
+      z < 325 &&
+      (z < 275 || x > 180) &&
+      (distance([x, z], visitorExit.center) > 35 || v >= -visitorExit.depth / 2)
+    );
+  };
+  for (const path of paths) {
+    if (path.tags.tunnel === 'yes') continue;
+    for (let i = 1; i < path.points.length; i++) {
+      const a = path.points[i - 1],
+        b = path.points[i];
+      if (insideCastle(a) && insideCastle(b)) connect(node(a), node(b));
+    }
+  }
+  const inner: Point = [
+    visitorExit.center[0] - visitorExit.axis[1] * (visitorExit.depth / 2 + 2),
+    visitorExit.center[1] + visitorExit.axis[0] * (visitorExit.depth / 2 + 2),
+  ];
+  const innerIndex = node(inner),
+    gateIndex = node(visitorExit.center),
+    exit = node(visitorExit.point);
+  const nearby = nodes
+    .map((item, index) => ({ index, distance: distance(item.point, inner) }))
+    .filter(
+      (item) =>
+        item.index !== innerIndex &&
+        item.distance < 25 &&
+        nodes[item.index].edges.size,
+    )
+    .sort((a, b) => a.distance - b.distance)
+    .find((item) => visitorRouteClear(inner, nodes[item.index].point));
+  if (!nearby) throw new Error('The castle paths do not reach Táborská Gate.');
+  connect(innerIndex, nearby.index);
+  connect(innerIndex, gateIndex);
+  connect(gateIndex, exit);
+
+  const routesTo = (target: number) => {
+    const costs = new Map<number, number>([[target, 0]]);
+    const next = new Map<number, number>();
+    const pending = new Set<number>([target]);
+    while (pending.size) {
+      let current = -1,
+        cheapest = Infinity;
+      for (const index of pending) {
+        const cost = costs.get(index);
+        if (cost !== undefined && cost < cheapest) {
+          current = index;
+          cheapest = cost;
+        }
+      }
+      if (current < 0)
+        throw new Error('Visitor route search could not make progress.');
+      pending.delete(current);
+      for (const [neighbor, length] of nodes[current].edges) {
+        const cost = cheapest + length;
+        if (cost < (costs.get(neighbor) ?? Infinity)) {
+          costs.set(neighbor, cost);
+          next.set(neighbor, current);
+          pending.add(neighbor);
+        }
+      }
+    }
+    return { costs, next };
+  };
+  const outbound = routesTo(exit);
+  const candidates = [...outbound.costs.keys()].filter(
+    (index) =>
+      nodes[index].edges.size > 1 &&
+      distance(nodes[index].point, visitorExit.center) > 40,
+  );
+  if (!candidates.length)
+    throw new Error('There are no connected castle paths for visitors.');
+  const nearest = (point: Point) =>
+    candidates.reduce((best, index) =>
+      distance(nodes[index].point, point) < distance(nodes[best].point, point)
+        ? index
+        : best,
+    );
+  const append = (
+    route: Point[],
+    start: number,
+    target: number,
+    next: Map<number, number>,
+  ) => {
+    let current = start;
+    while (current !== target) {
+      const successor = next.get(current);
+      if (successor === undefined)
+        throw new Error('A visitor itinerary is disconnected.');
+      route.push(nodes[successor].point);
+      current = successor;
+    }
+  };
+  const starts: Point[] = [
+    [-251, 37],
+    [-130, -75],
+    [-30, 48],
+    [91, 83],
+    [100, 160],
+    [200, 240],
+  ];
+  return starts.map((point) => {
+    let current = nearest(point);
+    const route = [nodes[current].point];
+    for (let stop = 0; stop < 2; stop++) {
+      const currentPoint = nodes[current].point;
+      const choices = candidates.filter(
+        (index) => distance(nodes[index].point, currentPoint) > 45,
+      );
+      if (!choices.length)
+        throw new Error('Visitor stroll destinations are unavailable.');
+      const target = choices[Math.floor(random() * choices.length)];
+      append(route, current, target, routesTo(target).next);
+      current = target;
+    }
+    append(route, current, exit, outbound.next);
+    return route;
+  });
+}
+
+export class VisitorStroll {
+  point: Point;
+  heading = 0;
+  distance = 0;
+  departed = false;
+  private next = 1;
+  constructor(readonly route: readonly Point[]) {
+    if (route.length < 2)
+      throw new Error('A visitor needs a route to the exit.');
+    this.point = [...route[0]];
+  }
+  update(delta: number, speed: number) {
+    let remaining = delta * speed;
+    while (remaining > 0 && !this.departed) {
+      const target = this.route[this.next];
+      const length = distance(this.point, target);
+      this.heading = Math.atan2(
+        target[0] - this.point[0],
+        target[1] - this.point[1],
+      );
+      if (remaining < length) {
+        this.point = [
+          this.point[0] + ((target[0] - this.point[0]) * remaining) / length,
+          this.point[1] + ((target[1] - this.point[1]) * remaining) / length,
+        ];
+        this.distance += remaining;
+        return;
+      }
+      this.point = [...target];
+      this.distance += length;
+      remaining -= length;
+      this.next++;
+      this.departed = this.next >= this.route.length;
+    }
+  }
+}

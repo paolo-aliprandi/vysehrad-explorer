@@ -1,0 +1,10 @@
+{
+  "source": "OpenStreetMap",
+  "sourceUrl": "https://www.openstreetmap.org/way/162054137",
+  "license": "ODbL-1.0",
+  "attribution": "© OpenStreetMap contributors",
+  "carriageways": [
+    { "id": 4083705, "start": [693.53, -417.17], "end": [711.43, 168.82] },
+    { "id": 115927375, "start": [708.87, -417.75], "end": [721.57, 168.54] }
+  ]
+}
