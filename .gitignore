@@ -51,5 +51,7 @@ test-results
 playwright-report
 .env*
 !.env.example
+.dev.vars*
+.wrangler/
 __pycache__/
 /fixes/

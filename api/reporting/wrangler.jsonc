@@ -1,0 +1,21 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "vysehrad-reporting",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-04",
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGIN": "https://paolo-aliprandi.github.io",
+    "PUBLIC_URL": "https://vysehrad-reporting.paolo-aliprandi.workers.dev",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "vysehrad-reports",
+      "database_id": "3d77a54c-fc56-4e82-9efd-301310e6fb7c",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "triggers": { "crons": ["0 3 * * *"] },
+  "observability": { "enabled": false },
+}

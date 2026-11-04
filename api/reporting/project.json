@@ -1,0 +1,16 @@
+{
+  "name": "reporting-api",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "api/reporting/src",
+  "projectType": "library",
+  "tags": [],
+  "// targets": "to see all targets run: nx show project reporting-api --web",
+  "targets": {
+    "typecheck": {
+      "command": "tsc --noEmit -p api/reporting/tsconfig.lib.json"
+    },
+    "build": {
+      "command": "wrangler deploy --dry-run --config api/reporting/wrangler.jsonc --outdir ../../dist/reporting-api"
+    }
+  }
+}

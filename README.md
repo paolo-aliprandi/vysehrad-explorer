@@ -22,6 +22,9 @@ acceleration is required. The server binds to loopback, not the local network.
 
 - WASD or arrows: move; Shift: faster; Space: jump.
 - Drag: turn camera; scroll: zoom.
+- Touch screens: drag to look; double-tap and hold the scene to walk forward.
+  Release to stop. Drag during the hold to steer; cancellation or an extra finger
+  stops walking.
 - Choose Chill Exploration or Knight Adventure on the home screen.
 - Chill: Walking / Flying changes mode; E or Space rises and Q descends in flight.
 - Adventure: collect a stick, sword or bow; R attacks, Z aims, C switches weapons.
@@ -32,9 +35,65 @@ acceleration is required. The server binds to loopback, not the local network.
 - Visit glowing landmark markers to discover regions. Adventure disables flight
   and fast travel; cleared raids can be restarted without losing equipment or discoveries.
 
-Progress is saved in this browser's local storage. There are no accounts, server
-backend, multiplayer, analytics, external font requests, or runtime OSM API calls.
+Progress is saved in this browser's local storage. There are no accounts,
+multiplayer, analytics, external font requests, or runtime OSM API calls.
 Photo mode hides most UI; use your browser or OS screenshot tool to capture it.
+
+## Private map reports
+
+The in-world **Report / contribute a photo** form freezes the avatar's native map
+coordinates (not the 1.5x rendering coordinates), heading, interior and build
+revision. Phone GPS is optional and requested only after an explicit button press.
+The form previews the locations, requires permission to share the photo, resizes
+it to at most 1280 pixels, and re-encodes it without source EXIF metadata.
+
+`api/reporting` is a Cloudflare Workers Free + D1 service. It verifies Turnstile,
+limits and validates the multipart request, strips JPEG application metadata,
+stores photos privately, and returns a receipt only after durable storage.
+Limits are three reports per connection per hour, 20 reports globally per UTC day,
+256 KiB per photo and 30-day photo access. Daily cleanup also deletes the stored
+report payload; private GitHub issue metadata persists for human review.
+There is no background location collection and no automated model modification.
+
+The private `paolo-aliprandi/vysehrad-reports` repository runs the
+`api/reporting/review-reports.yml` workflow every 30 minutes. Its repo-scoped
+`GITHUB_TOKEN` has only issue-write permission. A separate random service secret
+allows the workflow to lease queued reports and acknowledge delivery. Failed or
+interrupted deliveries are retried; existing report IDs are reconciled before
+creating issues. GitHub scheduling may be delayed. No GitHub token reaches the
+website or Worker, and visitors never need a GitHub account.
+
+Private photo links are random, report-specific bearer links, not authenticated
+owner sessions. Anyone given a link can view that photo until it expires. They are
+not embedded through GitHub's image proxy, are not cached, and must not be shared
+publicly. D1 backup retention can outlast the live record's deletion.
+
+### Reporting operations
+
+```sh
+npm run reporting:dev
+npx wrangler d1 migrations apply vysehrad-reports --remote --config api/reporting/wrangler.jsonc
+npm run reporting:deploy
+```
+
+Worker secrets: `TURNSTILE_SECRET_KEY` and `REVIEW_SERVICE_KEY`. The latter must
+match the private review repository's `REPORT_REVIEW_KEY` Actions secret.
+Use `wrangler secret put` and `gh secret set`; never commit credentials.
+The private review repository's `REPORT_API_URL` variable points at the Worker.
+The website's public Actions variables `REPORT_API_URL` and `TURNSTILE_SITE_KEY`
+enable the form during the Pages build. Missing settings keep it hidden rather
+than displaying a non-working upload feature. `VITE_MODEL_REVISION` records the
+deployed commit.
+
+Monitor the private delivery workflow for failures and the Worker's `/health`
+endpoint for configuration readiness. Run its workflow manually to drain a queue
+immediately. Reports and photos never belong in the public model repository.
+Stay on the free plans: Workers includes 100,000 requests/day; D1 allows 500 MB per
+free database. The bounded 30-day photo set is about 150 MiB at the daily maximum.
+The 30-minute private workflow uses at most about 1,488 minimum-billed minutes in
+a 31-day month if every job finishes within one minute, against GitHub Free's
+shared private Actions allowance. Scheduled jobs are not a delivery-time SLA.
+No paid plan or automatic upgrade is configured.
 
 ## Deployment
 

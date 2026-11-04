@@ -18,6 +18,9 @@ jobs:
     env:
       NX_NO_CLOUD: 'true'
       VITE_BASE_PATH: /${{ github.event.repository.name }}/
+      VITE_MODEL_REVISION: ${{ github.sha }}
+      VITE_REPORT_API_URL: ${{ vars.REPORT_API_URL }}
+      VITE_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -29,6 +32,7 @@ jobs:
       - run: npm run lint
       - run: npx nx test vysehrad-explorer --args='--maxWorkers=2' --output-style=static
       - run: npx nx build vysehrad-explorer --output-style=static
+      - run: npx nx build reporting-api --output-style=static
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -17,6 +17,7 @@ import {
   type TimeOfDay,
 } from './lighting';
 import { idleController, type ControllerInput } from './gamepad';
+import { TouchWalk } from './touch';
 import {
   chapelSites,
   chapelBlocked,
@@ -602,7 +603,8 @@ export class World {
   private jumpVelocity = 0;
   private distance = 0;
   private discovered = new Set<string>();
-  private drag: { x: number; y: number } | null = null;
+  private drag: { id: number; x: number; y: number } | null = null;
+  private touch = new TouchWalk();
   private active = false;
   private paused = false;
   private flying = false;
@@ -885,6 +887,7 @@ export class World {
     host.addEventListener('pointermove', this.pointerMove);
     host.addEventListener('pointerup', this.pointerUp);
     host.addEventListener('pointercancel', this.pointerUp);
+    host.addEventListener('lostpointercapture', this.pointerLost);
     host.addEventListener('wheel', this.wheel, { passive: false });
     this.renderer.domElement.addEventListener(
       'webglcontextlost',
@@ -2033,6 +2036,16 @@ export class World {
     if (paused) this.adventure.aiming = false;
     this.clearInput();
   }
+
+  reportLocation() {
+    const position = this.indoorReturn?.position ?? this.position;
+    return {
+      x: position.x,
+      z: position.z,
+      heading: this.indoorReturn?.yaw ?? this.yaw,
+      interior: this.indoorReturn?.kind ?? null,
+    };
+  }
   setDiscoveries(ids: string[]) {
     this.discovered = new Set(ids);
   }
@@ -3141,6 +3154,7 @@ export class World {
   private clearInput = () => {
     this.keys.clear();
     this.drag = null;
+    this.touch.cancel();
     this.controller = idleController;
   };
   private keyDown = (event: KeyboardEvent) => {
@@ -3194,21 +3208,44 @@ export class World {
   };
   private pointerDown = (event: PointerEvent) => {
     if (!this.active || this.paused) return;
+    if (event.pointerType === 'touch') {
+      if (!event.isPrimary) {
+        this.clearInput();
+        return;
+      }
+      this.touch.start(
+        event.pointerId,
+        event.clientX,
+        event.clientY,
+        event.timeStamp,
+      );
+      if (this.touch.walking && this.seat) this.stand();
+    }
     this.host.setPointerCapture(event.pointerId);
-    this.drag = { x: event.clientX, y: event.clientY };
+    this.drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
   };
   private pointerMove = (event: PointerEvent) => {
-    if (!this.drag) return;
+    if (!this.drag || this.drag.id !== event.pointerId) return;
+    this.touch.move(event.pointerId, event.clientX, event.clientY);
     this.yaw -= (event.clientX - this.drag.x) * 0.005;
     this.pitch = THREE.MathUtils.clamp(
       this.pitch + (event.clientY - this.drag.y) * 0.003,
       0.05,
       1.2,
     );
-    this.drag = { x: event.clientX, y: event.clientY };
+    this.drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
   };
-  private pointerUp = () => {
+  private pointerUp = (event: PointerEvent) => {
+    if (this.drag?.id !== event.pointerId) return;
+    this.touch.end(
+      event.pointerId,
+      event.timeStamp,
+      event.type === 'pointercancel',
+    );
     this.drag = null;
+  };
+  private pointerLost = (event: PointerEvent) => {
+    if (this.drag?.id === event.pointerId) this.clearInput();
   };
   private wheel = (event: WheelEvent) => {
     if (!this.active || this.paused) return;
@@ -3320,7 +3357,7 @@ export class World {
       const held = (...keys: string[]) =>
         keys.some((key) => this.keys.has(key));
       let forward =
-        Number(held('KeyW', 'ArrowUp')) -
+        Number(held('KeyW', 'ArrowUp') || this.touch.walking) -
         Number(held('KeyS', 'ArrowDown')) -
         this.controller.move[1];
       let right =
@@ -3748,6 +3785,7 @@ export class World {
     this.host.removeEventListener('pointermove', this.pointerMove);
     this.host.removeEventListener('pointerup', this.pointerUp);
     this.host.removeEventListener('pointercancel', this.pointerUp);
+    this.host.removeEventListener('lostpointercapture', this.pointerLost);
     this.host.removeEventListener('wheel', this.wheel);
     this.renderer.domElement.removeEventListener(
       'webglcontextlost',

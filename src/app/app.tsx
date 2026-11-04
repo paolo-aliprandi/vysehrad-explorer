@@ -36,6 +36,8 @@ import {
   type GameMode,
 } from '../world/adventure';
 import './app.css';
+import { ReportForm } from '../reporting/report-form';
+import type { ReportLocation } from '../../api/reporting/src/report';
 import {
   nearbyPointsOfInterest,
   pointsOfInterest,
@@ -43,6 +45,8 @@ import {
 
 const baseUrl = import.meta.env.BASE_URL;
 const welcomeAerials = ['fortress', 'cathedral', 'gates'];
+const reportApi = import.meta.env.VITE_REPORT_API_URL;
+const reportSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
 type IconName =
   | 'castle'
@@ -350,7 +354,10 @@ export function App() {
   const [undergroundNotes, setUndergroundNotes] = useState<string[]>([]);
   const [toast, setToast] = useState('');
   const [storageWarning, setStorageWarning] = useState('');
-  const [modal, setModal] = useState<'map' | 'help' | 'about' | 'npc' | null>(
+  const [modal, setModal] = useState<
+    'map' | 'help' | 'about' | 'npc' | 'report' | null
+  >(null);
+  const [reportLocation, setReportLocation] = useState<ReportLocation | null>(
     null,
   );
   const [npcTopic, setNpcTopic] = useState<
@@ -1282,23 +1289,28 @@ export function App() {
               </>
             ) : (
               <>
-                <span>
+                <span className="touch-controls">
+                  Drag to look · Double-tap and hold to walk · Release to stop
+                </span>
+                <span className="desktop-controls">
                   <kbd>F</kbd>Interact
                 </span>
-                <span>
+                <span className="desktop-controls">
                   <kbd>W</kbd>
                   <kbd>A</kbd>
                   <kbd>S</kbd>
                   <kbd>D</kbd>Move
                 </span>
-                <span>
+                <span className="desktop-controls">
                   <kbd>SHIFT</kbd>Faster
                 </span>
-                <span>
+                <span className="desktop-controls">
                   <kbd>{flying ? 'E / Q' : 'SPACE'}</kbd>
                   {flying ? 'Rise / descend' : 'Jump'}
                 </span>
-                <span>Drag to look · Scroll to zoom</span>
+                <span className="desktop-controls">
+                  Drag to look · Scroll to zoom
+                </span>
               </>
             )}
             {snapshot.controller && !snapshot.controllerSupported && (
@@ -1440,6 +1452,38 @@ export function App() {
           </button>
         )}
       </footer>
+
+      {started && !photo && reportApi && reportSiteKey && (
+        <button
+          className="report-button pill"
+          onClick={() => {
+            const location = world.current?.reportLocation();
+            if (!location) {
+              setToast('The world is still loading. Please try again.');
+              return;
+            }
+            world.current?.setPaused(true);
+            setReportLocation(location);
+            setModal('report');
+          }}
+        >
+          Report / contribute a photo
+        </button>
+      )}
+      {modal === 'report' && reportLocation && (
+        <Dialog
+          title="Help improve this little world."
+          onClose={() => setModal(null)}
+        >
+          <ReportForm
+            location={reportLocation}
+            revision={import.meta.env.VITE_MODEL_REVISION || 'development'}
+            endpoint={reportApi}
+            siteKey={reportSiteKey}
+            onDone={() => setModal(null)}
+          />
+        </Dialog>
+      )}
 
       {modal === 'map' && (
         <Dialog

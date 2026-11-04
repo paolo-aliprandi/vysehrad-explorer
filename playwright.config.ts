@@ -19,6 +19,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
+    env: {
+      VITE_REPORT_API_URL: 'https://reports.test',
+      VITE_TURNSTILE_SITE_KEY: 'browser-test-key',
+    },
     command: 'npm start -- --port 5174',
     url: 'http://127.0.0.1:5174',
     reuseExistingServer: false,

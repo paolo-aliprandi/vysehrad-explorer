@@ -23,6 +23,105 @@
   width: 100%;
   height: 100%;
 }
+.touch-controls {
+  display: none;
+}
+@media (pointer: coarse) {
+  .controls-bar > .desktop-controls {
+    display: none;
+  }
+  .controls-bar > .touch-controls {
+    display: inline;
+  }
+}
+.report-button {
+  position: absolute;
+  z-index: 4;
+  right: 24px;
+  top: 100px;
+  max-width: calc(100vw - 32px);
+  background: #f3efe2;
+  font-size: 11px;
+}
+.report-form {
+  max-width: 620px;
+  color: #43584c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.report-form fieldset {
+  padding: 0;
+  border: 0;
+  margin: 0;
+  min-width: 0;
+}
+.report-form label,
+.report-location,
+.report-gps {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 16px 0;
+}
+.report-location {
+  padding: 14px;
+  background: #e8ebdf;
+  border-radius: 8px;
+}
+.report-form input:not([type='checkbox']),
+.report-form select,
+.report-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #aeb8a9;
+  border-radius: 5px;
+  background: #fffdf6;
+  color: #263d32;
+  font: inherit;
+}
+.report-form textarea {
+  resize: vertical;
+}
+.report-preview {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  background: #e8ebdf;
+}
+.report-form .report-consent {
+  flex-direction: row;
+  align-items: flex-start;
+}
+.report-consent input {
+  margin-top: 6px;
+}
+.report-privacy,
+.report-location small {
+  font-size: 11px;
+}
+.report-form [role='alert'] {
+  color: #8e302b;
+}
+.report-gps button {
+  align-self: flex-start;
+  text-decoration: underline;
+}
+.report-form .primary-button {
+  margin-top: 16px;
+}
+.report-captcha {
+  max-width: 100%;
+  overflow: auto;
+}
+@media (max-width: 800px) {
+  .report-button {
+    top: 90px;
+    right: 16px;
+    font-size: 10px;
+  }
+}
 .welcome-aerials {
   position: absolute;
   inset: 0;
