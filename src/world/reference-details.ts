@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gardenKioskSite, kioskShell } from './kiosks';
 import polygonClipping, { type Polygon } from 'polygon-clipping';
 import {
   referenceSites,
@@ -556,20 +557,7 @@ function makeRoyalWallIvy(add: AddGeometry) {
 
 export function makeGardenKiosk(add: AddGeometry) {
   const site = referenceSites.gardenKiosk;
-  const ground = Math.max(
-    ...[-1, 1].flatMap((u) =>
-      [-1, 1].map((v) =>
-        elevation(
-          site.point[0] +
-            (Math.cos(site.angle) * u * site.width) / 2 +
-            (Math.sin(site.angle) * v * site.depth) / 2,
-          site.point[1] -
-            (Math.sin(site.angle) * u * site.width) / 2 +
-            (Math.cos(site.angle) * v * site.depth) / 2,
-        ),
-      ),
-    ),
-  );
+  const ground = gardenKioskSite.ground;
   const emit = localEmitter(site.point, ground, site.angle, add);
   emit(
     new THREE.BoxGeometry(site.width + 0.3, 0.55, site.depth + 0.3).translate(
@@ -580,7 +568,12 @@ export function makeGardenKiosk(add: AddGeometry) {
     '#99917f',
   );
   emit(
-    new THREE.BoxGeometry(site.width, 2.6, site.depth).translate(0, 1.3, 0),
+    kioskShell(site.width, site.depth, 2.6, {
+      center: -0.3,
+      width: 3.55,
+      sill: 1.04,
+      head: 2.24,
+    }),
     '#5a634c',
     'wood',
   );
@@ -594,10 +587,10 @@ export function makeGardenKiosk(add: AddGeometry) {
     new THREE.BoxGeometry(3.55, 1.2, 0.08).translate(
       -0.3,
       1.64,
-      site.depth / 2 + 0.045,
+      -site.depth / 2 + 0.17,
     ),
     '#28342e',
-    'glass',
+    'wood',
   );
   for (const u of [-2.12, 1.52])
     emit(

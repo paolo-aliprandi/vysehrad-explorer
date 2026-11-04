@@ -35,6 +35,8 @@ import {
   casemateUphillExit,
   retainedStreetAreas,
   retainedStreetAccess,
+  retainedStreetBanks,
+  retainedStreetBankElevation,
   onRetainedStreetSurface,
   segmentDistance,
   type Point,
@@ -61,11 +63,18 @@ export function clipTerrainAtArcades(
   source: THREE.BufferGeometry,
   sealExcavation = true,
   streetCuts = true,
+  streetFloor?: (point: Point) => number,
 ) {
   // Bound excavation to porch slabs and tunnel mouths, preserving rock above the entrance vault.
   const position = source.attributes.position;
   if (!position.count) return source;
-  const outlines = [
+  const outlines: {
+    points: readonly Point[];
+    floorBottom: number;
+    ceiling: number;
+    seal: boolean;
+    street?: boolean;
+  }[] = [
     ...cemeteryArcades.map(({ feature }) => ({
       points: feature.points,
       floorBottom: foundation(feature) - 0.15,
@@ -121,6 +130,7 @@ export function clipTerrainAtArcades(
         floorBottom: 0,
         ceiling: Infinity,
         seal: false,
+        street: true,
       })),
     );
   const areas = outlines.map((area) => ({
@@ -249,23 +259,34 @@ export function clipTerrainAtArcades(
               b = ring[(i + 1) % ring.length];
             const outline = nearby.find((area) =>
               area.points.some((p, index) => {
-                if (!index) return false;
-                const previous = area.points[index - 1];
+                const previous =
+                  area.points[
+                    (index + area.points.length - 1) % area.points.length
+                  ];
                 return (
-                  segmentDistance(a, previous, p) < 1e-6 &&
-                  segmentDistance(b, previous, p) < 1e-6
+                  segmentDistance(a, previous, p) < 0.0015 &&
+                  segmentDistance(b, previous, p) < 0.0015
                 );
               }),
             );
-            if (!outline?.seal) continue;
+            if (!outline || (!outline.seal && !(outline.street && streetFloor)))
+              continue;
+            const bottomA =
+              outline.street && streetFloor
+                ? streetFloor(a)
+                : outline.floorBottom;
+            const bottomB =
+              outline.street && streetFloor
+                ? streetFloor(b)
+                : outline.floorBottom;
             // Use this terrain triangle's interpolated crest, not a resampled height,
             // so the cut face joins its exact mesh edge without cracks.
             emit(a, triangle, undefined, true);
             emit(b, triangle, undefined, true);
-            emit(a, triangle, outline.floorBottom, true);
+            emit(a, triangle, bottomA, true);
             emit(b, triangle, undefined, true);
-            emit(b, triangle, outline.floorBottom, true);
-            emit(a, triangle, outline.floorBottom, true);
+            emit(b, triangle, bottomB, true);
+            emit(a, triangle, bottomA, true);
           }
     }
   }
@@ -278,6 +299,84 @@ export function clipTerrainAtArcades(
   source.boundingBox = null;
   source.boundingSphere = null;
   return source;
+}
+
+export function retainedStreetTerrain() {
+  const polygons = retainedStreetAreas.map((area) => area.polygon);
+  const geometries = retainedStreetAreas.map((area, index) => {
+    const bank = retainedStreetBanks.find((bank) => bank === area);
+    return drapedPolygon(
+      area.polygon,
+      0,
+      bank ? (x, z) => retainedStreetBankElevation(bank, [x, z]) : elevation,
+      polygons.slice(0, index),
+      'feature' in area && area !== retainedStreetAccess,
+    );
+  });
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const meshes = geometries.map((geometry) => {
+    geometry.computeBoundingBox();
+    return new THREE.Mesh(geometry, material);
+  });
+  const ray = new THREE.Raycaster();
+  const triangle = new THREE.Triangle();
+  const query = new THREE.Vector3();
+  const nearest = new THREE.Vector3();
+  const weights = new THREE.Vector3();
+  const cache = new Map<string, number>();
+  const heightAt = (point: Point) => {
+    const key = `${point[0]},${point[1]}`;
+    const cached = cache.get(key);
+    if (cached !== undefined) return cached;
+    ray.set(
+      new THREE.Vector3(point[0], 200, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    );
+    const hit = ray.intersectObjects(meshes, false)[0];
+    if (hit) {
+      cache.set(key, hit.point.y);
+      return hit.point.y;
+    }
+    // Snap millimeter-rounded excavation edges to the actual mesh, including narrow tips.
+    let distance = 0.002 ** 2;
+    let height: number | undefined;
+    query.set(point[0], 0, point[1]);
+    for (const geometry of geometries) {
+      const bounds = geometry.boundingBox;
+      if (
+        !bounds ||
+        point[0] < bounds.min.x - 0.002 ||
+        point[0] > bounds.max.x + 0.002 ||
+        point[1] < bounds.min.z - 0.002 ||
+        point[1] > bounds.max.z + 0.002
+      )
+        continue;
+      const positions = geometry.attributes.position;
+      for (let i = 0; i < positions.count; i += 3) {
+        triangle.a.set(positions.getX(i), 0, positions.getZ(i));
+        triangle.b.set(positions.getX(i + 1), 0, positions.getZ(i + 1));
+        triangle.c.set(positions.getX(i + 2), 0, positions.getZ(i + 2));
+        if (triangle.getArea() < 1e-12) continue;
+        triangle.closestPointToPoint(query, nearest);
+        const squared = query.distanceToSquared(nearest);
+        if (squared > distance) continue;
+        triangle.getBarycoord(nearest, weights);
+        distance = squared;
+        height =
+          weights.x * positions.getY(i) +
+          weights.y * positions.getY(i + 1) +
+          weights.z * positions.getY(i + 2);
+      }
+    }
+    if (height !== undefined) {
+      cache.set(key, height);
+      return height;
+    }
+    throw new Error(
+      `Missing constructed street terrain at ${point.join(',')}.`,
+    );
+  };
+  return { geometries, heightAt };
 }
 
 function geometry(vertices: number[]) {

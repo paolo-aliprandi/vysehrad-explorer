@@ -433,8 +433,9 @@ describe('knight adventure', () => {
     expect(adventure.snapshot().explored).toEqual(['rotunda']);
   });
 
-  it('buys and eats reachable food at all three venues without charging at full health or without money', () => {
+  it('buys and eats reachable food at every venue without charging at full health or without money', () => {
     const adventure = new Adventure();
+    adventure.coins = foodShops.length * 3 + 3;
     for (const shop of foodShops) {
       adventure.health = 1;
       adventure.eatTime = 0;

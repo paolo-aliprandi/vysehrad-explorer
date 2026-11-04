@@ -5,6 +5,7 @@ import {
   retainedStreetCorridors,
   retainedStreetWalls,
   retainedStreetBanks,
+  rotundaStreet,
   retainedStreetBankElevation,
   walls,
   wallProfile,
@@ -32,10 +33,56 @@ import {
   ribbonEdges,
   samplePolyline,
   clipTerrainAtArcades,
+  retainedStreetTerrain,
 } from './surfaces';
 import { makeCemeteryArcade } from './architecture';
 
 describe('connected world surfaces', () => {
+  it('keeps replacement soil below Brick Gate instead of pulling it up to the roof', () => {
+    const terrain = retainedStreetTerrain();
+    const point: Point = [-98, -76.7938];
+    expect(terrain.heightAt(point)).toBeCloseTo(elevation(...point), 1);
+    expect(terrain.heightAt(point)).toBeLessThan(32);
+    terrain.geometries.forEach((geometry) => geometry.dispose());
+  });
+
+  it('closes the actual cut edge between the rotunda bank and replacement soil', () => {
+    const terrain = retainedStreetTerrain();
+    expect(Number.isFinite(terrain.heightAt([-77.888, -67.639]))).toBe(true);
+    const point = samplePolyline(rotundaStreet.polygon, 0.25).sort(
+      (a, b) =>
+        Math.hypot(a[0] - 72.5, a[1] - 84) - Math.hypot(b[0] - 72.5, b[1] - 84),
+    )[0];
+    const geometry = new THREE.PlaneGeometry(8, 8, 2, 2)
+      .rotateX(-Math.PI / 2)
+      .translate(point[0], 0, point[1]);
+    const positions = geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++)
+      positions.setY(
+        i,
+        unretainedElevation(positions.getX(i), positions.getZ(i)),
+      );
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geometry, material);
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(point[0], 100, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    );
+    const oldHeight = ray.intersectObject(mesh)[0].point.y;
+    const floor = terrain.heightAt(point);
+    expect(Math.abs(oldHeight - floor)).toBeGreaterThan(0.1);
+    clipTerrainAtArcades(geometry, true, true, terrain.heightAt);
+    ray.set(
+      new THREE.Vector3(point[0] - 0.02, (oldHeight + floor) / 2, point[1]),
+      new THREE.Vector3(1, 0, 0),
+    );
+    ray.far = 0.04;
+    expect(ray.intersectObject(mesh).length).toBeGreaterThan(0);
+    geometry.dispose();
+    material.dispose();
+    terrain.geometries.forEach((geometry) => geometry.dispose());
+  });
+
   it('joins every outer and end bank edge back to existing ground without open height seams', () => {
     let maximumError = 0;
     for (const bank of retainedStreetBanks)

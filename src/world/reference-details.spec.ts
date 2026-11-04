@@ -420,7 +420,8 @@ it('puts a supported kiosk and its counter in the marked lawn without blocking t
       new THREE.Vector3(front[0], ground + 1.7, front[1]),
       new THREE.Vector3(-Math.sin(kiosk.angle), 0, -Math.cos(kiosk.angle)),
     ).intersectObjects(scene.meshes)[0];
-    expect(counter?.object.name).toMatch(/^glass:/);
+    expect(counter?.object.name).toMatch(/^wood:/);
+    expect(counter?.distance).toBeGreaterThan(4);
     expect(sitePropBlocked(front, elevation(...front))).toBe(false);
     const procopius = sculptures.find(
       (sculpture) => sculpture.id === 4294837398,

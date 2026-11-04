@@ -1,4 +1,11 @@
 import * as THREE from 'three';
+import {
+  kioskSites,
+  kioskReply,
+  kioskBuildingGeometry,
+  lawrenceKioskSite,
+  makeLawrenceKiosk,
+} from './kiosks';
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 import { makePragueSkyline } from './skyline';
 import { makeDrone } from './drone';
@@ -67,6 +74,7 @@ import {
   cliffTerrain,
   gardenBankTerrain,
   clipTerrainAtArcades,
+  retainedStreetTerrain,
 } from './surfaces';
 import {
   decorateBuilding,
@@ -105,11 +113,13 @@ import {
   createVisitorRoutes,
   visitorShopStops,
   gardenVisitorRoute,
+  kioskVisitorRoutes,
   VisitorStroll,
 } from './pedestrians';
 import {
   benches,
   groundskeeper,
+  kioskActivities,
   cathedral,
   casemates,
   uphillCasemates,
@@ -132,15 +142,11 @@ import {
   center,
   discoveredNear,
   elevation,
-  featureElevation,
   upperElevation,
   originalElevation,
   unretainedElevation,
-  retainedStreetBanks,
   retainedStreetWalls,
   retainedStreetAreas,
-  retainedStreetAccess,
-  retainedStreetBankElevation,
   retainedStreetSection,
   standingElevation,
   coverAt,
@@ -517,6 +523,7 @@ export class World {
     previous: THREE.Vector3;
   } | null = null;
   private npc: THREE.Group;
+  private kioskConversations = new Map<string, number>();
   private audio: WorldAudio;
   private gardenGuests: THREE.Group[] = [];
   private visitors: {
@@ -668,6 +675,22 @@ export class World {
     this.scene.add(this.site.group);
     this.npc = makeGroundskeeper(this.surfaceMaterials);
     this.npc.scale.setScalar(1 / environmentScale);
+    for (const site of kioskSites) {
+      const attendant = makeGroundskeeper(this.surfaceMaterials, {
+        coat: '#e3d8bb',
+        hat: '#657253',
+      });
+      attendant.name = `Kiosk attendant: ${site.id}`;
+      attendant.scale.setScalar(avatarScale);
+      attendant.position.set(site.attendant[0], site.ground, site.attendant[1]);
+      attendant.rotation.y = site.angle;
+      for (const limb of attendant.children)
+        if (limb.name.startsWith('arm-')) {
+          limb.rotation.x = -0.65;
+          limb.position.y = 1.35;
+        }
+      this.scene.add(attendant);
+    }
     const coats = [
       '#a78263',
       '#748890',
@@ -677,9 +700,13 @@ export class World {
       '#ad826e',
     ];
     const gardenRoute = gardenVisitorRoute();
+    const itineraries = createVisitorRoutes();
     const visitorRoutes = [
-      ...createVisitorRoutes().map(
+      ...itineraries.map(
         (route) => new VisitorStroll(route, visitorShopStops(route)),
+      ),
+      ...kioskVisitorRoutes(itineraries).map(
+        (route) => new VisitorStroll(route, visitorShopStops(route), true),
       ),
       new VisitorStroll(
         gardenRoute,
@@ -693,13 +720,18 @@ export class World {
       ),
     ];
     this.visitors = visitorRoutes.map((stroll, index) => {
+      if (stroll.loop) stroll.update(index * 2, 1.1);
       const model = makeGroundskeeper(this.surfaceMaterials, {
         coat: coats[index % coats.length],
         hat: index % 2 ? '#705f4e' : '#697765',
       });
       const warning = makeDistressMarker();
       model.add(warning);
-      model.name = `Wandering visitor ${index + 1}`;
+      model.name =
+        index >= itineraries.length &&
+        index < itineraries.length + kioskSites.length * 2
+          ? `Kiosk customer ${index - itineraries.length + 1}`
+          : `Wandering visitor ${index + 1}`;
       model.scale.setScalar(1 / environmentScale);
       model.position.set(
         stroll.point[0],
@@ -756,6 +788,7 @@ export class World {
           ),
       ),
       groundskeeper,
+      ...kioskActivities,
       cathedral,
       ...(['rotunda', 'lawrence', 'john'] as const).map((kind) => ({
         id: kind,
@@ -1001,21 +1034,8 @@ export class World {
     const courtBanks = courtBankTerrain();
     const cliffs = cliffTerrain();
     const gardenBanks = gardenBankTerrain();
-    const streetPolygons = retainedStreetAreas.map((area) => area.polygon);
-    const streetBeds = retainedStreetAreas.map((area, index) => {
-      const bank = retainedStreetBanks.find((bank) => bank === area);
-      return groundPolygon(
-        area.polygon,
-        0,
-        bank
-          ? (x, z) => retainedStreetBankElevation(bank, [x, z])
-          : 'feature' in area && area !== retainedStreetAccess
-            ? (x, z) => featureElevation(area.feature, [x, z])
-            : elevation,
-        streetPolygons.slice(0, index),
-        'feature' in area && area !== retainedStreetAccess,
-      );
-    });
+    const { geometries: streetBeds, heightAt: streetFloor } =
+      retainedStreetTerrain();
     for (const surface of [
       terrain,
       ...detailed,
@@ -1045,7 +1065,12 @@ export class World {
         'color',
         new THREE.Float32BufferAttribute(colors, 3),
       );
-      clipTerrainAtArcades(surface, true, !streetBeds.includes(surface));
+      clipTerrainAtArcades(
+        surface,
+        true,
+        !streetBeds.includes(surface),
+        streetFloor,
+      );
       surface.computeVertexNormals();
       worldUVs(surface, 'grass');
       const material = this.surfaceMaterials.get('grass', '#ffffff').clone();
@@ -1397,10 +1422,13 @@ export class World {
             ...samplePolyline(points, 0.8).map((p) => elevation(...p)),
           ) - 1;
     const top = ground + minHeight + wallHeight;
-    const geometry = new THREE.ExtrudeGeometry(shape(points, feature.holes), {
-      depth: top - bottom,
-      bevelEnabled: false,
-    });
+    const geometry =
+      feature.id === lawrenceKioskSite.building.id
+        ? kioskBuildingGeometry(feature, bottom, top)
+        : new THREE.ExtrudeGeometry(shape(points, feature.holes), {
+            depth: top - bottom,
+            bevelEnabled: false,
+          });
     geometry.rotateX(-Math.PI / 2);
     geometry.translate(0, bottom, 0);
     this.batch(
@@ -1446,6 +1474,8 @@ export class World {
       );
     if ([49810437, 49810440, 49810441].includes(feature.id))
       makeCanonGables(feature, ground, wallHeight, this.batch.bind(this));
+    if (feature.id === lawrenceKioskSite.building.id)
+      makeLawrenceKiosk(this.batch.bind(this));
     if (tags.height === '60' && tags['building:part']) {
       const crossY = ground + total + 1;
       this.batch('#d7c9a5', box(0.22, 2.4, 0.22, x, crossY, z), 'metal');
@@ -2357,6 +2387,11 @@ export class World {
       case 'npc':
         this.clearInput();
         return { kind: 'npc' };
+      case 'kiosk': {
+        const visit = this.kioskConversations.get(activity.id) ?? 0;
+        this.kioskConversations.set(activity.id, visit + 1);
+        return { kind: 'message', text: kioskReply(activity.id, visit) };
+      }
       case 'bench':
         if (!safeSeat(activity, this.position.y))
           return {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { kioskShell, lawrenceKioskSite } from './kiosks';
 import {
   elevation,
   upperElevation,
@@ -284,7 +285,18 @@ export function makeSpickaShop(add: AddGeometry) {
     ),
     'stone',
   );
-  place(new THREE.BoxGeometry(6, 3.2, 5), 0, 1.6, 0, '#d6c7ad');
+  place(
+    kioskShell(6, 5, 3.2, {
+      center: 0.6,
+      width: 2.75,
+      sill: 0.965,
+      head: 2.135,
+    }),
+    0,
+    0,
+    0,
+    '#d6c7ad',
+  );
   for (const side of [-1, 1])
     place(
       new THREE.BoxGeometry(6.6, 0.16, Math.hypot(2.8, 1.3)).rotateX(
@@ -317,21 +329,31 @@ export function makeSpickaShop(add: AddGeometry) {
     '#526b58',
     'wood',
   );
-  place(
-    new THREE.BoxGeometry(3, 1.4, 0.12),
-    0.6,
-    1.55,
-    2.57,
-    '#655743',
-    'wood',
-  );
+  for (const u of [-0.84, 2.04])
+    place(
+      new THREE.BoxGeometry(0.12, 1.4, 0.12),
+      u,
+      1.55,
+      2.57,
+      '#655743',
+      'wood',
+    );
+  for (const y of [0.91, 2.19])
+    place(
+      new THREE.BoxGeometry(3, 0.12, 0.12),
+      0.6,
+      y,
+      2.57,
+      '#655743',
+      'wood',
+    );
   place(
     new THREE.BoxGeometry(2.75, 1.17, 0.05),
     0.6,
     1.55,
-    2.66,
+    -2.32,
     '#3f6064',
-    'glass',
+    'wood',
   );
   place(
     new THREE.BoxGeometry(3.2, 0.12, 0.65),
@@ -1166,6 +1188,13 @@ export function makeSiteDetails(add: AddGeometry) {
     spickaShop.ground + 2.9,
     3.5,
     spickaShop.angle,
+  );
+  sign(
+    'ST. LAWRENCE KIOSK',
+    lawrenceKioskSite.at(0, 0.15),
+    lawrenceKioskSite.ground + 2.85,
+    3.4,
+    lawrenceKioskSite.angle,
   );
   sign(
     'OLD PUB · ŠPIČKA',

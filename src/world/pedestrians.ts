@@ -8,6 +8,7 @@ import {
   type Point,
 } from './geo';
 import { explorationPaths as paths } from './landscape';
+import { kioskSites } from './kiosks';
 
 type Node = { point: Point; edges: Map<number, number> };
 const distance = (a: Point, b: Point) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -22,14 +23,25 @@ export const visitorExit = {
     gate.center[1] - gate.axis[0] * (gate.depth / 2 + 0.6),
   ] as Point,
 };
-export const shopStops = streetFrontages.map((frontage) => ({
-  point: [
-    frontage.facade[0] + frontage.normal[0] * 2,
-    frontage.facade[1] + frontage.normal[1] * 2,
-  ] as Point,
-  heading: Math.atan2(-frontage.normal[0], -frontage.normal[1]),
-  duration: 7,
-}));
+export const shopStops = [
+  ...streetFrontages.map((frontage) => ({
+    name: frontage.name,
+    access: [],
+    point: [
+      frontage.facade[0] + frontage.normal[0] * 2,
+      frontage.facade[1] + frontage.normal[1] * 2,
+    ] as Point,
+    heading: Math.atan2(-frontage.normal[0], -frontage.normal[1]),
+    duration: 7,
+  })),
+  ...kioskSites.map((site) => ({
+    name: site.name,
+    access: site.access,
+    point: site.approach,
+    heading: Math.atan2(-site.normal[0], -site.normal[1]),
+    duration: 7,
+  })),
+];
 export type VisitorStop = { heading: number; duration: number };
 export function visitorShopStops(route: readonly Point[]) {
   const stops = new Map<number, VisitorStop>();
@@ -38,6 +50,38 @@ export function visitorShopStops(route: readonly Point[]) {
     if (shop) stops.set(index, shop);
   });
   return stops;
+}
+
+export function kioskVisitorRoutes(routes: readonly (readonly Point[])[]) {
+  return kioskSites.flatMap((site) => {
+    const itinerary = routes.find((route) => route.includes(site.approach));
+    if (!itinerary) throw new Error(`No visitors reach ${site.name}.`);
+    const index = itinerary.indexOf(site.approach);
+    return [-1, 1].map((direction) => {
+      const branch: Point[] = [site.approach];
+      let remaining = 14;
+      for (
+        let i = index + direction;
+        i >= 0 && i < itinerary.length && remaining > 0;
+        i += direction
+      ) {
+        const previous = branch[branch.length - 1],
+          next = itinerary[i];
+        const length = distance(previous, next);
+        if (!length) continue;
+        const t = Math.min(1, remaining / length);
+        branch.push([
+          previous[0] + (next[0] - previous[0]) * t,
+          previous[1] + (next[1] - previous[1]) * t,
+        ]);
+        remaining -= length;
+      }
+      if (branch.length < 2)
+        throw new Error(`No return route from ${site.name}.`);
+      branch.reverse();
+      return [...branch, ...branch.slice(0, -1).reverse()];
+    });
+  });
 }
 
 export function gardenVisitorRoute() {
@@ -123,23 +167,37 @@ export function createVisitorRoutes(random = Math.random): Point[][] {
       if (insideCastle(a) && insideCastle(b)) connect(node(a), node(b));
     }
   }
+  const pathNodeCount = nodes.length;
   const shopIndices = shopStops.map((shop) => {
     const target = node(shop.point);
+    let entrance = target;
+    for (const point of shop.access) {
+      const next = node(point);
+      connect(entrance, next);
+      if (!nodes[entrance].edges.has(next))
+        throw new Error(`${shop.name} has an obstructed garden approach.`);
+      entrance = next;
+    }
+    const anchor = nodes[entrance].point;
     const approach = nodes
       .map((item, index) => ({
         index,
-        distance: distance(item.point, shop.point),
+        distance: distance(item.point, anchor),
       }))
       .filter(
         (item) =>
-          item.index !== target &&
-          item.distance < 30 &&
+          item.index !== entrance &&
+          item.index < pathNodeCount &&
+          item.distance < (shop.access.length ? 40 : 30) &&
           nodes[item.index].edges.size,
       )
       .sort((a, b) => a.distance - b.distance)
-      .find((item) => visitorRouteClear(shop.point, nodes[item.index].point));
-    if (!approach) throw new Error('A shop has no walkable visitor approach.');
-    connect(target, approach.index);
+      .find((item) => visitorRouteClear(anchor, nodes[item.index].point));
+    if (!approach)
+      throw new Error(
+        `${shop.name} at ${shop.point.join(',')} has no walkable visitor approach.`,
+      );
+    connect(entrance, approach.index);
     return target;
   });
   const inner: Point = [

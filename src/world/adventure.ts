@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { kioskSites } from './kiosks';
 import {
   buildings,
   landmarks,
@@ -90,6 +91,14 @@ type Enemy = {
   windup: number;
 };
 export const foodShops = [
+  ...kioskSites
+    .filter((site) => site.id !== 'okenko')
+    .map((site) => ({
+      id: site.id,
+      name: site.name,
+      meal: site.meal,
+      point: site.approach,
+    })),
   ...[264494769, 3475173902].map((id) => {
     const frontage = streetFrontages.find((item) => item.detail.id === id);
     if (!frontage) throw new Error(`Missing food shop frontage ${id}.`);

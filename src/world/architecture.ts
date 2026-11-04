@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { lawrenceKioskSite } from './kiosks';
 import polygonClipping, { type Polygon } from 'polygon-clipping';
 import {
   center,
@@ -1197,6 +1198,15 @@ export function decorateBuilding(
         remaining--;
         const t = (col + 0.5) / columns;
         const p: Point = [a[0] + dx * t + nx * 0.04, a[1] + dz * t + nz * 0.04];
+        if (
+          feature.id === lawrenceKioskSite.building.id &&
+          floor === 1.8 &&
+          Math.hypot(
+            p[0] - lawrenceKioskSite.face[0],
+            p[1] - lawrenceKioskSite.face[1],
+          ) < 2.6
+        )
+          continue;
         if (
           feature.id === 49810596 &&
           Math.hypot(p[0] + 208.95, p[1] + 93.1) < 3

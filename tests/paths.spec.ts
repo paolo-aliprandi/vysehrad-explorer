@@ -43,6 +43,40 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   expect(
     await inspect('return w.scene.getObjectByName("Paving").children.length;'),
   ).toBe(2);
+  const kiosks = await inspect(`
+    const {kioskSites}=await import('/src/world/kiosks.ts'),g=await import('/src/world/geo.ts');
+    const mode=w.mode,previous=w.position.clone();
+    w.setMode('chill');
+    const results=kioskSites.map(site=>{
+      w.position.set(site.approach[0],g.standingElevation(site.approach),site.approach[1]);
+      const actor=w.scene.getObjectByName('Kiosk attendant: '+site.id);
+      const prompt=w.activity(),reply=w.interact();
+      return {id:site.id,attendant:!!actor,rotation:actor?.rotation.y,angle:site.angle,prompt:prompt?.id,reply};
+    });
+    const customers=w.visitors.filter(visitor=>visitor.model.name.startsWith('Kiosk customer'));
+    const loops=customers.map(visitor=>{
+      const distance=visitor.stroll.distance;
+      visitor.stroll.update(120,visitor.pace);
+      return {loop:visitor.stroll.loop,departed:visitor.stroll.departed,moved:visitor.stroll.distance>distance,stops:visitor.stroll.stops.size};
+    });
+    w.position.copy(previous);w.setMode(mode);
+    return {results,loops};
+  `);
+  expect(kiosks.results).toHaveLength(3);
+  for (const kiosk of kiosks.results) {
+    expect(kiosk.attendant).toBe(true);
+    expect(kiosk.rotation).toBeCloseTo(kiosk.angle, 5);
+    expect(kiosk.prompt).toBe(kiosk.id);
+    expect(kiosk.reply.kind).toBe('message');
+    expect(kiosk.reply.text).toContain(': ');
+  }
+  expect(kiosks.loops).toHaveLength(6);
+  for (const customer of kiosks.loops) {
+    expect(customer.loop).toBe(true);
+    expect(customer.departed).toBe(false);
+    expect(customer.moved).toBe(true);
+    expect(customer.stops).toBeGreaterThan(0);
+  }
   const streetChecks = await inspect(`
     const g=await import('/src/world/geo.ts'),s=await import('/src/world/surfaces.ts');
     const group=w.scene.getObjectByName('Paving');

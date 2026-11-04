@@ -14,12 +14,14 @@ import {
 import { streetFurniture, cathedralEntrance } from './architecture';
 import type { Materials } from './materials';
 import { cathedralLayout } from './cathedral';
+import { kioskSites } from './kiosks';
 export { makeCathedralInterior, indoorBlocked } from './cathedral';
 
 export type ActivityKind =
   | 'bench'
   | 'fire'
   | 'npc'
+  | 'kiosk'
   | 'tree'
   | 'cathedral'
   | 'rotunda'
@@ -42,6 +44,7 @@ export type Activity = ActivityLocation &
         kind:
           | 'fire'
           | 'npc'
+          | 'kiosk'
           | 'cathedral'
           | 'rotunda'
           | 'lawrence'
@@ -73,6 +76,12 @@ export const groundskeeper: Activity = {
   point: safePosition([spawn[0] + 4, spawn[1] + 2]),
   label: 'Talk to the groundskeeper',
 };
+export const kioskActivities: Activity[] = kioskSites.map((site) => ({
+  id: site.id,
+  kind: 'kiosk',
+  point: site.approach,
+  label: `Talk to the ${site.name} attendant`,
+}));
 export const cathedral: Activity = {
   id: 'cathedral',
   kind: 'cathedral',
