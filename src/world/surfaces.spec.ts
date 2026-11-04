@@ -24,6 +24,9 @@ import {
   cemeteryArcadeFloor,
   standingElevation,
   blocked,
+  aveMariaFrontage,
+  aveMariaPoint,
+  aveMariaCourtElevation,
   type Point,
 } from './geo';
 import {
@@ -38,6 +41,71 @@ import {
 import { makeCemeteryArcade } from './architecture';
 
 describe('connected world surfaces', () => {
+  it('seals the raised bank beside Ave Maria without closing the stair opening', () => {
+    const terrain = retainedStreetTerrain();
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const meshes = terrain.geometries.map(
+      (geometry) => new THREE.Mesh(geometry, material),
+    );
+    const seams = [-6, -5, -4].map((u) => {
+      const point = aveMariaPoint(u, 10.1);
+      return {
+        u,
+        floor: aveMariaCourtElevation(...point),
+        crest: terrain.heightAt(point),
+      };
+    });
+    try {
+      terrain.geometries.forEach((geometry) =>
+        clipTerrainAtArcades(geometry, true, false),
+      );
+      for (const { u, floor, crest } of seams) {
+        expect(crest - floor).toBeGreaterThan(0.15);
+        const from = aveMariaPoint(u, 9.85);
+        for (const fraction of [0.05, 0.5, 0.95]) {
+          const ray = new THREE.Raycaster(
+            new THREE.Vector3(
+              from[0],
+              floor + (crest - floor) * fraction,
+              from[1],
+            ),
+            new THREE.Vector3(
+              aveMariaFrontage.normal[0],
+              0,
+              aveMariaFrontage.normal[1],
+            ),
+            0,
+            0.5,
+          );
+          expect(
+            ray.intersectObjects(meshes).length,
+            JSON.stringify({ u, fraction }),
+          ).toBeGreaterThan(0);
+        }
+      }
+      const opening = aveMariaPoint(0, 9.85);
+      expect(
+        new THREE.Raycaster(
+          new THREE.Vector3(
+            opening[0],
+            aveMariaCourtElevation(...opening) + 0.2,
+            opening[1],
+          ),
+          new THREE.Vector3(
+            aveMariaFrontage.normal[0],
+            0,
+            aveMariaFrontage.normal[1],
+          ),
+          0,
+          0.5,
+        ).intersectObjects(meshes),
+      ).toHaveLength(0);
+    } finally {
+      terrain.geometries.forEach((geometry) => geometry.dispose());
+      material.dispose();
+    }
+  });
+
   it('keeps replacement soil below Brick Gate instead of pulling it up to the roof', () => {
     const terrain = retainedStreetTerrain();
     const point: Point = [-98, -76.7938];

@@ -26,6 +26,7 @@ import {
   brickGateStairCuts,
   panoramaDecks,
   aveMariaCourtCuts,
+  aveMariaCourtElevation,
   aveMariaStairCut,
   onAveMariaCourt,
   artilleryEntrance,
@@ -71,7 +72,7 @@ export function clipTerrainAtArcades(
   if (!position.count) return source;
   const outlines: {
     points: readonly Point[];
-    floorBottom: number;
+    floorBottom: number | ((point: Point) => number);
     ceiling: number;
     seal: boolean;
     street?: boolean;
@@ -101,9 +102,9 @@ export function clipTerrainAtArcades(
     },
     ...aveMariaCourtCuts.map((points) => ({
       points,
-      floorBottom: 0,
+      floorBottom: (point: Point) => aveMariaCourtElevation(...point),
       ceiling: Infinity,
-      seal: false,
+      seal: true,
     })),
     {
       points: artilleryEntrance.apron,
@@ -272,14 +273,15 @@ export function clipTerrainAtArcades(
             );
             if (!outline || (!outline.seal && !(outline.street && streetFloor)))
               continue;
-            const bottomA =
+            const floorBottom = outline.floorBottom;
+            const floorAt =
               outline.street && streetFloor
-                ? streetFloor(a)
-                : outline.floorBottom;
-            const bottomB =
-              outline.street && streetFloor
-                ? streetFloor(b)
-                : outline.floorBottom;
+                ? streetFloor
+                : typeof floorBottom === 'function'
+                  ? floorBottom
+                  : () => floorBottom;
+            const bottomA = floorAt(a);
+            const bottomB = floorAt(b);
             // Use this terrain triangle's interpolated crest, not a resampled height,
             // so the cut face joins its exact mesh edge without cracks.
             emit(a, triangle, undefined, true);
