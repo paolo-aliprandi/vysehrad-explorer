@@ -438,7 +438,7 @@ describe('OSM world and movement', () => {
         sitePropBlocked(prop.point, elevation(...prop.point)),
         prop.id,
       ).toBe(true);
-    const cafeTable = siteProps.find((prop) => prop.id === 'cafe-table-0.5');
+    const cafeTable = siteProps.find((prop) => prop.id === 'cafe-table-2.2');
     if (!cafeTable) throw new Error('Missing cafe table.');
     expect(blocked(cafeTable.point)).toBe(true);
     expect(
@@ -963,7 +963,13 @@ describe('OSM world and movement', () => {
     const source = features.find((feature) => feature.id === 51718886);
     const wall = walls.find((feature) => feature.id === 51718886);
     if (!source || !wall) throw new Error('Missing cathedral garden boundary.');
-    expect(wall.points).toEqual(source.points.slice(13));
+    expect(wall.points).toEqual(source.points.slice(16));
+    const continuation = retainedStreetWalls.find((wall) =>
+      wall.points.some((point) => point[0] === -84.26 && point[1] === -43.68),
+    );
+    expect(continuation?.points.slice(0, 4)).toEqual(
+      source.points.slice(13, 17).reverse(),
+    );
     for (let i = 1; i < wall.points.length; i++) {
       const a = wall.points[i - 1],
         b = wall.points[i];

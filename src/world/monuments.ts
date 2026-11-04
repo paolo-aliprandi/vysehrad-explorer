@@ -1,5 +1,10 @@
 import * as THREE from 'three';
-import { elevation, sculptures, columnShrine } from './geo';
+import {
+  elevation,
+  sculptures,
+  columnShrine,
+  cemeteryCornerShrine,
+} from './geo';
 import type { AddGeometry } from './architecture';
 
 type Vertex = readonly [number, number, number];
@@ -15,6 +20,7 @@ type Figure = {
 };
 
 export function makeMonuments(add: AddGeometry) {
+  makeCemeteryCornerShrine(add);
   const shrineGround = elevation(...columnShrine.point);
   const stone = '#c5bda6';
   const shrine = (geometry: THREE.BufferGeometry, color = stone) => {
@@ -71,7 +77,10 @@ export function makeMonuments(add: AddGeometry) {
   for (const monument of sculptures) {
     const width = monument.width / monument.scale,
       depth = monument.depth / monument.scale;
-    const ground = elevation(...monument.point);
+    const corner = monument.id === -91010;
+    const ground = corner
+      ? cemeteryCornerShrine.ground
+      : elevation(...monument.point);
     const stone = monument.tags.material === 'wood' ? '#9a7954' : '#c4bb9f';
     const emit = (
       geometry: THREE.BufferGeometry,
@@ -147,10 +156,16 @@ export function makeMonuments(add: AddGeometry) {
       0,
       '#a39c87',
     );
-    block(width - 0.3, 0.18, depth - 0.2, 0, 0.31, 0);
-    block(width - 0.65, 1, depth - 0.55, 0, 0.9, 0);
-    block(width - 0.28, 0.22, depth - 0.15, 0, 1.49, 0);
-    const plinth = 1.6;
+    if (corner) {
+      block(width - 0.1, 0.15, depth - 0.1, 0, 0.3, 0);
+      block(width - 0.25, 0.4, depth - 0.2, 0, 0.575, 0);
+      block(width, 0.12, depth, 0, 0.835, 0);
+    } else {
+      block(width - 0.3, 0.18, depth - 0.2, 0, 0.31, 0);
+      block(width - 0.65, 1, depth - 0.55, 0, 0.9, 0);
+      block(width - 0.28, 0.22, depth - 0.15, 0, 1.49, 0);
+    }
+    const plinth = corner ? 0.9 : 1.6;
     const figure = (pose: Figure, lift = 0) => {
       const base = plinth + lift;
       const move = ([x, y, z]: Vertex): Vertex => [
@@ -255,7 +270,20 @@ export function makeMonuments(add: AddGeometry) {
         0.115,
       );
     };
-    if (monument.id === 1200812873) {
+    if (corner) {
+      figure({
+        x: 0,
+        robe: true,
+        left: [
+          [-0.42, 1.7, 0.12],
+          [-0.12, 1.95, 0.3],
+        ],
+        right: [
+          [0.45, 1.4, 0.12],
+          [0.2, 1.2, 0.3],
+        ],
+      });
+    } else if (monument.id === 1200812873) {
       figure({
         x: -0.78,
         robe: true,
@@ -378,4 +406,90 @@ export function makeMonuments(add: AddGeometry) {
         ellipsoid([0.38, plinth + 1.4, 0.32], [0.13, 0.13, 0.13]);
     }
   }
+}
+
+export function makeCemeteryCornerShrine(add: AddGeometry) {
+  const { point, ground, angle } = cemeteryCornerShrine;
+  const emit = (
+    geometry: THREE.BufferGeometry,
+    color: string,
+    kind: Parameters<AddGeometry>[2] = 'plaster',
+  ) => {
+    geometry.rotateY(angle);
+    geometry.translate(point[0], ground, point[1]);
+    add(color, geometry, kind);
+  };
+  emit(
+    new THREE.CylinderGeometry(
+      1.13,
+      1.17,
+      4.3,
+      40,
+      1,
+      false,
+      0.88,
+      Math.PI * 2 - 1.76,
+    ).translate(0, 2.15, 0),
+    '#dad3be',
+  );
+  emit(
+    new THREE.BoxGeometry(1.55, 3.7, 0.15).translate(0, 1.85, -0.3),
+    '#99927e',
+    'stone',
+  );
+  const arch = new THREE.Shape();
+  arch.moveTo(-0.88, 0);
+  arch.lineTo(-0.71, 0);
+  arch.lineTo(-0.71, 2.7);
+  arch.absarc(0, 2.7, 0.71, Math.PI, 0, true);
+  arch.lineTo(0.71, 0);
+  arch.lineTo(0.88, 0);
+  arch.lineTo(0.88, 4.3);
+  arch.lineTo(-0.88, 4.3);
+  arch.closePath();
+  emit(
+    new THREE.ExtrudeGeometry(arch, {
+      depth: 0.24,
+      bevelEnabled: false,
+      curveSegments: 24,
+    }).translate(0, 0, 0.62),
+    '#ded7c3',
+  );
+  emit(
+    new THREE.CylinderGeometry(1.2, 1.2, 0.12, 40).translate(0, 0.06, 0),
+    '#bcb39e',
+    'stone',
+  );
+  for (const [radius, y] of [
+    [1.18, 3.95],
+    [1.23, 4.25],
+  ] as const)
+    emit(
+      new THREE.CylinderGeometry(radius, radius, 0.12, 40).translate(0, y, 0),
+      '#c9c0aa',
+      'stone',
+    );
+  for (let i = 0; i < 16; i++) {
+    const theta = (i * Math.PI) / 8;
+    emit(
+      new THREE.TorusGeometry(0.17, 0.035, 5, 12, Math.PI)
+        .translate(0, 3.93, 1.13)
+        .rotateY(theta),
+      '#c9c0aa',
+      'stone',
+    );
+  }
+  emit(
+    new THREE.ConeGeometry(1.36, 0.7, 40).translate(0, 4.68, 0),
+    '#92674f',
+    'slate',
+  );
+  for (let ring = 0; ring < 4; ring++)
+    emit(
+      new THREE.TorusGeometry(1.32 * (1 - ring / 4), 0.045, 5, 40)
+        .rotateX(Math.PI / 2)
+        .translate(0, 4.35 + ring * 0.17, 0),
+      '#a77a59',
+      'slate',
+    );
 }

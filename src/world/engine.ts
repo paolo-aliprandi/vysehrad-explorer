@@ -45,7 +45,12 @@ import {
   onHillDetail,
   splitRockySlopes,
 } from './landscape';
-import { pavingSurfaces, pavingGeometry, upperPromenadePaving } from './paving';
+import {
+  pavingSurfaces,
+  pavingGeometry,
+  pavingStyle,
+  upperPromenadePaving,
+} from './paving';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   Materials,
@@ -73,6 +78,7 @@ import {
   makeRotunda,
   makeEnclosureDetails,
   makePanoramaLookouts,
+  makeStulcovaGardenWall,
 } from './architecture';
 import { makeMonuments } from './monuments';
 import { makeNuselskyBridge } from './bridge';
@@ -80,13 +86,19 @@ import { makeRiversideGallery } from './gallery';
 import { makePassages, makeApproach } from './passages';
 import { makeSiteDetails, pevnostiHedges } from './site-details';
 import { stepWalker } from './movement';
+import { WorldAudio } from './audio';
 import {
   makeCasemateInterior,
   casemateBlocked,
   casemateNotes,
   casemateFloor,
 } from './casemates';
-import { createVisitorRoutes, VisitorStroll } from './pedestrians';
+import {
+  createVisitorRoutes,
+  visitorShopStops,
+  gardenVisitorRoute,
+  VisitorStroll,
+} from './pedestrians';
 import {
   benches,
   groundskeeper,
@@ -166,6 +178,7 @@ import {
   cemeteryArcades,
   cemeteryArcadeWallIds,
   streetFurniture,
+  gardenBenchIds,
   summerTheatre,
   sculptureFootprintContains,
   riversideGallery,
@@ -470,6 +483,8 @@ export class World {
     previous: THREE.Vector3;
   } | null = null;
   private npc: THREE.Group;
+  private audio: WorldAudio;
+  private gardenGuests: THREE.Group[] = [];
   private visitors: {
     model: THREE.Group;
     warning: THREE.Group;
@@ -556,6 +571,9 @@ export class World {
     private host: HTMLElement,
     private callbacks: Callbacks,
   ) {
+    this.audio = new WorldAudio((message) =>
+      this.callbacks.onMessage?.(message),
+    );
     // Keep OSM terrain and collision coordinates native; scale at the rendering boundary.
     this.scene.scale.setScalar(environmentScale);
     this.renderer = new THREE.WebGLRenderer({
@@ -620,12 +638,27 @@ export class World {
       '#678c79',
       '#ad826e',
     ];
-    this.visitors = createVisitorRoutes().map((route, index) => {
+    const gardenRoute = gardenVisitorRoute();
+    const visitorRoutes = [
+      ...createVisitorRoutes().map(
+        (route) => new VisitorStroll(route, visitorShopStops(route)),
+      ),
+      new VisitorStroll(
+        gardenRoute,
+        new Map([[1, { duration: 5, heading: 0.8 }]]),
+        true,
+      ),
+      new VisitorStroll(
+        [...gardenRoute].reverse(),
+        new Map([[2, { duration: 6, heading: -2.3 }]]),
+        true,
+      ),
+    ];
+    this.visitors = visitorRoutes.map((stroll, index) => {
       const model = makeGroundskeeper(this.surfaceMaterials, {
-        coat: coats[index],
+        coat: coats[index % coats.length],
         hat: index % 2 ? '#705f4e' : '#697765',
       });
-      const stroll = new VisitorStroll(route);
       const warning = makeDistressMarker();
       model.add(warning);
       model.name = `Wandering visitor ${index + 1}`;
@@ -638,6 +671,26 @@ export class World {
       this.scene.add(model);
       return { model, warning, stroll, pace: 1.05 + Math.random() * 0.35 };
     });
+    for (const id of [gardenBenchIds[0], gardenBenchIds[3]]) {
+      const bench = streetFurniture.find((site) => site.id === id);
+      if (!bench) throw new Error('A garden guest has no bench.');
+      const guest = makeGroundskeeper(this.surfaceMaterials, {
+        coat: id === gardenBenchIds[0] ? '#8a7865' : '#758e82',
+        hat: '#6f6953',
+      });
+      guest.name = `Seated garden guest ${id}`;
+      guest.scale.setScalar(1 / environmentScale);
+      guest.position.set(bench.point[0], bench.ground, bench.point[1]);
+      guest.rotation.y = bench.angle;
+      for (const limb of guest.children)
+        if (limb.name.startsWith('leg-')) {
+          limb.rotation.x = -Math.PI / 2;
+          limb.position.setY(0.52);
+          limb.position.z = 0.3;
+        }
+      this.gardenGuests.push(guest);
+      this.scene.add(guest);
+    }
     this.interior = makeCathedralInterior(this.surfaceMaterials);
     this.casemates = makeCasemateInterior(this.surfaceMaterials);
     this.chapels = {
@@ -652,7 +705,14 @@ export class World {
       this.chapels.lawrence.group,
     );
     this.outdoorActivities = [
-      ...benches,
+      ...benches.filter(
+        (bench) =>
+          ![gardenBenchIds[0], gardenBenchIds[3]].some((id) =>
+            streetFurniture.some(
+              (site) => site.id === id && site.point === bench.point,
+            ),
+          ),
+      ),
       groundskeeper,
       cathedral,
       ...(['rotunda', 'lawrence'] as const).map((kind) => ({
@@ -1012,6 +1072,7 @@ export class World {
     }
     const rotunda = buildings.find((feature) => feature.id === 560209917);
     for (const feature of [...buildings, ...parts]) {
+      if (feature.id === 459551122) continue;
       if (feature.id === 49811196) continue;
       if (riversideGallery.portalBuildingIds.has(feature.id)) continue;
       if (cemeteryArcades.some((arcade) => arcade.feature.id === feature.id)) {
@@ -1064,6 +1125,10 @@ export class World {
     this.makePaving();
     for (const feature of walls) {
       if (cemeteryArcadeWallIds.has(feature.id)) continue;
+      if (feature.id === 377578898) {
+        makeStulcovaGardenWall(feature.points, this.batch.bind(this));
+        continue;
+      }
       for (const points of rampartWallRuns(feature)) {
         const samples = samplePolyline(points, 0.9);
         if (feature.id === 1532977610) {
@@ -1831,6 +1896,9 @@ export class World {
     this.sunlight.shadow.camera.updateProjectionMatrix();
     this.clearInput();
   }
+  setSound(enabled: boolean) {
+    return this.audio.setEnabled(enabled);
+  }
   setPaused(paused: boolean) {
     this.paused = paused;
     if (paused) this.adventure.aiming = false;
@@ -1989,6 +2057,7 @@ export class World {
         (0.3 + 0.32) / environmentScale;
     return (
       touchesPerson(this.npc) ||
+      this.gardenGuests.some(touchesPerson) ||
       this.visitors.some(
         ({ model, stroll }) => !stroll.departed && touchesPerson(model),
       )
@@ -2996,6 +3065,7 @@ export class World {
     if (this.disposed) return;
     const elapsed = (time - (this.lastTime || time)) / 1000;
     const delta = Math.min(elapsed, 0.1);
+    const previousDistance = this.distance;
     this.lastTime = time;
     this.clock += delta;
     if (this.active && !this.paused && document.visibilityState === 'visible') {
@@ -3038,7 +3108,9 @@ export class World {
           if (limb.name.startsWith('leg-') || limb.name.startsWith('arm-')) {
             const phase = limb.name.endsWith('--1') ? Math.PI : 0;
             limb.rotation.x =
-              Math.sin(stroll.distance * environmentScale * 5 + phase) *
+              (stroll.waiting || state?.recovering
+                ? 0
+                : Math.sin(stroll.distance * environmentScale * 5 + phase)) *
               (limb.name.startsWith('leg-') ? 0.4 : -0.25);
           }
       }
@@ -3197,6 +3269,55 @@ export class World {
             this.callbacks.onDiscover(landmark.id);
           }
     }
+    this.audio.update({
+      delta,
+      distance: this.distance - previousDistance,
+      audible:
+        this.active &&
+        !this.paused &&
+        !this.flying &&
+        document.visibilityState === 'visible',
+      walking: moving && !this.seat && Math.abs(this.jumpVelocity) < 0.1,
+      softGround: () =>
+        !this.indoorReturn &&
+        paths.some(
+          (path) =>
+            pavingStyle(path).kind === 'gravel' &&
+            projectRoute([this.position.x, this.position.z], path.points)
+              .distance <
+              pathWidth(path) / 2,
+        ),
+      people: this.indoorReturn
+        ? []
+        : [
+            this.npc,
+            ...this.gardenGuests,
+            ...this.visitors
+              .filter(({ model }) => model.visible)
+              .map(({ model }) => model),
+          ]
+            .filter(
+              (model) =>
+                Math.abs(model.position.y - this.position.y) < 1.5 &&
+                model.position.distanceTo(this.position) < 7 &&
+                [0.25, 0.5, 0.75].every(
+                  (t) =>
+                    !blocked(
+                      [
+                        this.position.x +
+                          (model.position.x - this.position.x) * t,
+                        this.position.z +
+                          (model.position.z - this.position.z) * t,
+                      ],
+                      this.position.y,
+                    ),
+                ),
+            )
+            .map((model) => ({
+              id: model.uuid,
+              distance: model.position.distanceTo(this.position),
+            })),
+    });
     if (this.mode === 'adventure') {
       if (
         this.active &&
@@ -3454,6 +3575,7 @@ export class World {
 
   dispose() {
     this.disposed = true;
+    this.audio.dispose();
     cancelAnimationFrame(this.frame);
     this.observer.disconnect();
     window.removeEventListener('keydown', this.keyDown);

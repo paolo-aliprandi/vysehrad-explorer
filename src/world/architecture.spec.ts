@@ -13,6 +13,7 @@ import {
   cathedralEntrance,
   buildingEntrance,
   makeBuildingDoor,
+  makeStulcovaGardenWall,
   decorateBuilding,
 } from './architecture';
 import {
@@ -79,6 +80,7 @@ import {
   gardenExitAccess,
   summerTheatre,
   panoramaSites,
+  cemeteryCornerShrine,
 } from './geo';
 import {
   pathRibbon,
@@ -88,7 +90,7 @@ import {
   gardenBankTerrain,
   drapedPolygon,
 } from './surfaces';
-import { makeMonuments } from './monuments';
+import { makeMonuments, makeCemeteryCornerShrine } from './monuments';
 import { makePassages, makeApproach, makeRiversideDoorways } from './passages';
 import { roof } from './engine';
 import { pavingGeometry, pavingSurfaces, upperPromenadePaving } from './paving';
@@ -139,6 +141,123 @@ it('opens real panorama windows above solid retaining masonry and covers the Seb
 });
 
 describe('screenshot geometry repairs', () => {
+  it('opens the actual cemetery-corner shrine niche around a visible statue instead of a solid generic building', () => {
+    const geometries: THREE.BufferGeometry[] = [];
+    makeCemeteryCornerShrine((_color, geometry) => geometries.push(geometry));
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const meshes = geometries.map(
+      (geometry) => new THREE.Mesh(geometry, material),
+    );
+    const { point, ground, angle } = cemeteryCornerShrine;
+    const toward = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
+    const from = new THREE.Vector3(
+      point[0],
+      ground + 1.8,
+      point[1],
+    ).addScaledVector(toward, 2);
+    const ray = new THREE.Raycaster(from, toward.clone().negate(), 0, 3);
+    const backing = ray.intersectObjects(meshes)[0];
+    expect(backing?.distance).toBeGreaterThan(2);
+    expect(backing?.distance).toBeLessThan(2.5);
+    ray.ray.origin.y = ground + 3.8;
+    expect(ray.intersectObjects(meshes)[0]?.distance).toBeLessThan(1.5);
+    const statueMeshes: THREE.Mesh[] = [];
+    makeMonuments((_color, geometry) =>
+      statueMeshes.push(new THREE.Mesh(geometry, material)),
+    );
+    ray.ray.origin.copy(from);
+    expect(ray.intersectObjects(statueMeshes)[0]?.distance).toBeLessThan(
+      backing.distance,
+    );
+    expect(blocked(point, ground)).toBe(true);
+    for (const mesh of [...meshes, ...statueMeshes]) mesh.geometry.dispose();
+    material.dispose();
+  });
+  it('keeps a level chapel doorstep and exposed wooden leaf clear of its stone frame', () => {
+    const doorstep: Point[] = [
+      [78, 34],
+      [80, 34],
+      [80, 35],
+      [78, 35],
+    ];
+    const geometries: { color: string; geometry: THREE.BufferGeometry }[] = [];
+    makeBuildingDoor(
+      {
+        ...aveMariaFrontage,
+        width: 1.65,
+        height: 2.65,
+        ground: 50,
+        doorstep,
+        score: 0,
+      },
+      (color, geometry) => geometries.push({ color, geometry }),
+    );
+    const doorstepMesh = geometries.find((item) => item.color === '#b9b29f');
+    if (!doorstepMesh) throw new Error('Missing chapel doorstep.');
+    const slab = doorstepMesh.geometry.attributes.position;
+    for (let i = 0; i < slab.count; i++)
+      expect(slab.getY(i)).toBeCloseTo(50, 5);
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const meshes = geometries.map(({ color, geometry }) => {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = color;
+      return mesh;
+    });
+    const { point, normal } = aveMariaFrontage;
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(
+        point[0] + normal[0] * 2,
+        51.3,
+        point[1] + normal[1] * 2,
+      ),
+      new THREE.Vector3(-normal[0], 0, -normal[1]),
+    );
+    expect(ray.intersectObjects(meshes)[0]?.object.name).toBe('#59634d');
+    geometries.forEach(({ geometry }) => geometry.dispose());
+    material.dispose();
+  });
+
+  it('builds a pierced brick garden screen between plaster piers only on the referenced Štulcova boundary', () => {
+    const wall = walls.find((wall) => wall.id === 377578898);
+    if (!wall) throw new Error('Missing Štulcova garden boundary.');
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const meshes: THREE.Mesh[] = [];
+    makeStulcovaGardenWall(wall.points, (_color, geometry) =>
+      meshes.push(new THREE.Mesh(geometry, material)),
+    );
+    const a = wall.points[1],
+      b = wall.points[2];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const bays = Math.ceil(length / 3.6),
+      bay = length / bays;
+    const start = 0.23,
+      end = bay - 0.23;
+    const step = (end - start) / Math.floor((end - start) / 0.36);
+    const at = (u: number): Point => [
+      a[0] + ((b[0] - a[0]) * u) / length,
+      a[1] + ((b[1] - a[1]) * u) / length,
+    ];
+    const normal: Point = [-(b[1] - a[1]) / length, (b[0] - a[0]) / length];
+    for (const [col, hit] of [
+      [0, true],
+      [1, false],
+    ] as const) {
+      const p = at(start + step * (col + 0.5));
+      const ray = new THREE.Raycaster(
+        new THREE.Vector3(
+          p[0] + normal[0],
+          upperElevation(...p) + 0.515,
+          p[1] + normal[1],
+        ),
+        new THREE.Vector3(-normal[0], 0, -normal[1]),
+        0,
+        2,
+      );
+      expect(ray.intersectObjects(meshes).length > 0).toBe(hit);
+    }
+    meshes.forEach((mesh) => mesh.geometry.dispose());
+    material.dispose();
+  });
   it('supports the tower-side cemetery roof corner and its return with grounded solid columns', () => {
     const feature = buildings.find((building) => building.id === -4229100);
     if (!feature) throw new Error('Missing tower-side cemetery arcade.');

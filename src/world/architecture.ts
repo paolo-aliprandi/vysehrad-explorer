@@ -1053,12 +1053,26 @@ export function makeBuildingDoor(
   add: AddGeometry,
 ) {
   const { point, ground, angle, width, height, normal } = door;
+  for (const side of [-1, 1])
+    add(
+      '#b9ae98',
+      positioned(
+        new THREE.BoxGeometry(0.12, height + 0.12, 0.18),
+        [
+          point[0] + Math.cos(angle) * side * (width / 2 + 0.06),
+          point[1] - Math.sin(angle) * side * (width / 2 + 0.06),
+        ],
+        ground + height / 2 + 0.06,
+        angle,
+      ),
+      'stone',
+    );
   add(
     '#b9ae98',
     positioned(
-      new THREE.BoxGeometry(width + 0.24, height + 0.18, 0.14),
+      new THREE.BoxGeometry(width + 0.24, 0.12, 0.18),
       point,
-      ground + height / 2 + 0.04,
+      ground + height + 0.06,
       angle,
     ),
     'stone',
@@ -1090,7 +1104,11 @@ export function makeBuildingDoor(
   );
   add(
     '#b9b29f',
-    drapedPolygon(door.doorstep, 0, () => ground),
+    new THREE.ShapeGeometry(
+      new THREE.Shape(door.doorstep.map(([x, z]) => new THREE.Vector2(x, -z))),
+    )
+      .rotateX(-Math.PI / 2)
+      .translate(0, ground, 0),
     'stone',
   );
   add(
@@ -2287,6 +2305,88 @@ export function makeSlavin(add: AddGeometry) {
   block(0.17, 1.75, 0.16, 0, 2.67, 3.65, '#52715c', 'metal');
   block(1.15, 0.17, 0.16, 0, 3.12, 3.65, '#52715c', 'metal');
   sphere(0, 2.93, 3.8, 0.16, 0.28, 0.1, '#5e725a');
+}
+
+export function makeStulcovaGardenWall(
+  points: readonly Point[],
+  add: AddGeometry,
+) {
+  add(
+    '#b6ac96',
+    continuousWall(points, 0.32, (point) => ({
+      bottom: upperElevation(...point) - 0.12,
+      top: upperElevation(...point) + 0.28,
+    })),
+    'stone',
+  );
+  const place = (
+    geometry: THREE.BufferGeometry,
+    point: Point,
+    height: number,
+    angle: number,
+    color: string,
+    kind: Parameters<AddGeometry>[2],
+  ) => add(color, positioned(geometry, point, height, angle), kind);
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1],
+      b = points[i];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const bays = Math.ceil(length / 3.6);
+    const angle = -Math.atan2(b[1] - a[1], b[0] - a[0]);
+    const at = (u: number): Point => [
+      a[0] + ((b[0] - a[0]) * u) / length,
+      a[1] + ((b[1] - a[1]) * u) / length,
+    ];
+    for (let bay = 0; bay <= bays; bay++) {
+      const u = (length * bay) / bays;
+      const point = at(u),
+        ground = upperElevation(...point);
+      if (bay < bays || i === points.length - 1) {
+        place(
+          new THREE.BoxGeometry(0.42, 1.65, 0.42),
+          point,
+          ground + 0.85,
+          angle,
+          '#ded5bf',
+          'plaster',
+        );
+        place(
+          new THREE.BoxGeometry(0.56, 0.12, 0.56),
+          point,
+          ground + 1.72,
+          angle,
+          '#b8ad96',
+          'stone',
+        );
+        place(
+          new THREE.ConeGeometry(0.39, 0.18, 4).rotateY(Math.PI / 4),
+          point,
+          ground + 1.87,
+          angle,
+          '#aaa08a',
+          'stone',
+        );
+      }
+      if (bay === bays) continue;
+      const start = u + 0.23,
+        end = (length * (bay + 1)) / bays - 0.23;
+      const columns = Math.max(1, Math.floor((end - start) / 0.36));
+      const step = (end - start) / columns;
+      for (let row = 0; row < 8; row++)
+        for (let col = 0; col < columns; col++) {
+          if (row % 2 && col % 2) continue;
+          const point = at(start + step * (col + 0.5));
+          place(
+            new THREE.BoxGeometry(step - 0.035, 0.12, 0.22),
+            point,
+            upperElevation(...point) + 0.36 + row * 0.155,
+            angle,
+            (row + col) % 3 ? '#794d3e' : '#985f49',
+            'brick',
+          );
+        }
+    }
+  }
 }
 
 export function makeStreetFurniture(add: AddGeometry) {

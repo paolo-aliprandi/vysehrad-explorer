@@ -52,6 +52,8 @@ type IconName =
   | 'close'
   | 'check'
   | 'camera'
+  | 'sound'
+  | 'muted'
   | 'expand';
 function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const artwork: Record<IconName, string> = {
@@ -67,6 +69,8 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     check: 'm5 12 4 4L19 6',
     camera: 'M3 7h5l2-3h4l2 3h5v13H3V7Zm9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
     expand: 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5',
+    sound: 'M3 9h4l5-4v14l-5-4H3V9Zm13-1a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14',
+    muted: 'M3 9h4l5-4v14l-5-4H3V9Zm13 0 6 6m0-6-6 6',
   };
   return (
     <svg
@@ -335,6 +339,7 @@ export function App() {
   const [started, setStarted] = useState(false);
   const [flying, setFlying] = useState(false);
   const [time, setTime] = useState<TimeOfDay>('cycle');
+  const [sound, setSound] = useState(false);
   const [mode, setMode] = useState<GameMode>('chill');
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [visited, setVisited] = useState<string[]>([]);
@@ -585,6 +590,7 @@ export function App() {
     }
     world.current?.setMode(mode, progress);
     world.current?.setActive(true);
+    void world.current?.setSound(true).then(setSound);
     setStarted(true);
     setToast(
       mode === 'adventure'
@@ -854,6 +860,17 @@ export function App() {
                 >
                   {mode === 'adventure' ? 'Attack' : 'Toss stone'}{' '}
                   <kbd>{snapshot.controllerSupported ? 'Y' : 'R'}</kbd>
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={() =>
+                    void world.current?.setSound(!sound).then(setSound)
+                  }
+                  aria-label={sound ? 'Mute sounds' : 'Enable sounds'}
+                  aria-pressed={sound}
+                  title="Quiet footsteps and nearby conversation"
+                >
+                  <Icon name={sound ? 'sound' : 'muted'} />
                 </button>
                 <button
                   className="icon-button"

@@ -4,6 +4,7 @@ import {
   upperElevation,
   siteDetails,
   cafeFrontage,
+  cafeTableOffsets,
   streetFrontages,
   features,
   paths,
@@ -1144,7 +1145,7 @@ export function makeSiteDetails(add: AddGeometry) {
     local(-5, 2.3),
   ];
   add('#b6ab93', drapedPolygon(terrace, 0.07), 'cobble');
-  for (const u of [-2.9, 0.5]) {
+  for (const u of cafeTableOffsets) {
     const prop = siteProp(`cafe-table-${u}`);
     const point = prop.point,
       ground = elevation(...point);

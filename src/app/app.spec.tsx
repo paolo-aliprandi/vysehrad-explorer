@@ -6,6 +6,7 @@ vi.mock('../world/engine', () => ({
     setDiscoveries = vi.fn();
     setCasemateNotes = vi.fn();
     setActive = vi.fn();
+    setSound = vi.fn(async (enabled: boolean) => enabled);
     setMode = vi.fn();
     setControllerInput = vi.fn();
     setPaused = vi.fn();
@@ -32,6 +33,10 @@ describe('exploration entry', () => {
     fireEvent.click(enter);
     expect(screen.getByText('1 / 4')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Walking' })).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Mute sounds' }));
+    expect(
+      await screen.findByRole('button', { name: 'Enable sounds' }),
+    ).toBeTruthy();
     expect(
       screen.getByRole('button', { name: 'Open exploration map' }),
     ).toBeTruthy();
@@ -43,6 +48,7 @@ describe('exploration entry', () => {
     const enter = await screen.findByRole('button', { name: 'Enter Vyšehrad' });
     fireEvent.click(screen.getByRole('button', { name: /Adventure Mode/ }));
     fireEvent.click(enter);
+    await screen.findByRole('button', { name: 'Mute sounds' });
     expect(screen.getByText('0 / 4')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Walking' })).toBeNull();
     expect(
@@ -78,6 +84,7 @@ describe('exploration entry', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Adventure Mode/ }));
     fireEvent.click(enter);
+    await screen.findByRole('button', { name: 'Mute sounds' });
     expect(screen.getByText('1 / 4')).toBeTruthy();
     expect(
       screen

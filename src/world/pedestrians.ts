@@ -1,4 +1,12 @@
-import { blocked, gateBuildings, standingElevation, type Point } from './geo';
+import {
+  blocked,
+  gateBuildings,
+  standingElevation,
+  streetFrontages,
+  streetFurniture,
+  gardenBenchIds,
+  type Point,
+} from './geo';
 import { explorationPaths as paths } from './landscape';
 
 type Node = { point: Point; edges: Map<number, number> };
@@ -14,8 +22,53 @@ export const visitorExit = {
     gate.center[1] - gate.axis[0] * (gate.depth / 2 + 0.6),
   ] as Point,
 };
+export const shopStops = streetFrontages.map((frontage) => ({
+  point: [
+    frontage.facade[0] + frontage.normal[0] * 2,
+    frontage.facade[1] + frontage.normal[1] * 2,
+  ] as Point,
+  heading: Math.atan2(-frontage.normal[0], -frontage.normal[1]),
+  duration: 7,
+}));
+export type VisitorStop = { heading: number; duration: number };
+export function visitorShopStops(route: readonly Point[]) {
+  const stops = new Map<number, VisitorStop>();
+  route.forEach((point, index) => {
+    const shop = shopStops.find((shop) => distance(shop.point, point) < 0.01);
+    if (shop) stops.set(index, shop);
+  });
+  return stops;
+}
 
+export function gardenVisitorRoute() {
+  const points = gardenBenchIds.map((id) => {
+    const bench = streetFurniture.find((site) => site.id === id);
+    if (!bench) throw new Error(`Missing Na hradbách garden bench ${id}.`);
+    return [
+      bench.point[0] + Math.sin(bench.angle) * 1.5,
+      bench.point[1] + Math.cos(bench.angle) * 1.5,
+    ] as Point;
+  });
+  points.push(points[0]);
+  for (let i = 1; i < points.length; i++)
+    if (!visitorRouteClear(points[i - 1], points[i]))
+      throw new Error('The Na hradbách garden stroll is obstructed.');
+  return points;
+}
+
+const routeClearance = new Map<string, boolean>();
 export function visitorRouteClear(a: Point, b: Point) {
+  // Routes use immutable geographic collisions, not the moving crowd.
+  const ends = [a.join(','), b.join(',')].sort();
+  const key = ends.join('|');
+  const cached = routeClearance.get(key);
+  if (cached !== undefined) return cached;
+  const clear = scanVisitorRoute(a, b);
+  routeClearance.set(key, clear);
+  return clear;
+}
+
+function scanVisitorRoute(a: Point, b: Point) {
   const steps = Math.max(1, Math.ceil(distance(a, b) / 0.6));
   let previous = standingElevation(a);
   for (let i = 0; i <= steps; i++) {
@@ -70,6 +123,25 @@ export function createVisitorRoutes(random = Math.random): Point[][] {
       if (insideCastle(a) && insideCastle(b)) connect(node(a), node(b));
     }
   }
+  const shopIndices = shopStops.map((shop) => {
+    const target = node(shop.point);
+    const approach = nodes
+      .map((item, index) => ({
+        index,
+        distance: distance(item.point, shop.point),
+      }))
+      .filter(
+        (item) =>
+          item.index !== target &&
+          item.distance < 30 &&
+          nodes[item.index].edges.size,
+      )
+      .sort((a, b) => a.distance - b.distance)
+      .find((item) => visitorRouteClear(shop.point, nodes[item.index].point));
+    if (!approach) throw new Error('A shop has no walkable visitor approach.');
+    connect(target, approach.index);
+    return target;
+  });
   const inner: Point = [
     visitorExit.center[0] - visitorExit.axis[1] * (visitorExit.depth / 2 + 2),
     visitorExit.center[1] + visitorExit.axis[0] * (visitorExit.depth / 2 + 2),
@@ -92,7 +164,13 @@ export function createVisitorRoutes(random = Math.random): Point[][] {
   connect(innerIndex, gateIndex);
   connect(gateIndex, exit);
 
+  const routeCache = new Map<
+    number,
+    { costs: Map<number, number>; next: Map<number, number> }
+  >();
   const routesTo = (target: number) => {
+    const cached = routeCache.get(target);
+    if (cached) return cached;
     const costs = new Map<number, number>([[target, 0]]);
     const next = new Map<number, number>();
     const pending = new Set<number>([target]);
@@ -118,7 +196,9 @@ export function createVisitorRoutes(random = Math.random): Point[][] {
         }
       }
     }
-    return { costs, next };
+    const result = { costs, next };
+    routeCache.set(target, result);
+    return result;
   };
   const outbound = routesTo(exit);
   const candidates = [...outbound.costs.keys()].filter(
@@ -157,9 +237,14 @@ export function createVisitorRoutes(random = Math.random): Point[][] {
     [100, 160],
     [200, 240],
   ];
-  return starts.map((point) => {
+  return starts.map((point, index) => {
     let current = nearest(point);
     const route = [nodes[current].point];
+    const shop = shopIndices[index % shopIndices.length];
+    if (!outbound.costs.has(shop))
+      throw new Error('A shop is disconnected from the castle visitor paths.');
+    append(route, current, shop, routesTo(shop).next);
+    current = shop;
     for (let stop = 0; stop < 2; stop++) {
       const currentPoint = nodes[current].point;
       const choices = candidates.filter(
@@ -181,34 +266,58 @@ export class VisitorStroll {
   heading = 0;
   distance = 0;
   departed = false;
+  waiting = 0;
   private next = 1;
-  constructor(readonly route: readonly Point[]) {
-    if (route.length < 2)
+  constructor(
+    readonly route: readonly Point[],
+    readonly stops: ReadonlyMap<number, VisitorStop> = new Map(),
+    readonly loop = false,
+  ) {
+    if (
+      route.length < 2 ||
+      !route.some((point) => distance(point, route[0]) > 0)
+    )
       throw new Error('A visitor needs a route to the exit.');
     this.point = [...route[0]];
   }
   update(delta: number, speed: number) {
-    let remaining = delta * speed;
+    let remaining = delta;
+    if (speed <= 0) return;
     while (remaining > 0 && !this.departed) {
+      if (this.waiting > 0) {
+        const waited = Math.min(remaining, this.waiting);
+        this.waiting -= waited;
+        remaining -= waited;
+        if (!remaining) return;
+      }
       const target = this.route[this.next];
       const length = distance(this.point, target);
       this.heading = Math.atan2(
         target[0] - this.point[0],
         target[1] - this.point[1],
       );
-      if (remaining < length) {
+      const travelled = remaining * speed;
+      if (travelled < length) {
         this.point = [
-          this.point[0] + ((target[0] - this.point[0]) * remaining) / length,
-          this.point[1] + ((target[1] - this.point[1]) * remaining) / length,
+          this.point[0] + ((target[0] - this.point[0]) * travelled) / length,
+          this.point[1] + ((target[1] - this.point[1]) * travelled) / length,
         ];
-        this.distance += remaining;
+        this.distance += travelled;
         return;
       }
       this.point = [...target];
       this.distance += length;
-      remaining -= length;
+      remaining -= length / speed;
+      const stop = this.stops.get(this.next);
+      if (stop) {
+        this.waiting = stop.duration;
+        this.heading = stop.heading;
+      }
       this.next++;
-      this.departed = this.next >= this.route.length;
+      if (this.next >= this.route.length) {
+        if (this.loop) this.next = 1;
+        else this.departed = true;
+      }
     }
   }
 }

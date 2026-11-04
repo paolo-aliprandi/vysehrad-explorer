@@ -36,6 +36,19 @@ import {
 import { makeCemeteryArcade } from './architecture';
 
 describe('connected world surfaces', () => {
+  it('joins every outer and end bank edge back to existing ground without open height seams', () => {
+    let maximumError = 0;
+    for (const bank of retainedStreetBanks)
+      for (const point of samplePolyline(bank.blendBoundary, 0.5))
+        maximumError = Math.max(
+          maximumError,
+          Math.abs(
+            retainedStreetBankElevation(bank, point) -
+              unretainedElevation(...point),
+          ),
+        );
+    expect(maximumError).toBeLessThan(0.002);
+  });
   it('uses the graded street height, not the old court-bank height, across every rendered road vertex', () => {
     for (const corridor of retainedStreetCorridors) {
       const floor = drapedPolygon(corridor.polygon, 0, elevation);

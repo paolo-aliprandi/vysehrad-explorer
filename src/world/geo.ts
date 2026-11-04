@@ -2633,15 +2633,26 @@ export const retainedStreetWalls: Feature[] = retainedStreetCorridors.flatMap(
     return result;
   },
 );
-walls.push(...retainedStreetWalls);
-const streetBankWidth = 12;
 const brickApproachWall = walls.find((wall) => wall.id === 51718886);
 if (!brickApproachWall)
   throw new Error('Missing mapped Brick Gate street wall.');
-export const retainedStreetBanks = [
-  ...retainedStreetWalls,
-  { ...brickApproachWall, points: brickApproachWall.points.slice(0, 4) },
-].map((wall) => {
+const joinedStreetWall = retainedStreetWalls.find(
+  (wall) =>
+    Math.hypot(
+      wall.points[0][0] - brickApproachWall.points[0][0],
+      wall.points[0][1] - brickApproachWall.points[0][1],
+    ) < 1,
+);
+if (!joinedStreetWall)
+  throw new Error('The Brick Gate retaining wall has no street continuation.');
+joinedStreetWall.points = [
+  ...brickApproachWall.points.slice(0, 4).reverse(),
+  ...joinedStreetWall.points.slice(1),
+];
+brickApproachWall.points = brickApproachWall.points.slice(3);
+walls.push(...retainedStreetWalls);
+const streetBankWidth = 12;
+export const retainedStreetBanks = retainedStreetWalls.map((wall) => {
   const corridor = retainedStreetCorridors.reduce((a, b) =>
     projectRoute(wall.points[0], a.points).distance <
     projectRoute(wall.points[0], b.points).distance
@@ -2678,11 +2689,29 @@ export const retainedStreetBanks = [
     }
     return total / weight;
   });
-  const polygon = streetOutline([...wall.points, ...outer.reverse()]);
+  const blendBoundary = [
+    wall.points[wall.points.length - 1],
+    ...outer.reverse(),
+    wall.points[0],
+  ];
+  const polygon = streetOutline([...wall.points, ...outer]);
+  const blendEdges = blendBoundary.slice(1).map((b, index) => {
+    const a = blendBoundary[index];
+    return {
+      a,
+      b,
+      minX: Math.min(a[0], b[0]) - 3,
+      maxX: Math.max(a[0], b[0]) + 3,
+      minZ: Math.min(a[1], b[1]) - 3,
+      maxZ: Math.max(a[1], b[1]) + 3,
+    };
+  });
   return {
     wall,
     crests,
     polygon,
+    blendBoundary,
+    blendEdges,
     minX: Math.min(...polygon.map((point) => point[0])),
     maxX: Math.max(...polygon.map((point) => point[0])),
     minZ: Math.min(...polygon.map((point) => point[1])),
@@ -2739,13 +2768,27 @@ export function retainedStreetBankElevation(
   bank: (typeof retainedStreetBanks)[number],
   point: Point,
 ) {
-  const projection = projectRoute(point, bank.wall.points);
   const ground = unretainedElevation(...point);
+  let blendDistance = 3;
+  for (const edge of bank.blendEdges)
+    if (
+      point[0] >= edge.minX &&
+      point[0] <= edge.maxX &&
+      point[1] >= edge.minZ &&
+      point[1] <= edge.maxZ
+    )
+      blendDistance = Math.min(
+        blendDistance,
+        segmentDistance(point, edge.a, edge.b),
+      );
+  if (blendDistance < 1e-8) return ground;
+  const projection = projectRoute(point, bank.wall.points);
   const crest = streetBankCrest(bank, projection);
   return (
-    crest +
-    (ground - crest) *
-      smooth((projection.distance - 0.6) / (streetBankWidth - 0.6))
+    ground +
+    (crest - ground) *
+      (1 - smooth((projection.distance - 0.6) / (streetBankWidth - 0.6))) *
+      smooth(blendDistance / 3)
   );
 }
 
@@ -3218,7 +3261,7 @@ export function wallProfile(feature: Feature, point: Point, normal: Point) {
     return {
       bottom:
         (retainedStreetSection(point)?.level ?? elevation(...point)) - 0.3,
-      top: streetBankCrest(bank, projection) + 0.18,
+      top: retainedStreetBankElevation(bank, projection.point) + 0.18,
     };
   }
   const profile = terrainWallProfile(feature, point, normal);
@@ -3316,6 +3359,20 @@ export function retainedWallOffsets(
 const mainRampart = walls.find((wall) => wall.id === rampartWallId);
 if (!mainRampart) throw new Error('The main rampart is missing.');
 
+export const cemeteryCornerShrine = (() => {
+  const feature = buildings.find((building) => building.id === 459551122);
+  const street = paths.find((path) => path.id === 27762643);
+  if (!feature || !street)
+    throw new Error('The cemetery corner shrine alignment is missing.');
+  const point = center(feature.points);
+  const toward = projectRoute(point, street.points).point;
+  return {
+    feature,
+    point,
+    ground: foundation(feature),
+    angle: Math.atan2(toward[0] - point[0], toward[1] - point[1]),
+  };
+})();
 export const sculptures = monuments
   .filter(
     ({ id, point, tags }) =>
@@ -3390,6 +3447,15 @@ export const sculptures = monuments
               : 2.4,
     };
   });
+sculptures.push({
+  id: -91010,
+  point: cemeteryCornerShrine.point,
+  tags: { name: 'Cemetery corner niche statue', material: 'stone' },
+  angle: cemeteryCornerShrine.angle,
+  scale: 0.8,
+  width: 0.95,
+  depth: 0.85,
+});
 
 export function sculptureFootprintContains(point: Point, margin = 0.4) {
   return sculptures.some((sculpture) => {
@@ -4340,7 +4406,8 @@ for (const [runIndex, run] of shopGardenFence.entries())
     });
   }
 const cafe = cafeFrontage();
-for (const u of [-2.9, 0.5]) {
+export const cafeTableOffsets = [-2.9, 2.2];
+for (const u of cafeTableOffsets) {
   siteProps.push({
     id: `cafe-table-${u}`,
     point: propAt(cafe, u, 4.4),
@@ -4852,7 +4919,27 @@ export function blocked(
   });
 }
 
-// Surveyed furniture is retained locally, never replaced by arbitrary scenic seats.
+const pubGarden = streetFrontages.find(
+  (frontage) => frontage.detail.id === 264494769,
+);
+if (!pubGarden) throw new Error('The Na hradbách garden frontage is missing.');
+export const gardenBenchIds = [-91001, -91002, -91003, -91004];
+for (const [index, [u, v]] of [
+  [-7, 14],
+  [-3.5, 18],
+  [3.5, 18],
+  [7, 14],
+].entries())
+  siteDetails.push({
+    id: gardenBenchIds[index],
+    point: propAt(pubGarden, u, pubGarden.depth / 2 + v),
+    tags: {
+      amenity: 'bench',
+      direction: String((-pubGarden.angle * 180) / Math.PI),
+    },
+  });
+
+// Keep surveyed seats; additions are confined to the pub garden.
 for (const detail of siteDetails) {
   const bench = detail.tags.amenity === 'bench',
     lamp = detail.tags.highway === 'street_lamp';
@@ -5003,8 +5090,11 @@ export const requestedPlantingZones: Point[][] = [
   ],
 ];
 export function treePositions(): Point[] {
+  const atStreetWallJoin = (point: Point) =>
+    Math.hypot(point[0] + 85.5, point[1] + 41.5) < 1.6;
   const trees: Point[] = mappedTrees.filter(
     (point) =>
+      !atStreetWallJoin(point) &&
       !inside(point, spickaFrontage.plantingPlot) &&
       !(
         platformIndex.get(
@@ -5028,6 +5118,7 @@ export function treePositions(): Point[] {
   );
   const add = (point: Point) => {
     if (
+      atStreetWallJoin(point) ||
       retainedStreetSection(point) ||
       blocked(point) ||
       inside(point, spickaFrontage.plantingPlot) ||
