@@ -8,6 +8,7 @@ import {
   casemateDoor,
   casemateUphillExit,
   upperElevation,
+  artilleryEntrance,
   type Point,
 } from './geo';
 import { streetFurniture, cathedralEntrance } from './architecture';
@@ -23,6 +24,8 @@ export type ActivityKind =
   | 'cathedral'
   | 'rotunda'
   | 'lawrence'
+  | 'john'
+  | 'artillery'
   | 'casemates'
   | 'casemate-note'
   | 'exit';
@@ -42,6 +45,8 @@ export type Activity = ActivityLocation &
           | 'cathedral'
           | 'rotunda'
           | 'lawrence'
+          | 'john'
+          | 'artillery'
           | 'casemates'
           | 'casemate-note'
           | 'exit';
@@ -88,6 +93,12 @@ export const uphillCasemates: Activity = {
   kind: 'casemates',
   point: casemateUphillExit.point,
   label: 'Enter the uphill casemate passage',
+};
+export const artilleryGallery: Activity = {
+  id: 'artillery',
+  kind: 'artillery',
+  point: artilleryEntrance.approach,
+  label: 'Enter the artillery gallery',
 };
 export const cathedralExits: Activity[] = cathedralLayout.exits.map(
   (x, index) => ({

@@ -9,6 +9,11 @@ import {
 } from './reference-details';
 import {
   brickGateStairs,
+  brickGateFenceLevel,
+  upperElevation,
+  upperCovers,
+  coverElevation,
+  originalElevation,
   cemeteryArcadeBays,
   elevation,
   referenceSites,
@@ -34,6 +39,10 @@ import {
   riversideDoorways,
   blocked,
   slavin,
+  aveMariaStairs,
+  aveMariaStairCut,
+  referenceBorderBushes,
+  retainedStreetWalls,
   type Point,
 } from './geo';
 import { makeApproach, makePassages } from './passages';
@@ -42,6 +51,7 @@ import { clipTerrainAtArcades, drapedPolygon } from './surfaces';
 import {
   makePanoramaLookouts,
   makeAveMariaWall,
+  makeAveMaria,
   makeFence,
   makeSlavin,
   type AddGeometry,
@@ -69,8 +79,50 @@ function geometryScene(
   };
 }
 
-it('embeds Ave Maria in the retaining wall with a clear graded approach, a closed chapel door and an open side arch', () => {
-  const scene = geometryScene(makeAveMariaWall, THREE.DoubleSide);
+it('grades the lawn above Brick Gate into a straight crest while preserving its perimeter and the road beneath', () => {
+  const cover = upperCovers.find((cover) => cover.id === 51700613);
+  const fence = walls.find((wall) => wall.id === 1303806149);
+  if (!cover || !fence) throw new Error('Missing Brick Gate crest.');
+  const [a, b] = fence.points;
+  const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const normal: Point = [-(b[1] - a[1]) / length, (b[0] - a[0]) / length];
+  const scene = geometryScene(makePassages, THREE.DoubleSide);
+  try {
+    for (const t of [0.1, 0.3, 0.5, 0.7, 0.9]) {
+      const axis: Point = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+      const level = brickGateFenceLevel(...axis) - 0.03;
+      for (const side of [-2, 0, 2]) {
+        const point: Point = [
+          axis[0] + normal[0] * side,
+          axis[1] + normal[1] * side,
+        ];
+        expect(upperElevation(...point)).toBeCloseTo(level, 6);
+        const floor = new THREE.Raycaster(
+          new THREE.Vector3(point[0], level + 0.5, point[1]),
+          new THREE.Vector3(0, -1, 0),
+          0,
+          1,
+        ).intersectObjects(scene.meshes)[0];
+        expect(floor).toBeDefined();
+        expect(Math.abs(floor.point.y - level)).toBeLessThan(0.003);
+        expect(elevation(...point)).toBeLessThan(level - 5);
+      }
+    }
+    for (const point of cover.footprint)
+      expect(coverElevation(cover, ...point)).toBeCloseTo(
+        originalElevation(...point),
+        6,
+      );
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('clears walkable side and rear gaps around the restored Ave Maria chapel to reach the hidden church doorway', () => {
+  const scene = geometryScene((add) => {
+    makeAveMariaWall(add);
+    makeAveMaria(aveMariaFloor(), 4, add);
+  }, THREE.DoubleSide);
   try {
     expect(foundation(aveMariaFrontage.feature)).toBeCloseTo(
       aveMariaFloor(),
@@ -85,6 +137,10 @@ it('embeds Ave Maria in the retaining wall with a clear graded approach, a close
       [0, 9.5],
       [3.55, -0.5],
       [3.55, -7],
+      [-5.2, -4],
+      [-5.2, -9.5],
+      [0, -9.8],
+      [-3.2, -10.2],
     ]) {
       const point = aveMariaPoint(u, v);
       const level = aveMariaCourtElevation(...point);
@@ -108,6 +164,12 @@ it('embeds Ave Maria in the retaining wall with a clear graded approach, a close
       ).toBeLessThan(0.035);
       expect(blocked(point, level)).toBe(false);
     }
+    for (let v = 0; v >= -10; v -= 0.15) {
+      const point = aveMariaPoint(-5, v);
+      expect(blocked(point, elevation(...point)), JSON.stringify(point)).toBe(
+        false,
+      );
+    }
     const level = aveMariaFloor();
     const cast = (u: number) => {
       const start = aveMariaPoint(u, 1);
@@ -124,15 +186,6 @@ it('embeds Ave Maria in the retaining wall with a clear graded approach, a close
     };
     expect(cast(0)[0]?.object.name).toMatch(/^wood:/);
     expect(cast(3.55)).toHaveLength(0);
-    const lintel = aveMariaPoint(3.55, -0.2);
-    expect(
-      new THREE.Raycaster(
-        new THREE.Vector3(lintel[0], level + 1.6, lintel[1]),
-        new THREE.Vector3(0, 1, 0),
-        0,
-        3,
-      ).intersectObjects(scene.meshes)[0]?.object.name,
-    ).toMatch(/^stone:/);
     for (const cut of aveMariaCourtCuts) {
       const soil = drapedPolygon(cut, 0, unretainedElevation);
       clipTerrainAtArcades(soil, false, false);
@@ -169,6 +222,62 @@ it('embeds Ave Maria in the retaining wall with a clear graded approach, a close
     } finally {
       legacy.dispose();
     }
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('joins the kiosk corner masonry, plants both marked frontages and renders the short Ave Maria approach as grounded steps', () => {
+  const ends = [-9000103, -9001000].map((id) =>
+    retainedStreetWalls.find((wall) => wall.id === id)?.points.at(-1),
+  );
+  expect(ends[0]).toEqual(ends[1]);
+  expect(
+    referenceBorderBushes.filter((bush) => bush.point[0] > 120).length,
+  ).toBeGreaterThan(3);
+  expect(
+    referenceBorderBushes.filter((bush) => bush.point[0] < 70).length,
+  ).toBeGreaterThan(1);
+  const kioskBushes = referenceBorderBushes.filter(
+    (bush) => bush.point[0] < 70,
+  );
+  expect(kioskBushes.some((bush) => bush.point[1] > 59)).toBe(true);
+  expect(kioskBushes.some((bush) => bush.point[1] < 40)).toBe(true);
+  for (const bush of kioskBushes) {
+    const distance = Math.min(
+      ...retainedStreetWalls
+        .filter((wall) => [-9000103, -9001000].includes(wall.id))
+        .map((wall) => projectRoute(bush.point, wall.points).distance),
+    );
+    expect(distance).toBeGreaterThan(0.7);
+    expect(distance).toBeLessThan(1.2);
+  }
+  const scene = geometryScene(makeApproach, THREE.DoubleSide);
+  try {
+    if (!aveMariaStairs) throw new Error('Missing approach stairs.');
+    const [a, b] = aveMariaStairs.feature.points;
+    for (let i = 1; i < aveMariaStairs.count; i++) {
+      const t = (i + 0.4) / aveMariaStairs.count;
+      const point: Point = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+      const floor = stairElevation(aveMariaStairs, point);
+      const hit = new THREE.Raycaster(
+        new THREE.Vector3(point[0], floor + 0.2, point[1]),
+        new THREE.Vector3(0, -1, 0),
+        0,
+        0.4,
+      ).intersectObjects(scene.meshes)[0];
+      expect(hit?.point.y).toBeCloseTo(floor + 0.05, 4);
+    }
+    const soil = drapedPolygon(aveMariaStairCut);
+    clipTerrainAtArcades(soil);
+    const midpoint: Point = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    expect(
+      new THREE.Raycaster(
+        new THREE.Vector3(midpoint[0], 80, midpoint[1]),
+        new THREE.Vector3(0, -1, 0),
+      ).intersectObject(new THREE.Mesh(soil, scene.meshes[0].material)),
+    ).toHaveLength(0);
+    soil.dispose();
   } finally {
     scene.dispose();
   }
@@ -432,7 +541,13 @@ it('recesses the surviving hidden church windows behind actual openings, rather 
     expect(window?.object.name).not.toMatch(/^brick:/);
     expect(window?.distance).toBeGreaterThan(2);
     expect(wall?.object.name).toMatch(/^brick:/);
-    expect(wall?.distance).toBeCloseTo(2, 4);
+    expect(wall?.distance).toBeCloseTo(4 - church.depth / 2, 4);
+    const door = new THREE.Raycaster(
+      at(-3.4, 1.2, 2),
+      direction,
+    ).intersectObjects(scene.meshes)[0];
+    expect(door?.object.name).toMatch(/^wood:/);
+    expect(door?.distance).toBeGreaterThan(2 - church.depth / 2);
   } finally {
     scene.dispose();
   }

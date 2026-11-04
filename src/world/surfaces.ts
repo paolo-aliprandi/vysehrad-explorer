@@ -3,6 +3,7 @@ import polygonClipping, { type Polygon } from 'polygon-clipping';
 import { polygonBoolean } from './polygons';
 import {
   elevation,
+  upperCovers,
   terrainField,
   approachTerrainField,
   taborTerrainField,
@@ -25,6 +26,7 @@ import {
   brickGateStairCuts,
   panoramaDecks,
   aveMariaCourtCuts,
+  aveMariaStairCut,
   onAveMariaCourt,
   foundation,
   casemateDoor,
@@ -45,6 +47,14 @@ const streetDrapeBounds = retainedStreetAreas.map(({ polygon }) => ({
 }));
 const streetAccessDrapeBounds =
   streetDrapeBounds[retainedStreetAreas.indexOf(retainedStreetAccess)];
+const brickGateCover = upperCovers.find((cover) => cover.id === 51700613);
+if (!brickGateCover) throw new Error('Missing Brick Gate terrain cover.');
+const brickGateDrapeBounds = {
+  minX: Math.min(...brickGateCover.footprint.map((point) => point[0])),
+  maxX: Math.max(...brickGateCover.footprint.map((point) => point[0])),
+  minZ: Math.min(...brickGateCover.footprint.map((point) => point[1])),
+  maxZ: Math.max(...brickGateCover.footprint.map((point) => point[1])),
+};
 
 export function clipTerrainAtArcades(
   source: THREE.BufferGeometry,
@@ -72,6 +82,12 @@ export function clipTerrainAtArcades(
     },
   ].map((area) => ({ ...area, seal: true }));
   outlines.push(
+    {
+      points: aveMariaStairCut,
+      floorBottom: 0,
+      ceiling: Infinity,
+      seal: false,
+    },
     ...aveMariaCourtCuts.map((points) => ({
       points,
       floorBottom: 0,
@@ -561,6 +577,7 @@ function drapeTriangles(
         const detailed =
           streetDetail ||
           [
+            brickGateDrapeBounds,
             approachTerrainField,
             courtBankBounds,
             gardenBankBounds,

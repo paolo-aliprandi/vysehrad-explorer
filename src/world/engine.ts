@@ -99,6 +99,7 @@ import {
   casemateBlocked,
   casemateNotes,
   casemateFloor,
+  artilleryBlocked,
 } from './casemates';
 import {
   createVisitorRoutes,
@@ -112,6 +113,7 @@ import {
   cathedral,
   casemates,
   uphillCasemates,
+  artilleryGallery,
   cathedralExits,
   nearbyActivity,
   benchApproach,
@@ -183,6 +185,8 @@ import {
   panoramaOpening,
   panoramaDecks,
   aveMariaCourtCuts,
+  brickGateFenceLevel,
+  gardenLatticeWallIds,
   exposedRocks,
   cemeteryArcades,
   cemeteryArcadeWallIds,
@@ -207,7 +211,7 @@ export type Snapshot = {
   interaction: ActivityPrompt | null;
   seated: boolean;
   indoors: boolean;
-  interior: 'cathedral' | 'casemates' | ChapelKind | null;
+  interior: 'cathedral' | 'casemates' | 'artillery' | ChapelKind | null;
   wood: number;
   hour: number;
   controller: string | null;
@@ -253,6 +257,7 @@ export function roof(
   base: number,
   height: number,
   kind: string,
+  uphill?: Point,
 ) {
   const frame = orientedBounds(points);
   const local = points.map(
@@ -264,6 +269,23 @@ export function roof(
     ],
   );
   const vertices: number[] = [];
+  const skillionFactor = (
+    coordinate: number,
+    axis: number,
+    mid: number,
+    half: number,
+  ) => {
+    const projection = uphill
+      ? axis === 0
+        ? uphill[0] * frame.axis[0] + uphill[1] * frame.axis[1]
+        : -uphill[0] * frame.axis[1] + uphill[1] * frame.axis[0]
+      : 1;
+    if (Math.abs(projection) < 1e-8)
+      throw new Error('Skillion roof rise is parallel to its ridge.');
+    return (
+      (Math.sign(projection) * (coordinate - mid) + half) / (2 * half || 1)
+    );
+  };
   const ring =
     local[0][0] === local.at(-1)?.[0] && local[0][1] === local.at(-1)?.[1]
       ? local.slice(0, -1)
@@ -366,7 +388,7 @@ export function roof(
           const p = clipped[index];
           const factor =
             kind === 'skillion'
-              ? (p[axis] - mid + half) / (2 * half || 1)
+              ? skillionFactor(p[axis], axis, mid, half)
               : 1 - Math.abs(p[axis] - mid) / (half || 1);
           vertices.push(p[0], base + Math.max(0, factor) * height, p[1]);
         }
@@ -390,7 +412,7 @@ export function roof(
       kind === 'hipped'
         ? Math.min(1 - Math.abs(p[1]) / halfZ, (halfX - Math.abs(p[0])) / halfZ)
         : kind === 'skillion'
-          ? (p[axis] + half) / (2 * half)
+          ? skillionFactor(p[axis], axis, 0, half)
           : 1 - Math.abs(p[axis]) / half;
     return base + Math.max(0, factor) * height;
   };
@@ -503,10 +525,11 @@ export class World {
   }[] = [];
   private interior: ReturnType<typeof makeCathedralInterior>;
   private casemates: ReturnType<typeof makeCasemateInterior>;
+  private artillery: ReturnType<typeof makeCasemateInterior>;
   private chapels: Record<ChapelKind, ReturnType<typeof makeChapelInterior>>;
   private foundCasemateNotes = new Set<string>();
   private indoorReturn: {
-    kind: 'cathedral' | 'casemates' | ChapelKind;
+    kind: 'cathedral' | 'casemates' | 'artillery' | ChapelKind;
     position: THREE.Vector3;
     yaw: number;
     zoom: number;
@@ -706,16 +729,20 @@ export class World {
     }
     this.interior = makeCathedralInterior(this.surfaceMaterials);
     this.casemates = makeCasemateInterior(this.surfaceMaterials);
+    this.artillery = makeCasemateInterior(this.surfaceMaterials, true);
     this.chapels = {
       rotunda: makeChapelInterior('rotunda', this.surfaceMaterials),
       lawrence: makeChapelInterior('lawrence', this.surfaceMaterials),
+      john: makeChapelInterior('john', this.surfaceMaterials),
     };
     this.scene.add(
       this.npc,
       this.interior.group,
       this.casemates.group,
+      this.artillery.group,
       this.chapels.rotunda.group,
       this.chapels.lawrence.group,
+      this.chapels.john.group,
     );
     this.outdoorActivities = [
       ...benches.filter(
@@ -728,17 +755,20 @@ export class World {
       ),
       groundskeeper,
       cathedral,
-      ...(['rotunda', 'lawrence'] as const).map((kind) => ({
+      ...(['rotunda', 'lawrence', 'john'] as const).map((kind) => ({
         id: kind,
         kind,
         point: chapelSites[kind].approach,
         label:
           kind === 'rotunda'
             ? 'Enter St. Martin’s Rotunda'
-            : 'Explore St. Lawrence’s ruins',
+            : kind === 'lawrence'
+              ? 'Explore St. Lawrence’s ruins'
+              : 'Enter the hidden Church of St. John',
       })),
       casemates,
       uphillCasemates,
+      artilleryGallery,
       {
         id: 'fire',
         kind: 'fire',
@@ -786,6 +816,8 @@ export class World {
       ...this.blockers,
       ...this.interior.blockers,
       ...this.casemates.blockers,
+      ...this.artillery.blockers,
+      ...Object.values(this.chapels).flatMap((chapel) => chapel.blockers),
     ]) {
       if (!(mesh instanceof THREE.Mesh) || mesh.geometry.index?.count === 0)
         continue;
@@ -1153,7 +1185,7 @@ export class World {
     this.makePaving();
     for (const feature of walls) {
       if (cemeteryArcadeWallIds.has(feature.id)) continue;
-      if (feature.id === 377578898) {
+      if (gardenLatticeWallIds.has(feature.id)) {
         makeStulcovaGardenWall(feature.points, this.batch.bind(this));
         continue;
       }
@@ -1177,14 +1209,28 @@ export class World {
         const fence = feature.tags.barrier === 'fence';
         let suspended = false;
         const emit = () => {
-          if (run.length > 1 && fence)
+          if (run.length > 1 && fence) {
+            if (feature.id === 1303806149)
+              this.batch(
+                '#a29b87',
+                continuousWall(
+                  run,
+                  0.32,
+                  (point) => ({
+                    bottom: elevation(...point) - 0.2,
+                    top: brickGateFenceLevel(...point) + 0.08,
+                  }),
+                  false,
+                ),
+                'stone',
+              );
             makeFence(
               run,
               meters(feature.tags.height, 1.8),
               this.batch.bind(this),
-              upperElevation,
+              feature.id === 1303806149 ? brickGateFenceLevel : upperElevation,
             );
-          else if (run.length > 1)
+          } else if (run.length > 1)
             this.batch(
               feature.tags.barrier === 'city_wall'
                 ? [8888302, 33878732].includes(feature.id)
@@ -1298,10 +1344,7 @@ export class World {
     const tags = { ...parent?.tags, ...feature.tags };
     feature = { ...feature, tags };
     const ground = foundation(feature);
-    if (feature.id === -89545110) {
-      makeAveMariaWall(this.batch.bind(this));
-      return;
-    }
+    if (feature.id === -89545110) makeAveMariaWall(this.batch.bind(this));
     if (feature.id === chapelSites.lawrence.feature.id) {
       makeLawrenceExterior(this.batch.bind(this));
       return;
@@ -1357,7 +1400,15 @@ export class World {
       tags.building === 'church' || color === '#52514f' ? 'stone' : 'plaster',
     );
     if (roofHeight > 0) {
-      const covering = roof(points, top, roofHeight, roofKind);
+      let uphill: Point | undefined;
+      if ([511065344, 511065345].includes(feature.id)) {
+        const nave = parts.find((part) => part.id === 454748869);
+        if (!nave)
+          throw new Error('Missing cathedral nave beside its aisle roofs.');
+        const naveCenter = center(nave.points);
+        uphill = [naveCenter[0] - x, naveCenter[1] - z];
+      }
+      const covering = roof(points, top, roofHeight, roofKind, uphill);
       this.batch(
         tags['roof:colour']?.match(/^#[0-9a-f]{6}$/i)
           ? tags['roof:colour']
@@ -1879,7 +1930,10 @@ export class World {
       light.night,
     );
     this.surfaceMaterials.setNight(light.night);
-    if (this.indoorReturn?.kind === 'casemates') {
+    if (
+      this.indoorReturn?.kind === 'casemates' ||
+      this.indoorReturn?.kind === 'artillery'
+    ) {
       this.scene.background = new THREE.Color('#25251f');
       this.scene.fog = new THREE.FogExp2('#25251f', 0.012 / environmentScale);
       this.renderer.toneMappingExposure = 1.05;
@@ -2149,7 +2203,10 @@ export class World {
       const church = nearbyActivity(
         this.outdoorActivities.filter(
           (activity) =>
-            activity.kind === 'rotunda' || activity.kind === 'lawrence',
+            activity.kind === 'rotunda' ||
+            activity.kind === 'lawrence' ||
+            activity.kind === 'john' ||
+            activity.kind === 'artillery',
         ),
         point,
         this.position.y,
@@ -2191,17 +2248,27 @@ export class World {
                 label: `${this.foundCasemateNotes.has(note.id) ? 'Re-read' : 'Record'}: ${note.title}`,
               })),
             ]
-          : this.indoorReturn.kind === 'rotunda' ||
-              this.indoorReturn.kind === 'lawrence'
+          : this.indoorReturn.kind === 'artillery'
             ? [
                 {
-                  id: 'chapel-exit',
+                  id: 'artillery-exit',
                   kind: 'exit' as const,
-                  point: chapelSites[this.indoorReturn.kind].exit,
-                  label: 'Return to Vyšehrad',
+                  point: [0, 2.5] as Point,
+                  label: 'Leave the artillery gallery',
                 },
               ]
-            : cathedralExits
+            : this.indoorReturn.kind === 'rotunda' ||
+                this.indoorReturn.kind === 'lawrence' ||
+                this.indoorReturn.kind === 'john'
+              ? [
+                  {
+                    id: 'chapel-exit',
+                    kind: 'exit' as const,
+                    point: chapelSites[this.indoorReturn.kind].exit,
+                    label: 'Return to Vyšehrad',
+                  },
+                ]
+              : cathedralExits
         : this.outdoorActivities.filter(
             (item) => item.kind !== 'tree' || !this.felled.has(item.index),
           ),
@@ -2255,7 +2322,7 @@ export class World {
         text: this.indoorReturn
           ? this.indoorReturn.kind === 'casemates'
             ? 'Follow the lit corridors. F records a field note; return to the green entrance door to leave.'
-            : 'Walk back to the cathedral doors and press F to leave.'
+            : 'Walk back to the entrance door and press F to leave.'
           : 'Walk closer to a bench, tree, fireplace, or the groundskeeper.',
       };
     switch (activity.kind) {
@@ -2310,13 +2377,22 @@ export class World {
         };
       case 'rotunda':
       case 'lawrence':
+      case 'john':
         this.enterInterior(activity.kind);
         return {
           kind: 'message',
           text:
             activity.kind === 'rotunda'
               ? 'Inside St. Martin’s Rotunda. An illustrative Romanesque interior; F at the door to leave.'
-              : 'St. Lawrence’s archaeological remains. Low foundations and interpretive Romanesque floor tiles, not a reconstruction of a standing basilica. F at the entrance to leave.',
+              : activity.kind === 'john'
+                ? 'Inside the hidden Church of St. John the Baptist. This is an illustrative interior beneath the rampart, not a surveyed reconstruction. F at the entrance to leave.'
+                : 'St. Lawrence’s archaeological remains. Low foundations and interpretive Romanesque floor tiles, not a reconstruction of a standing basilica. F at the entrance to leave.',
+        };
+      case 'artillery':
+        this.enterInterior('artillery');
+        return {
+          kind: 'message',
+          text: 'A separate illustrative artillery gallery: cannons, cannonballs, shields, helmets, drums and trophy displays. These are interpretive props, not a claim about a real collection here. F at the green entrance door to leave.',
         };
       case 'casemates':
         this.enterInterior('casemates', activity.id === 'casemates-uphill');
@@ -2445,24 +2521,30 @@ export class World {
   private get activeInterior() {
     return this.indoorReturn?.kind === 'casemates'
       ? this.casemates
-      : this.indoorReturn?.kind === 'rotunda' ||
-          this.indoorReturn?.kind === 'lawrence'
-        ? this.chapels[this.indoorReturn.kind]
-        : this.interior;
+      : this.indoorReturn?.kind === 'artillery'
+        ? this.artillery
+        : this.indoorReturn?.kind === 'rotunda' ||
+            this.indoorReturn?.kind === 'lawrence' ||
+            this.indoorReturn?.kind === 'john'
+          ? this.chapels[this.indoorReturn.kind]
+          : this.interior;
   }
   private interiorBlocked(point: Point) {
     return this.indoorReturn?.kind === 'casemates'
       ? casemateBlocked(point)
-      : this.indoorReturn?.kind === 'rotunda' ||
-          this.indoorReturn?.kind === 'lawrence'
-        ? chapelBlocked(this.indoorReturn.kind, point)
-        : indoorBlocked(point);
+      : this.indoorReturn?.kind === 'artillery'
+        ? artilleryBlocked(point)
+        : this.indoorReturn?.kind === 'rotunda' ||
+            this.indoorReturn?.kind === 'lawrence' ||
+            this.indoorReturn?.kind === 'john'
+          ? chapelBlocked(this.indoorReturn.kind, point)
+          : indoorBlocked(point);
   }
   private indoorFloor(point: Point) {
     return this.indoorReturn?.kind === 'casemates' ? casemateFloor(point) : 0;
   }
   private enterInterior(
-    kind: 'cathedral' | 'casemates' | ChapelKind,
+    kind: 'cathedral' | 'casemates' | 'artillery' | ChapelKind,
     uphill = false,
   ) {
     this.indoorReturn = {
@@ -2489,9 +2571,9 @@ export class World {
       uphill ? casemateFloor([38, -34.5]) : 0,
       uphill
         ? -34.5
-        : kind === 'casemates'
+        : kind === 'casemates' || kind === 'artillery'
           ? 2
-          : kind === 'rotunda' || kind === 'lawrence'
+          : kind === 'rotunda' || kind === 'lawrence' || kind === 'john'
             ? chapelSites[kind].spawn[1]
             : 13,
     );

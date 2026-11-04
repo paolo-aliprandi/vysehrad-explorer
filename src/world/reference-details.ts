@@ -23,6 +23,7 @@ import {
   wallOpening,
   courtBankBoundary,
   buildings,
+  artilleryEntrance,
   type Point,
   type Feature,
 } from './geo';
@@ -170,12 +171,20 @@ export function makeHiddenChurch(add: AddGeometry) {
   const site = referenceSites.hiddenChurch;
   const ground = elevation(...site.point);
   const emit = localEmitter(site.point, ground, site.angle, add);
+  const face = site.depth / 2;
   const front = new THREE.Shape();
   front.moveTo(-site.width / 2, -1.5);
   front.lineTo(site.width / 2, -1.5);
   front.lineTo(site.width / 2, site.height);
   front.lineTo(-site.width / 2, site.height);
   front.closePath();
+  const doorway = new THREE.Path();
+  doorway.moveTo(-4.05, -0.1);
+  doorway.lineTo(-2.75, -0.1);
+  doorway.lineTo(-2.75, 2.3);
+  doorway.lineTo(-4.05, 2.3);
+  doorway.closePath();
+  front.holes.push(doorway);
   const windows = [-1.4, 1.35, 3.4];
   for (const x of windows) {
     const hole = new THREE.Path();
@@ -196,7 +205,7 @@ export function makeHiddenChurch(add: AddGeometry) {
   );
   for (const x of windows) {
     emit(
-      new THREE.BoxGeometry(1.02, 1.65, 0.04).translate(x, 3.7, 1.68),
+      new THREE.BoxGeometry(1.02, 1.65, 0.04).translate(x, 3.7, face - 0.25),
       '#252d2b',
       'wood',
     );
@@ -205,19 +214,19 @@ export function makeHiddenChurch(add: AddGeometry) {
         new THREE.BoxGeometry(0.025, 1.54, 0.04).translate(
           x + bar * 0.19,
           3.72,
-          1.98,
+          face + 0.03,
         ),
         '#4a4b41',
         'metal',
       );
     for (const y of [3.25, 3.78, 4.25])
       emit(
-        new THREE.BoxGeometry(0.98, 0.025, 0.04).translate(x, y, 1.98),
+        new THREE.BoxGeometry(0.98, 0.025, 0.04).translate(x, y, face + 0.03),
         '#4a4b41',
         'metal',
       );
     emit(
-      new THREE.BoxGeometry(1.15, 0.12, 0.34).translate(x, 2.92, 1.95),
+      new THREE.BoxGeometry(1.15, 0.12, 0.34).translate(x, 2.92, face + 0.04),
       '#a59f89',
     );
   }
@@ -230,22 +239,87 @@ export function makeHiddenChurch(add: AddGeometry) {
     '#9e9a87',
   );
   emit(
-    new THREE.BoxGeometry(2.4, 4.2, 0.16).translate(-3.35, 1.9, 2.05),
+    new THREE.BoxGeometry(0.26, 2.65, 0.22).translate(-4.19, 1.2, face + 0.02),
     '#a8a390',
     'rubble',
   );
   emit(
-    new THREE.BoxGeometry(1.2, 2.3, 0.08).translate(-3.4, 1.15, 2.15),
+    new THREE.BoxGeometry(1.3, 2.3, 0.08).translate(-3.4, 1.15, face - 0.08),
     '#71937d',
     'wood',
   );
   for (const x of [-3.68, -3.12])
     for (const y of [0.6, 1.65])
       emit(
-        new THREE.BoxGeometry(0.44, 0.88, 0.035).translate(x, y, 2.2),
+        new THREE.BoxGeometry(0.44, 0.88, 0.035).translate(x, y, face - 0.025),
         '#62816d',
         'wood',
       );
+  emit(
+    new THREE.BoxGeometry(0.26, 2.65, 0.22).translate(-2.61, 1.2, face + 0.02),
+    '#a8a390',
+  );
+  emit(
+    new THREE.BoxGeometry(1.84, 0.26, 0.22).translate(-3.4, 2.43, face + 0.02),
+    '#a8a390',
+  );
+}
+
+export function makeArtilleryEntrance(add: AddGeometry) {
+  const site = artilleryEntrance;
+  const emit = localEmitter(site.point, site.floor, site.angle, add);
+  const arch = new THREE.Shape();
+  arch.moveTo(-1.3, -0.2);
+  arch.lineTo(1.3, -0.2);
+  arch.lineTo(1.3, 1.8);
+  arch.absarc(0, 1.8, 1.3, 0, Math.PI, false);
+  arch.closePath();
+  const hole = new THREE.Path();
+  hole.moveTo(-0.88, -0.2);
+  hole.lineTo(0.88, -0.2);
+  hole.lineTo(0.88, 1.8);
+  hole.absarc(0, 1.8, 0.88, 0, Math.PI, false);
+  hole.closePath();
+  arch.holes.push(hole);
+  emit(
+    new THREE.ExtrudeGeometry(arch, {
+      depth: 0.45,
+      bevelEnabled: false,
+      curveSegments: 24,
+    }),
+    '#c2b59b',
+  );
+  emit(
+    new THREE.BoxGeometry(1.76, 2.3, 0.12).translate(0, 1.15, -0.04),
+    '#405d4c',
+    'wood',
+  );
+  for (const y of [0.55, 1.65])
+    emit(
+      new THREE.BoxGeometry(1.7, 0.06, 0.05).translate(0, y, 0.05),
+      '#36433c',
+      'metal',
+    );
+  emit(
+    new THREE.BoxGeometry(0.12, 0.12, 0.1).translate(0.57, 1.15, 0.08),
+    '#b5a16f',
+    'metal',
+  );
+  const n = site.normal,
+    t: Point = [n[1], -n[0]];
+  const apron = [
+    [-1.6, 0],
+    [1.6, 0],
+    [1.6, 3.2],
+    [-1.6, 3.2],
+    [-1.6, 0],
+  ].map(
+    ([u, v]): Point => [
+      site.point[0] + t[0] * u + n[0] * v,
+      site.point[1] + t[1] * u + n[1] * v,
+    ],
+  );
+  add('#b3aa97', drapedPolygon(apron, 0.045), 'cobble');
 }
 
 export function makeStairCross(add: AddGeometry) {
@@ -1128,6 +1202,7 @@ export function makeReferenceDetails(add: AddGeometry) {
   makeGardenReferences(add);
   makeGardenKiosk(add);
   makeHiddenChurch(add);
+  makeArtilleryEntrance(add);
   makeStairCross(add);
   makeReferenceBankIvy(add);
   makeCemeteryEntranceDetails(add);

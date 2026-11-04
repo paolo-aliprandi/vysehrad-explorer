@@ -36,9 +36,13 @@ import {
   type GameMode,
 } from '../world/adventure';
 import './app.css';
-import { nearbyPointsOfInterest } from '../world/points-of-interest';
+import {
+  nearbyPointsOfInterest,
+  pointsOfInterest,
+} from '../world/points-of-interest';
 
 const baseUrl = import.meta.env.BASE_URL;
+const welcomeAerials = ['fortress', 'cathedral', 'gates'];
 
 type IconName =
   | 'castle'
@@ -358,8 +362,11 @@ export function App() {
   const [reading, setReading] = useState<string | null>(null);
   const readingPanel = useRef<HTMLElement>(null);
   const nearbyPOIs = useMemo(
-    () => (started && !flying ? nearbyPointsOfInterest(snapshot.position) : []),
-    [started, flying, snapshot.position],
+    () =>
+      started && !flying && !snapshot.interior
+        ? nearbyPointsOfInterest(snapshot.position)
+        : [],
+    [started, flying, snapshot.interior, snapshot.position],
   );
   const shownPOI = nearbyPOIs.find((poi) => poi.id === reading);
   const readPOI = useCallback(() => {
@@ -785,6 +792,22 @@ export function App() {
       className={`app ${started ? 'playing' : 'welcome'} ${photo ? 'photo-mode' : ''}`}
     >
       <div className="scene" ref={host} />
+      {!started && (
+        <div className="welcome-aerials" aria-hidden="true">
+          {welcomeAerials.map((view, index) => (
+            <img
+              key={view}
+              src={`${baseUrl}images/welcome-${view}.jpg`}
+              srcSet={`${baseUrl}images/welcome-${view}.jpg 1200w, ${baseUrl}images/welcome-${view}-large.jpg 3840w`}
+              sizes="100vw"
+              alt=""
+              width="1200"
+              height="750"
+              fetchPriority={index === 0 ? 'high' : 'low'}
+            />
+          ))}
+        </div>
+      )}
       <div className="vignette" />
       {started && mode === 'adventure' && (
         <div
@@ -953,7 +976,7 @@ export function App() {
             <p>
               {mode === 'adventure'
                 ? 'Defend civilians and village houses from raiding moss sprites. Take up a weapon, raise four banners and reclaim the fortress. An adventure on foot, with its own progress.'
-                : 'Wander the fortress paths. Find four landmarks. Take to the sky and see Prague from a different angle.'}
+                : 'Explore historic places, chapels and underground galleries. Collect four landmark stamps, or take to the sky and see Prague from a different angle.'}
             </p>
             <div className="entry-stats">
               <div>
@@ -961,7 +984,7 @@ export function App() {
                 <span>mapped buildings</span>
               </div>
               <div>
-                <strong>04</strong>
+                <strong>{pointsOfInterest.length}</strong>
                 <span>places to discover</span>
               </div>
               <div>
@@ -1020,11 +1043,15 @@ export function App() {
             {snapshot.indoors
               ? snapshot.interior === 'casemates'
                 ? 'Vyšehrad casemates · underground interpretation'
-                : snapshot.interior === 'rotunda'
-                  ? 'St. Martin’s Rotunda · interior interpretation'
-                  : snapshot.interior === 'lawrence'
-                    ? 'St. Lawrence · archaeological remains'
-                    : 'Saints Peter & Paul · interior sketch'
+                : snapshot.interior === 'artillery'
+                  ? 'Artillery gallery · underground interpretation'
+                  : snapshot.interior === 'john'
+                    ? 'St. John the Baptist · hidden church interpretation'
+                    : snapshot.interior === 'rotunda'
+                      ? 'St. Martin’s Rotunda · interior interpretation'
+                      : snapshot.interior === 'lawrence'
+                        ? 'St. Lawrence · archaeological remains'
+                        : 'Saints Peter & Paul · interior sketch'
               : snapshot.seated
                 ? 'Taking a moment'
                 : near
@@ -1211,11 +1238,15 @@ export function App() {
                 <p className="interior-map-note">
                   {snapshot.interior === 'casemates'
                     ? 'Entrance → vaulted passages → Gorlice'
-                    : snapshot.interior === 'rotunda'
-                      ? 'Romanesque nave, domed ceiling and altar apse. An illustrative interior.'
-                      : snapshot.interior === 'lawrence'
-                        ? 'Sheltered archaeological foundations and interpretive hexagonal floor tiles beneath a flat roof; not a rebuilt basilica.'
-                        : 'An illustrative cathedral nave.'}
+                    : snapshot.interior === 'artillery'
+                      ? 'A separate vaulted gallery with interpretive cannons and military trophy displays.'
+                      : snapshot.interior === 'john'
+                        ? 'A sheltered chapel within the rampart, reached through the gap behind Ave Maria. An illustrative interior.'
+                        : snapshot.interior === 'rotunda'
+                          ? 'Romanesque nave, domed ceiling and altar apse. An illustrative interior.'
+                          : snapshot.interior === 'lawrence'
+                            ? 'Sheltered archaeological foundations and interpretive hexagonal floor tiles beneath a flat roof; not a rebuilt basilica.'
+                            : 'An illustrative cathedral nave.'}
                   <br />
                   {snapshot.interior === 'casemates'
                     ? 'Green doors: return entrance, or uphill branch toward Na Hradbách. F to leave.'

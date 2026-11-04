@@ -6,6 +6,8 @@ import {
   casemateSculptures,
   makeCasemateInterior,
   readCasemateNotes,
+  artilleryBlocked,
+  artilleryCannons,
 } from './casemates';
 
 it('connects the entrance, both corridor turns, all field notes and the hall without crossing solid walls', () => {
@@ -39,6 +41,48 @@ it('connects the entrance, both corridor turns, all field notes and the hall wit
     number,
   ][])
     expect(casemateBlocked(point)).toBe(true);
+});
+
+it('gives the separate artillery gallery a clear entrance and central aisle, solid vault, and collidable cannon displays', () => {
+  const material = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide });
+  const interior = makeCasemateInterior({ get: () => material }, true);
+  interior.group.updateMatrixWorld(true);
+  try {
+    for (let z = 2; z >= -25; z -= 0.25) {
+      expect(artilleryBlocked([0, z])).toBe(false);
+      const ray = new THREE.Raycaster(
+        new THREE.Vector3(0, 0.15, z),
+        new THREE.Vector3(0, -1, 0),
+        0,
+        0.3,
+      );
+      expect(ray.intersectObjects(interior.blockers)[0]?.point.y).toBeCloseTo(
+        0,
+      );
+      ray.set(new THREE.Vector3(0, 1.6, z), new THREE.Vector3(0, 1, 0));
+      ray.far = 10;
+      expect(
+        ray.intersectObjects(interior.blockers)[0]?.point.y,
+      ).toBeGreaterThan(2.7);
+    }
+    const along = new THREE.Raycaster(
+      new THREE.Vector3(0, 1.3, 2),
+      new THREE.Vector3(0, 0, -1),
+      0,
+      26,
+    );
+    expect(along.intersectObjects(interior.blockers)).toHaveLength(0);
+    for (const point of artilleryCannons)
+      expect(artilleryBlocked(point)).toBe(true);
+    expect(artilleryBlocked([0, -27])).toBe(true);
+    expect(artilleryBlocked([7, -15])).toBe(true);
+    expect(interior.markers.size).toBe(0);
+  } finally {
+    interior.group.traverse((object) => {
+      if (object instanceof THREE.Mesh) object.geometry.dispose();
+    });
+    material.dispose();
+  }
 });
 
 it('renders continuous floors, open connections and solid vaulted ceilings over the actual walking route', () => {

@@ -97,6 +97,54 @@ export const casemateRooms: Room[] = [
     openings: [{ side: 'west', from: -36, to: -33 }],
   },
 ];
+export const artilleryRooms: Room[] = [
+  {
+    minX: -1.5,
+    maxX: 1.5,
+    minZ: -8,
+    maxZ: 4,
+    spring: 2,
+    rise: 1.2,
+    axis: 'z',
+    openings: [{ side: 'north', from: -1.5, to: 1.5 }],
+  },
+  {
+    minX: -6,
+    maxX: 6,
+    minZ: -29,
+    maxZ: -8,
+    spring: 3.2,
+    rise: 2.8,
+    axis: 'z',
+    openings: [{ side: 'south', from: -1.5, to: 1.5 }],
+  },
+];
+export const artilleryCannons: Point[] = [-13, -21].flatMap((z): Point[] => [
+  [-4.1, z],
+  [4.1, z],
+]);
+export function artilleryBlocked(point: Point) {
+  if (!point.every(Number.isFinite)) return true;
+  for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    const x = point[0] + Math.cos(a) * 0.28,
+      z = point[1] + Math.sin(a) * 0.28;
+    if (
+      !artilleryRooms.some(
+        (room) =>
+          x >= room.minX && x <= room.maxX && z >= room.minZ && z <= room.maxZ,
+      )
+    )
+      return true;
+  }
+  return (
+    artilleryCannons.some(
+      (p) =>
+        Math.abs(point[0] - p[0]) < 1.5 && Math.abs(point[1] - p[1]) < 1.35,
+    ) ||
+    (Math.abs(point[0]) < 2.5 && point[1] < -26.2)
+  );
+}
 export function casemateFloor(point: Point) {
   const ramp = casemateRooms.find(
     (room) =>
@@ -163,9 +211,14 @@ export function casemateVault(
   return geometry;
 }
 
-export function makeCasemateInterior(materials: Pick<Materials, 'get'>) {
+export function makeCasemateInterior(
+  materials: Pick<Materials, 'get'>,
+  artillery = false,
+) {
   const group = new THREE.Group();
-  group.name = 'Illustrative Vysehrad casemates and Gorlice';
+  group.name = artillery
+    ? 'Illustrative artillery casemate gallery'
+    : 'Illustrative Vysehrad casemates and Gorlice';
   group.visible = false;
   const blockers: THREE.Object3D[] = [];
   const batches = new Map<THREE.Material, THREE.BufferGeometry[]>();
@@ -194,7 +247,7 @@ export function makeCasemateInterior(materials: Pick<Materials, 'get'>) {
     z: number,
     mat = brick,
   ) => add(new THREE.BoxGeometry(w, h, d).translate(x, y, z), mat);
-  for (const room of casemateRooms) {
+  for (const room of artillery ? artilleryRooms : casemateRooms) {
     const width = room.maxX - room.minX,
       depth = room.maxZ - room.minZ;
     const x = (room.maxX + room.minX) / 2,
@@ -319,7 +372,10 @@ export function makeCasemateInterior(materials: Pick<Materials, 'get'>) {
     }
   }
   // The six silhouettes evoke the display without claiming to reproduce its artworks.
-  for (const [index, [x, z]] of casemateSculptures.entries()) {
+  for (const [index, [x, z]] of (artillery
+    ? []
+    : casemateSculptures
+  ).entries()) {
     box(1.3, 0.6, 1.3, x, 0.3, z, stone);
     box(1.45, 0.16, 1.45, x, 0.68, z, stone);
     add(
@@ -342,39 +398,170 @@ export function makeCasemateInterior(materials: Pick<Materials, 'get'>) {
       stone,
     );
   }
-  const lamps: Point[] = [
-    [-1.25, 1],
-    [-1.25, -7],
-    [-1.25, -15],
-    [-1.25, -22],
-    [8, -23.7],
-    [18, -23.7],
-    [19.25, -30],
-    [19.25, -38],
-    [19.25, -44],
-    [11, -52],
-    [25, -52],
-    [11, -63],
-    [25, -63],
-    [24, -35.7],
-    [31, -35.7],
-    [38, -35.7],
-  ];
+  if (artillery) {
+    const timber = materials.get('wood', '#72573c');
+    const bronze = materials.get('metal', '#77734e');
+    for (const [index, [x, z]] of artilleryCannons.entries()) {
+      const angle = x < 0 ? Math.PI / 2 : -Math.PI / 2;
+      const cannon = (
+        geometry: THREE.BufferGeometry,
+        material: THREE.Material,
+      ) => add(geometry.rotateY(angle).translate(x, 0, z), material);
+      for (const side of [-1, 1]) {
+        cannon(
+          new THREE.BoxGeometry(0.18, 0.55, 1.65).translate(
+            side * 0.38,
+            0.55,
+            0,
+          ),
+          timber,
+        );
+        cannon(
+          new THREE.TorusGeometry(0.58, 0.095, 8, 24)
+            .rotateY(Math.PI / 2)
+            .translate(side * 0.72, 0.62, 0.2),
+          timber,
+        );
+        cannon(
+          new THREE.CylinderGeometry(0.12, 0.12, 0.22, 12)
+            .rotateZ(Math.PI / 2)
+            .translate(side * 0.72, 0.62, 0.2),
+          metal,
+        );
+        for (let spoke = 0; spoke < 8; spoke++)
+          cannon(
+            new THREE.BoxGeometry(0.08, 1.04, 0.055)
+              .rotateX((spoke * Math.PI) / 4)
+              .translate(side * 0.72, 0.62, 0.2),
+            timber,
+          );
+      }
+      cannon(
+        new THREE.BoxGeometry(1.3, 0.18, 0.85).translate(0, 0.55, 0.2),
+        timber,
+      );
+      const profile = [
+        [0, -0.95],
+        [0.19, -0.95],
+        [0.29, -0.7],
+        [0.23, 0.8],
+        [0.28, 1.05],
+        [0.16, 1.05],
+        [0.145, 0.55],
+        [0, 0.55],
+      ].map(([r, y]) => new THREE.Vector2(r, y));
+      cannon(
+        new THREE.LatheGeometry(profile, 32)
+          .rotateX(Math.PI / 2)
+          .rotateX(-0.08)
+          .translate(0, 1.05, 0),
+        index % 2 ? metal : bronze,
+      );
+      for (let row = 0; row < 2; row++)
+        for (let ball = 0; ball < 3 - row; ball++)
+          cannon(
+            new THREE.SphereGeometry(0.15, 12, 8).translate(
+              0.95 + ball * 0.3,
+              0.16 + row * 0.25,
+              -0.65 + row * 0.12,
+            ),
+            metal,
+          );
+    }
+    box(4.5, 0.45, 1.4, 0, 0.225, -27.6, stone);
+    for (const x of [-1.4, 0, 1.4]) {
+      add(
+        new THREE.SphereGeometry(
+          0.38,
+          16,
+          12,
+          0,
+          Math.PI * 2,
+          0,
+          Math.PI / 2,
+        ).translate(x, 0.65, -27.4),
+        metal,
+      );
+      add(
+        new THREE.SphereGeometry(0.52, 16, 12)
+          .scale(1, 1.2, 0.16)
+          .translate(x, 1.55, -28.15),
+        bronze,
+      );
+      for (const direction of [-1, 1])
+        add(
+          new THREE.BoxGeometry(0.055, 1.65, 0.05)
+            .rotateZ(direction * 0.6)
+            .translate(x, 2.5, -28.25),
+          metal,
+        );
+      box(0.58, 0.06, 0.08, x, 1.95, -28.2, bronze);
+    }
+    for (const side of [-1, 1]) {
+      box(0.06, 3.6, 0.06, side * 4.7, 1.8, -27, timber);
+      box(
+        1.1,
+        1.5,
+        0.04,
+        side * 4.2,
+        2.65,
+        -27,
+        materials.get('plaster', side < 0 ? '#94624b' : '#697c6a'),
+      );
+      add(
+        new THREE.CylinderGeometry(0.48, 0.48, 0.6, 20).translate(
+          side * 3.2,
+          0.34,
+          -27,
+        ),
+        timber,
+      );
+    }
+  }
+  const lamps: Point[] = artillery
+    ? [
+        [-1.25, 1],
+        [-1.25, -5],
+        [-5.7, -11],
+        [5.7, -11],
+        [-5.7, -19],
+        [5.7, -19],
+        [-5.7, -27],
+        [5.7, -27],
+      ]
+    : [
+        [-1.25, 1],
+        [-1.25, -7],
+        [-1.25, -15],
+        [-1.25, -22],
+        [8, -23.7],
+        [18, -23.7],
+        [19.25, -30],
+        [19.25, -38],
+        [19.25, -44],
+        [11, -52],
+        [25, -52],
+        [11, -63],
+        [25, -63],
+        [24, -35.7],
+        [31, -35.7],
+        [38, -35.7],
+      ];
   for (const [x, z] of lamps) {
     const floor = casemateFloor([x, z]);
     box(0.18, 0.42, 0.18, x, floor + 1.8, z, metal);
     box(0.12, 0.25, 0.12, x, floor + 1.85, z, glow);
     const light = new THREE.PointLight(
       '#ffd29a',
-      z < -46 ? 28 : 12,
-      z < -46 ? 20 : 10,
+      artillery || z < -46 ? 28 : 12,
+      artillery || z < -46 ? 20 : 10,
       2,
     );
     light.position.set(x, floor + (z < -46 ? 5 : 2), z);
     group.add(light);
   }
   const markers = new Map<string, THREE.Mesh>();
-  for (const note of casemateNotes) {
+  for (const note of artillery ? [] : casemateNotes) {
     const marker = new THREE.Mesh(
       new THREE.TorusGeometry(0.22, 0.045, 8, 24),
       glow,
@@ -387,16 +574,26 @@ export function makeCasemateInterior(materials: Pick<Materials, 'get'>) {
   // Mark the return door independently of the field-note markers.
   box(2, 2.2, 0.08, 0, 1.1, 3.8, materials.get('wood', '#536c60'));
   box(0.85, 0.12, 0.12, 0, 2.6, 3.7, glow);
-  box(
-    0.08,
-    2.2,
-    1.8,
-    39.3,
-    casemateFloor([39.3, -34.5]) + 1.1,
-    -34.5,
-    materials.get('wood', '#536c60'),
-  );
-  box(0.12, 0.12, 0.85, 39.2, casemateFloor([39.2, -34.5]) + 2.6, -34.5, glow);
+  if (!artillery) {
+    box(
+      0.08,
+      2.2,
+      1.8,
+      39.3,
+      casemateFloor([39.3, -34.5]) + 1.1,
+      -34.5,
+      materials.get('wood', '#536c60'),
+    );
+    box(
+      0.12,
+      0.12,
+      0.85,
+      39.2,
+      casemateFloor([39.2, -34.5]) + 2.6,
+      -34.5,
+      glow,
+    );
+  }
   for (const [material, geometries] of batches) {
     const geometry = mergeGeometries(geometries);
     if (!geometry) throw new Error('Could not assemble casemate geometry.');

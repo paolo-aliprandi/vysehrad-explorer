@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('enters, explores and leaves the rotunda and flat-covered St Lawrence remains in both modes', async ({
+test('enters, explores and leaves the churches and separate artillery gallery in both modes', async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -30,10 +30,35 @@ test('enters, explores and leaves the rotunda and flat-covered St Lawrence remai
   };
   for (const mode of ['chill', 'adventure']) {
     await inspect(`w.setMode('${mode}');w.setTime('day');`);
-    for (const kind of ['rotunda', 'lawrence']) {
+    for (const kind of ['rotunda', 'lawrence', 'john', 'artillery']) {
+      if (kind === 'john') {
+        const clearance = await inspect(`
+          const g=await import('/src/world/geo.ts');
+          const route=[[-5,.8],[-5,-9.7],[-3.2,-10.2]].map(p=>g.aveMariaPoint(...p));
+          const samples=route.slice(1).flatMap((b,i)=>{
+            const a=route[i],count=Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/.15);
+            return Array.from({length:count+1},(_,j)=>[a[0]+(b[0]-a[0])*j/count,a[1]+(b[1]-a[1])*j/count]);
+          });
+          w.scene.updateMatrixWorld(true);
+          return samples.map(p=>{
+            const floor=g.standingElevation(p);
+            w.raycaster.set(w.position.clone().set(p[0]*1.5,(floor+.3)*1.5,p[1]*1.5),w.position.clone().set(0,-1,0));
+            w.raycaster.far=.8;
+            const hit=w.raycaster.intersectObjects(w.scene.children,true)[0];
+            return {p,blocked:w.outdoorBlocked(p,floor,false),floor,rendered:hit?.point.y/1.5};
+          });
+        `);
+        for (const point of clearance) {
+          expect(point.blocked, JSON.stringify(point)).toBe(false);
+          expect(
+            Math.abs(point.rendered - point.floor),
+            JSON.stringify(point),
+          ).toBeLessThan(0.1);
+        }
+      }
       const outside = await inspect(`
         const {chapelSites}=await import('/src/world/chapels.ts'),g=await import('/src/world/geo.ts');
-        const p=chapelSites.${kind}.approach;
+        const p='${kind}'==='artillery'?g.artilleryEntrance.approach:chapelSites.${kind}.approach;
         w.position.set(p[0],g.standingElevation(p)+.1,p[1]);
         w.position.y=w.support(p);w.jumpVelocity=0;
         return {position:w.position.toArray(),blocked:w.outdoorBlocked(p,w.position.y,false)};
@@ -51,7 +76,11 @@ test('enters, explores and leaves the rotunda and flat-covered St Lawrence remai
           name:
             kind === 'rotunda'
               ? 'Enter St. Martin’s Rotunda'
-              : 'Explore St. Lawrence’s ruins',
+              : kind === 'lawrence'
+                ? 'Explore St. Lawrence’s ruins'
+                : kind === 'john'
+                  ? 'Enter the hidden Church of St. John'
+                  : 'Enter the artillery gallery',
         }),
       ).toBeVisible();
       await page.keyboard.press('f');
@@ -59,7 +88,13 @@ test('enters, explores and leaves the rotunda and flat-covered St Lawrence remai
         .poll(() => inspect('return w.indoorReturn?.kind;'))
         .toBe(kind);
       await expect(page.locator('.location-pill')).toContainText(
-        kind === 'rotunda' ? 'St. Martin' : 'St. Lawrence',
+        kind === 'rotunda'
+          ? 'St. Martin'
+          : kind === 'lawrence'
+            ? 'St. Lawrence'
+            : kind === 'john'
+              ? 'St. John'
+              : 'Artillery gallery',
       );
       if (kind === 'lawrence') {
         expect(await inspect('return w.sky.visible;')).toBe(false);
@@ -79,7 +114,7 @@ test('enters, explores and leaves the rotunda and flat-covered St Lawrence remai
         .toBeLessThan(before - 0.8);
       await page.keyboard.up('w');
       await inspect(
-        `w.position.set(0,0,${kind === 'rotunda' ? 1.4 : 5.5});w.yaw=0;w.pitch=.32;w.zoom=5;w.jumpVelocity=0;`,
+        `w.position.set(0,0,${kind === 'artillery' ? -10 : kind === 'lawrence' ? 5.5 : 1.4});w.yaw=0;w.pitch=.32;w.zoom=5;w.jumpVelocity=0;`,
       );
       await page.waitForTimeout(300);
       await page.screenshot({
@@ -87,10 +122,15 @@ test('enters, explores and leaves the rotunda and flat-covered St Lawrence remai
       });
       await inspect(`
         const {chapelSites}=await import('/src/world/chapels.ts');
-        const p=chapelSites.${kind}.exit;w.position.set(p[0],0,p[1]-.65);w.jumpVelocity=0;
+        const p='${kind}'==='artillery'?[0,2.5]:chapelSites.${kind}.exit;w.position.set(p[0],0,p[1]-.65);w.jumpVelocity=0;
       `);
       await expect(
-        page.getByRole('button', { name: 'Return to Vyšehrad' }),
+        page.getByRole('button', {
+          name:
+            kind === 'artillery'
+              ? 'Leave the artillery gallery'
+              : 'Return to Vyšehrad',
+        }),
       ).toBeVisible();
       await page.keyboard.press('f');
       await expect.poll(() => inspect('return w.indoorReturn;')).toBeNull();

@@ -10,7 +10,7 @@ import {
 
 describe('accessible Romanesque churches', () => {
   it('places both entrances on reachable outdoor ground and keeps interior routes clear of walls and furnishings', () => {
-    for (const kind of ['rotunda', 'lawrence'] as const) {
+    for (const kind of ['rotunda', 'lawrence', 'john'] as const) {
       const site = chapelSites[kind];
       expect(
         blocked(site.approach, standingElevation(site.approach)),
@@ -25,6 +25,36 @@ describe('accessible Romanesque churches', () => {
     expect(chapelBlocked('rotunda', [2.65, 0.2])).toBe(true);
     expect(chapelBlocked('lawrence', [2.2, -1.8])).toBe(true);
     expect(chapelBlocked('lawrence', [4.6, 0])).toBe(true);
+  });
+
+  it('shelters the hidden church behind a continuous vaulted ceiling while preserving its entrance and altar aisle', () => {
+    const material = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide });
+    const interior = makeChapelInterior('john', { get: () => material });
+    interior.group.updateMatrixWorld(true);
+    try {
+      for (let z = 4; z > -3.5; z -= 0.5) {
+        expect(chapelBlocked('john', [0, z])).toBe(false);
+        const ray = new THREE.Raycaster(
+          new THREE.Vector3(0, 0.2, z),
+          new THREE.Vector3(0, -1, 0),
+        );
+        expect(ray.intersectObjects(interior.blockers)[0]?.point.y).toBeCloseTo(
+          0,
+        );
+        ray.set(new THREE.Vector3(0, 1.6, z), new THREE.Vector3(0, 1, 0));
+        expect(ray.intersectObjects(interior.blockers)[0]?.point.y).toBeCloseTo(
+          4.6,
+        );
+      }
+      expect(chapelBlocked('john', [0, -4.7])).toBe(true);
+      expect(chapelBlocked('john', [2.45, 1.5])).toBe(true);
+      expect(chapelBlocked('john', [4, 0])).toBe(true);
+    } finally {
+      interior.group.traverse((object) => {
+        if (object instanceof THREE.Mesh) object.geometry.dispose();
+      });
+      material.dispose();
+    }
   });
 
   it('builds a domed rotunda and flat-covered basilica remains, preserving the raised hexagonal floor below the ceiling', () => {

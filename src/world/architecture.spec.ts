@@ -19,6 +19,7 @@ import {
 import {
   elevation,
   features,
+  parts,
   buildings,
   gateFrame,
   gateOpenings,
@@ -217,47 +218,50 @@ describe('screenshot geometry repairs', () => {
     material.dispose();
   });
 
-  it('builds a pierced brick garden screen between plaster piers only on the referenced Štulcova boundary', () => {
-    const wall = walls.find((wall) => wall.id === 377578898);
-    if (!wall) throw new Error('Missing Štulcova garden boundary.');
-    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-    const meshes: THREE.Mesh[] = [];
-    makeStulcovaGardenWall(wall.points, (_color, geometry) =>
-      meshes.push(new THREE.Mesh(geometry, material)),
-    );
-    const a = wall.points[1],
-      b = wall.points[2];
-    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const bays = Math.ceil(length / 3.6),
-      bay = length / bays;
-    const start = 0.23,
-      end = bay - 0.23;
-    const step = (end - start) / Math.floor((end - start) / 0.36);
-    const at = (u: number): Point => [
-      a[0] + ((b[0] - a[0]) * u) / length,
-      a[1] + ((b[1] - a[1]) * u) / length,
-    ];
-    const normal: Point = [-(b[1] - a[1]) / length, (b[0] - a[0]) / length];
-    for (const [col, hit] of [
-      [0, true],
-      [1, false],
-    ] as const) {
-      const p = at(start + step * (col + 0.5));
-      const ray = new THREE.Raycaster(
-        new THREE.Vector3(
-          p[0] + normal[0],
-          upperElevation(...p) + 0.515,
-          p[1] + normal[1],
-        ),
-        new THREE.Vector3(-normal[0], 0, -normal[1]),
-        0,
-        2,
+  it.each([377578898, 351536139])(
+    'builds a pierced brick garden screen between plaster piers on referenced boundary %i',
+    (id) => {
+      const wall = walls.find((wall) => wall.id === id);
+      if (!wall) throw new Error('Missing referenced garden boundary.');
+      const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+      const meshes: THREE.Mesh[] = [];
+      makeStulcovaGardenWall(wall.points, (_color, geometry) =>
+        meshes.push(new THREE.Mesh(geometry, material)),
       );
-      expect(ray.intersectObjects(meshes).length > 0).toBe(hit);
-    }
-    meshes.forEach((mesh) => mesh.geometry.dispose());
-    material.dispose();
-  });
+      const a = wall.points[0],
+        b = wall.points[1];
+      const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const bays = Math.ceil(length / 3.6),
+        bay = length / bays;
+      const start = 0.23,
+        end = bay - 0.23;
+      const step = (end - start) / Math.floor((end - start) / 0.36);
+      const at = (u: number): Point => [
+        a[0] + ((b[0] - a[0]) * u) / length,
+        a[1] + ((b[1] - a[1]) * u) / length,
+      ];
+      const normal: Point = [-(b[1] - a[1]) / length, (b[0] - a[0]) / length];
+      for (const [col, hit] of [
+        [0, true],
+        [1, false],
+      ] as const) {
+        const p = at(start + step * (col + 0.5));
+        const ray = new THREE.Raycaster(
+          new THREE.Vector3(
+            p[0] + normal[0],
+            upperElevation(...p) + 0.515,
+            p[1] + normal[1],
+          ),
+          new THREE.Vector3(-normal[0], 0, -normal[1]),
+          0,
+          2,
+        );
+        expect(ray.intersectObjects(meshes).length > 0).toBe(hit);
+      }
+      meshes.forEach((mesh) => mesh.geometry.dispose());
+      material.dispose();
+    },
+  );
   it('supports the tower-side cemetery roof corner and its return with grounded solid columns', () => {
     const feature = buildings.find((building) => building.id === -4229100);
     if (!feature) throw new Error('Missing tower-side cemetery arcade.');
@@ -2149,7 +2153,7 @@ it('renders a solid upper promenade and genuinely open lower galleries, not eart
   const a = upperPromenade[0],
     b = upperPromenade[1];
   const point = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as const;
-  const upper = originalElevation(...point);
+  const upper = upperElevation(...point);
   const down = new THREE.Raycaster(
     new THREE.Vector3(point[0], upper + 0.6, point[1]),
     new THREE.Vector3(0, -1, 0),
@@ -2533,6 +2537,40 @@ it('closes gable ends and the raised edge of a skillion roof down to their walls
     expect(
       new THREE.Raycaster(origin, direction).intersectObject(wall).length,
     ).toBeGreaterThan(0);
+    covering.surface.dispose();
+    covering.fascia.dispose();
+  }
+  material.dispose();
+});
+
+it('pitches both cathedral aisle roofs upward toward the nave without rotating their footprints', () => {
+  const nave = parts.find((part) => part.id === 454748869);
+  if (!nave) throw new Error('Missing cathedral nave.');
+  const target = center(nave.points);
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  for (const [id, outerZ, innerZ] of [
+    [511065344, -3.4, 3],
+    [511065345, 21.9, 15.3],
+  ]) {
+    const part = parts.find((part) => part.id === id);
+    if (!part) throw new Error('Missing cathedral aisle.');
+    const footprint = modelBuildingPart(part).points;
+    const midpoint = center(footprint);
+    const covering = roof(footprint, 10, 6, 'skillion', [
+      target[0] - midpoint[0],
+      target[1] - midpoint[1],
+    ]);
+    const mesh = new THREE.Mesh(covering.surface, material);
+    const height = (z: number) => {
+      expect(inside([-190, z], footprint)).toBe(true);
+      const hit = new THREE.Raycaster(
+        new THREE.Vector3(-190, 25, z),
+        new THREE.Vector3(0, -1, 0),
+      ).intersectObject(mesh)[0];
+      expect(hit).toBeDefined();
+      return hit.point.y;
+    };
+    expect(height(innerZ) - height(outerZ)).toBeGreaterThan(4);
     covering.surface.dispose();
     covering.fascia.dispose();
   }

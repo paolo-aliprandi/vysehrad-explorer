@@ -30,6 +30,7 @@ import {
   aveMariaFrontage,
   retainedGardenGuards,
   karlachBorderBushes,
+  referenceBorderBushes,
   karlachBorderBeds,
   wallProfile,
   type Point,
@@ -580,7 +581,10 @@ function makeHedges(add: AddGeometry) {
       'stone',
     );
   }
-  for (const [index, bush] of karlachBorderBushes.entries())
+  for (const [index, bush] of [
+    ...karlachBorderBushes,
+    ...referenceBorderBushes,
+  ].entries())
     for (const [u, radius] of [
       [-0.42, 0.48],
       [0, 0.62],

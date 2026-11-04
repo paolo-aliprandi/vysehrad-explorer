@@ -1,5 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import App from './app';
+import { buildings } from '../world/geo';
+import { pointsOfInterest } from '../world/points-of-interest';
 
 vi.mock('../world/engine', () => ({
   World: class {
@@ -28,9 +30,18 @@ describe('exploration entry', () => {
       'vysehrad-discoveries-v1',
       '["gate","gate","unknown"]',
     );
-    render(<App />);
+    const { container } = render(<App />);
+    expect(container.querySelectorAll('.welcome-aerials img')).toHaveLength(3);
+    expect(
+      screen.getByText('mapped buildings').previousElementSibling?.textContent,
+    ).toBe(String(buildings.length));
+    expect(
+      screen.getByText('places to discover').previousElementSibling
+        ?.textContent,
+    ).toBe(String(pointsOfInterest.length));
     const enter = await screen.findByRole('button', { name: 'Enter Vyšehrad' });
     fireEvent.click(enter);
+    expect(container.querySelector('.welcome-aerials')).toBeNull();
     expect(screen.getByText('1 / 4')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Walking' })).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Mute sounds' }));

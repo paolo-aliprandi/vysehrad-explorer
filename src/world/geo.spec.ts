@@ -734,7 +734,7 @@ describe('OSM world and movement', () => {
       standingElevation(gate.center, foundation(gate.feature)),
     ).toBeCloseTo(elevation(...gate.center));
     expect(standingElevation(gate.center)).toBeCloseTo(
-      originalElevation(...gate.center),
+      upperElevation(...gate.center),
     );
     const [a, b] = upperPromenade;
     let height = standingElevation(a);

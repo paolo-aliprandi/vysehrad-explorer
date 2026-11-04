@@ -508,6 +508,14 @@ export const walls = features
             }
           : wall,
   );
+export const gardenLatticeWallIds = new Set([377578898, 351536139]);
+const brickGateFence = walls.find((wall) => wall.id === 1303806149);
+if (!brickGateFence) throw new Error('Missing Brick Gate garden fence.');
+const brickGateFenceSurvey = [...brickGateFence.points];
+brickGateFence.points = [
+  brickGateFence.points[0],
+  brickGateFence.points[brickGateFence.points.length - 1],
+];
 export const aveMariaFrontage = (() => {
   const stairs = features.find((feature) => feature.id === 255297754);
   if (!stairs) throw new Error('The chapel approach stairs are missing.');
@@ -557,10 +565,7 @@ export function aveMariaPoint(u: number, v: number): Point {
     point[1] - Math.sin(angle) * u + normal[1] * v,
   ];
 }
-const aveMariaCourtBounds = [
-  [-4.8, 6.6, -0.5, 10.1],
-  [2.4, 6.6, -11, -0.5],
-];
+const aveMariaCourtBounds = [[-6.2, 6.6, -11.8, 10.1]];
 export const aveMariaCourtCuts = aveMariaCourtBounds.map(
   ([left, right, back, front]) => [
     aveMariaPoint(left, back),
@@ -591,23 +596,35 @@ export function aveMariaCourtElevation(x: number, z: number) {
   const { point, normal } = aveMariaFrontage;
   const v = (x - point[0]) * normal[0] + (z - point[1]) * normal[1];
   const floor = aveMariaFloor();
-  const target =
-    v >= 0
-      ? unretainedElevation(...aveMariaFrontage.approach)
-      : unretainedElevation(87.36, 28.13);
-  return floor + (target - floor) * (Math.abs(v) / (v >= 0 ? 9.9 : 9.3));
+  if (v >= 0)
+    return (
+      floor +
+      ((unretainedElevation(...aveMariaFrontage.approach) - floor) * v) / 9.9
+    );
+  const u =
+    (x - point[0]) * Math.cos(aveMariaFrontage.angle) -
+    (z - point[1]) * Math.sin(aveMariaFrontage.angle);
+  return (
+    floor +
+    (unretainedElevation(87.36, 28.13) - floor) *
+      Math.min(1, -v / 9.3) *
+      smooth((u - 2.8) / 3.8)
+  );
 }
 aveMariaRetaining.points = [
   [78.05, 25.37],
-  aveMariaPoint(-4.8, -0.25),
-  aveMariaPoint(-aveMariaFrontage.width / 2, -0.25),
+  aveMariaPoint(-6.2, -11.8),
+  aveMariaPoint(-6.2, 0),
 ];
 walls.push({
   id: -89545111,
   tags: { barrier: 'retaining_wall' },
   holes: [],
-  points: [aveMariaPoint(6.6, -0.25), aveMariaPoint(6.6, -11), [88.04, 26.4]],
+  points: [aveMariaPoint(6.6, 0), aveMariaPoint(6.6, -11.8)],
 });
+const chapelRearFence = walls.find((wall) => wall.id === 644962722);
+if (!chapelRearFence) throw new Error('Missing rear chapel garden fence.');
+chapelRearFence.points = [chapelRearFence.points[0], aveMariaPoint(-6.5, -8.8)];
 export const casemateEntrance = (() => {
   const wall = walls.find((feature) => feature.id === 377578901);
   if (!wall) throw new Error('The surveyed casemate entrance wall is missing.');
@@ -2687,6 +2704,32 @@ export const retainedStreetWalls: Feature[] = retainedStreetCorridors.flatMap(
     return result;
   },
 );
+const kioskCorner: Point = [60.75, 62.1];
+for (const id of [-9000103, -9001000]) {
+  const wall = retainedStreetWalls.find((item) => item.id === id);
+  if (!wall) throw new Error(`Missing kiosk corner wall ${id}.`);
+  if (id === -9000103) wall.points = [...wall.points.slice(0, -2), kioskCorner];
+  else wall.points.push(kioskCorner);
+}
+const chapelApproachSteps = paths.find((path) => path.id === 255297754);
+if (!chapelApproachSteps) throw new Error('Missing chapel approach staircase.');
+for (const id of [-9000001, -9000002]) {
+  const wall = retainedStreetWalls.find((item) => item.id === id);
+  if (!wall) throw new Error(`Missing chapel roadside wall ${id}.`);
+  const end =
+    id === -9000001 ? wall.points[wall.points.length - 1] : wall.points[0];
+  const projection = projectRoute(end, chapelApproachSteps.points);
+  const side = Math.sign(
+    (end[0] - projection.point[0]) * projection.normal[0] +
+      (end[1] - projection.point[1]) * projection.normal[1],
+  );
+  const cheek: Point = [
+    projection.point[0] + projection.normal[0] * side * 1.76,
+    projection.point[1] + projection.normal[1] * side * 1.76,
+  ];
+  if (id === -9000001) wall.points.push(cheek);
+  else wall.points.unshift(cheek);
+}
 const brickApproachWall = walls.find((wall) => wall.id === 51718886);
 if (!brickApproachWall)
   throw new Error('Missing mapped Brick Gate street wall.');
@@ -2772,6 +2815,14 @@ export const retainedStreetBanks = retainedStreetWalls.map((wall) => {
     maxZ: Math.max(...polygon.map((point) => point[1])),
   };
 });
+const kioskBanks = retainedStreetBanks.filter((bank) =>
+  [-9000103, -9001000].includes(bank.wall.id),
+);
+const kioskCornerCrest = Math.max(
+  ...kioskBanks.map((bank) => bank.crests[bank.crests.length - 1]),
+);
+for (const bank of kioskBanks)
+  bank.crests[bank.crests.length - 1] = kioskCornerCrest;
 export const retainedStreetAccess = (() => {
   const feature = paths.find((path) => path.id === 26454854);
   if (!feature) throw new Error('Missing uphill street-side footpath.');
@@ -2867,11 +2918,16 @@ function streetBankCrest(
     (bank.crests[projection.segment + 1] - bank.crests[projection.segment]) *
       projection.fraction;
   const ground = unretainedElevation(...projection.point);
+  const joinedStart = bank.wall.id === -9000002;
+  const joinedEnd = [-9000001, -9000103, -9001000].includes(bank.wall.id);
   return (
     ground +
     (crest - ground) *
       smooth(
-        Math.min(projection.along, projection.length - projection.along) / 6,
+        Math.min(
+          joinedStart ? Infinity : projection.along,
+          joinedEnd ? Infinity : projection.length - projection.along,
+        ) / 6,
       )
   );
 }
@@ -2884,6 +2940,11 @@ export function coverElevation(
   x: number,
   z: number,
 ) {
+  if (cover.id === brickGateId) {
+    const original = originalElevation(x, z);
+    const blend = smooth(projectRoute([x, z], cover.footprint).distance / 3);
+    return original + (brickGateCrestElevation(x, z) - original) * blend;
+  }
   return cover.id === gardenDoorRoute.id
     ? gardenWallCrest([x, z]) + 0.16
     : posternIds.has(cover.id)
@@ -2910,7 +2971,9 @@ export function posternVaultRoute(postern: (typeof posterns)[number]): Point[] {
 }
 export const stairFlights = features
   .filter((feature) =>
-    [284582284, 183917805, 26454844, 1106803168].includes(feature.id),
+    [284582284, 183917805, 26454844, 1106803168, 255297754].includes(
+      feature.id,
+    ),
   )
   .map((feature) => ({
     feature,
@@ -2946,6 +3009,80 @@ export const brickGateStairCuts = brickGateStairs.map((flight) => {
     ],
   );
 });
+export const aveMariaStairs = stairFlights.find(
+  (flight) => flight.feature.id === 255297754,
+);
+if (!aveMariaStairs) throw new Error('Missing Ave Maria approach steps.');
+export const aveMariaStairCut = (() => {
+  const [a, b] = aveMariaStairs.feature.points;
+  const normal = projectRoute(a, [a, b]).normal;
+  const offset = (p: Point, side: number): Point => [
+    p[0] + normal[0] * side * 1.65,
+    p[1] + normal[1] * side * 1.65,
+  ];
+  return [
+    offset(a, -1),
+    offset(b, -1),
+    offset(b, 1),
+    offset(a, 1),
+    offset(a, -1),
+  ];
+})();
+export const artilleryEntrance = (() => {
+  const wall = walls.find((item) => item.id === 1532977610);
+  if (!wall) throw new Error('Missing gallery rampart wall.');
+  const projection = projectRoute([135.2, 132.97], wall.points);
+  const sign = inside(
+    [
+      projection.point[0] + projection.normal[0],
+      projection.point[1] + projection.normal[1],
+    ],
+    rampartBoundary,
+  )
+    ? -1
+    : 1;
+  const normal: Point = [
+    projection.normal[0] * sign,
+    projection.normal[1] * sign,
+  ];
+  const point: Point = [
+    projection.point[0] + normal[0] * 0.9,
+    projection.point[1] + normal[1] * 0.9,
+  ];
+  const approach: Point = [
+    point[0] + normal[0] * 1.5,
+    point[1] + normal[1] * 1.5,
+  ];
+  return {
+    point,
+    normal,
+    approach,
+    angle: Math.atan2(normal[0], normal[1]),
+    floor: unretainedElevation(...approach),
+  };
+})();
+function brickGateCrestElevation(x: number, z: number) {
+  const fence = walls.find((wall) => wall.id === 1303806149);
+  if (!fence) throw new Error('Missing Brick Gate garden fence.');
+  const first = fence.points[0],
+    last = fence.points[fence.points.length - 1];
+  const route = [first, last];
+  const start = originalElevation(...first),
+    end = originalElevation(...last);
+  const projection = projectRoute([x, z], route);
+  let lift = 0;
+  for (const point of brickGateFenceSurvey) {
+    const t = projectRoute(point, route).fraction;
+    lift = Math.max(
+      lift,
+      originalElevation(...point) - start - (end - start) * t,
+    );
+  }
+  return start + (end - start) * projection.fraction + lift;
+}
+export function brickGateFenceLevel(x: number, z: number) {
+  return brickGateCrestElevation(x, z) + 0.03;
+}
 const accessStairs = stairFlights.find(
   (flight) => flight.feature.id === 284582284,
 );
@@ -3269,6 +3406,8 @@ function terrainWallProfile(feature: Feature, point: Point, normal: Point) {
     };
   if (feature.id === 51700612) return { bottom, top: ground + 1.05 };
   if (feature.id === 55117755) return { bottom, top: ground + 0.95 };
+  if (gardenLatticeWallIds.has(feature.id))
+    return { bottom, top: ground + 1.95 };
   if (cemeterySolidWallIds.has(feature.id))
     return { bottom, top: ground + 3.6 };
   if (height) return { bottom, top: ground + height };
@@ -3347,7 +3486,9 @@ export function wallProfile(feature: Feature, point: Point, normal: Point) {
     return {
       bottom:
         (retainedStreetSection(point)?.level ?? elevation(...point)) - 0.3,
-      top: retainedStreetBankElevation(bank, projection.point) + 0.18,
+      top: [-9000001, -9000002, -9000103, -9001000].includes(feature.id)
+        ? streetBankCrest(bank, projection) + 0.18
+        : retainedStreetBankElevation(bank, projection.point) + 0.18,
     };
   }
   const profile = terrainWallProfile(feature, point, normal);
@@ -4252,6 +4393,91 @@ export type SiteProp = {
   ground?: number;
 };
 export const siteProps: SiteProp[] = [];
+const gardenKiosk = {
+  point: [46.5, 55.2] as Point,
+  angle: 0.196,
+  width: 5.4,
+  depth: 3.6,
+  height: 3.5,
+};
+const kioskBorder = (() => {
+  const front = retainedStreetWalls.find((wall) => wall.id === -9001000);
+  const side = retainedStreetWalls.find((wall) => wall.id === -9000103);
+  if (!front || !side) throw new Error('Missing kiosk border walls.');
+  const route = [
+    ...front.points.slice(3),
+    ...side.points
+      .filter(([x, z]) => x > 35 && z > 18)
+      .slice(0, -1)
+      .reverse(),
+  ];
+  return route
+    .slice(1)
+    .flatMap((b, index) => {
+      const a = route[index],
+        length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const count = Math.ceil(length / 1.3);
+      return Array.from({ length: count }, (_, i): Point => {
+        const t = (i + 0.5) / count;
+        const edge: Point = [
+          a[0] + (b[0] - a[0]) * t,
+          a[1] + (b[1] - a[1]) * t,
+        ];
+        const road = retainedStreetCorridors
+          .map((corridor) => projectRoute(edge, corridor.points))
+          .reduce((a, b) => (a.distance < b.distance ? a : b));
+        const normal: Point = [-(b[1] - a[1]) / length, (b[0] - a[0]) / length];
+        const sign = Math.sign(
+          (edge[0] - road.point[0]) * normal[0] +
+            (edge[1] - road.point[1]) * normal[1],
+        );
+        if (!sign)
+          throw new Error('Kiosk planting border overlaps the street centre.');
+        return [
+          edge[0] + normal[0] * sign * 1.1,
+          edge[1] + normal[1] * sign * 1.1,
+        ];
+      });
+    })
+    .filter(
+      (point) =>
+        [front, side].every(
+          (wall) => projectRoute(point, wall.points).distance > 0.8,
+        ) &&
+        Math.hypot(
+          point[0] - gardenKiosk.point[0] - Math.sin(gardenKiosk.angle) * 3,
+          point[1] - gardenKiosk.point[1] - Math.cos(gardenKiosk.angle) * 3,
+        ) > 2.2,
+    );
+})();
+export const referenceBorderBushes = [
+  ...Array.from(
+    { length: 8 },
+    (_, i): Point => [136 + i * 1.45, 179.5 - i * 1.25],
+  ),
+  ...kioskBorder,
+]
+  .filter(
+    (point) =>
+      !paths.some(
+        (path) =>
+          projectRoute(point, path.points).distance < pathWidth(path) / 2 + 0.8,
+      ) &&
+      !buildings.some(
+        (building) =>
+          inside(point, building.points) ||
+          projectRoute(point, building.points).distance < 0.8,
+      ),
+  )
+  .map((point, i) => ({
+    id: `reference-border-${i}`,
+    point,
+    angle: point[0] > 120 ? 0.71 : -0.2,
+    width: 1.4,
+    depth: 1.1,
+    height: 0.85,
+  }));
+siteProps.push(...referenceBorderBushes);
 export const karlachBorderBushes = (() => {
   const garden = features.find((feature) => feature.id === 380920698);
   if (!garden) throw new Error('Missing Karlach garden boundary.');
@@ -4331,19 +4557,6 @@ export const retainedGardenGuards = retainedStreetWalls
     points: wall.points.filter(([x, z]) => x > -104 && x < 15 && z < -17),
   }));
 siteProps.push(...karlachBorderBushes);
-for (const [u, width] of [
-  [2.3, 0.15],
-  [5.65, 1.9],
-])
-  siteProps.push({
-    id: `ave-maria-side-pier-${u}`,
-    point: aveMariaPoint(u, -0.2),
-    angle: aveMariaFrontage.angle,
-    width,
-    depth: 0.8,
-    height: 4.4,
-    ground: aveMariaFloor(),
-  });
 for (const guard of retainedGardenGuards)
   for (let i = 1; i < guard.points.length; i++) {
     const a = guard.points[i - 1],
@@ -4384,19 +4597,13 @@ export const referenceSites = {
     height: 5.1,
   },
   hiddenChurch: {
-    point: [95.3, 24.3] as Point,
-    angle: -1.32,
-    width: 9.2,
-    depth: 4,
-    height: 5.4,
+    point: aveMariaPoint(0.2, -11.8),
+    angle: aveMariaFrontage.angle,
+    width: 12.8,
+    depth: 0.7,
+    height: 4.8,
   },
-  gardenKiosk: {
-    point: [46.5, 55.2] as Point,
-    angle: 0.196,
-    width: 5.4,
-    depth: 3.6,
-    height: 3.5,
-  },
+  gardenKiosk,
 };
 siteProps.push(
   ...Object.entries(referenceSites).map(([id, site]) => ({

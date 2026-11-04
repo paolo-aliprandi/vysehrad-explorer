@@ -6,13 +6,15 @@ import {
   foundation,
   elevation,
   safePosition,
+  aveMariaPoint,
   type Point,
 } from './geo';
 import type { AddGeometry } from './architecture';
 import { worldUVs, type Materials } from './materials';
 import { drapedPolygon } from './surfaces';
+import { casemateVault } from './casemates';
 
-export type ChapelKind = 'rotunda' | 'lawrence';
+export type ChapelKind = 'rotunda' | 'lawrence' | 'john';
 function building(id: number) {
   const feature = buildings.find((item) => item.id === id);
   if (!feature) throw new Error(`Missing church footprint ${id}.`);
@@ -41,6 +43,12 @@ export const chapelSites = {
     title: 'Basilica of St. Lawrence',
     spawn: [0, 7.6] as Point,
     exit: [0, 8.8] as Point,
+  },
+  john: {
+    approach: aveMariaPoint(-3.2, -10.2),
+    title: 'Church of St. John the Baptist',
+    spawn: [0, 4] as Point,
+    exit: [0, 5.2] as Point,
   },
 };
 
@@ -271,6 +279,15 @@ export function makeLawrenceExterior(add: AddGeometry) {
 }
 
 export function chapelBlocked(kind: ChapelKind, [x, z]: Point) {
+  if (kind === 'john')
+    return (
+      !Number.isFinite(x) ||
+      !Number.isFinite(z) ||
+      Math.abs(x) > 3.65 ||
+      Math.abs(z) > 5.65 ||
+      (Math.abs(x) < 1.4 && z < -3.8) ||
+      (Math.abs(Math.abs(x) - 2.45) < 0.65 && z > -1.7 && z < 2.4)
+    );
   if (kind === 'rotunda')
     return (
       !(Math.hypot(x, z) < 3.65 || Math.hypot(x, z + 4.1) < 1.85) ||
@@ -317,7 +334,77 @@ export function makeChapelInterior(
     if (geometry.index) geometry.dispose();
     batches.set(key, batch);
   };
-  if (kind === 'lawrence') {
+  if (kind === 'john') {
+    add(
+      '#b7ae97',
+      new THREE.BoxGeometry(8, 0.2, 12).translate(0, -0.1, 0),
+      'stone',
+    );
+    for (const x of [-4, 4])
+      add(
+        '#c2b79f',
+        new THREE.BoxGeometry(0.35, 2.8, 12).translate(x, 1.4, 0),
+        'rubble',
+      );
+    for (const z of [-6, 6])
+      add(
+        '#c2b79f',
+        new THREE.BoxGeometry(8.35, 4.65, 0.35).translate(0, 2.325, z),
+        'rubble',
+      );
+    add('#d2c7af', casemateVault(8, 12, 2.8, 1.8), 'plaster');
+    add(
+      '#aaa18b',
+      new THREE.BoxGeometry(2.4, 0.2, 1.8).translate(0, 0.1, -4.7),
+      'stone',
+    );
+    add(
+      '#b2a68c',
+      new THREE.BoxGeometry(1.7, 0.95, 0.8).translate(0, 0.675, -4.7),
+      'stone',
+    );
+    add(
+      '#e0d3b6',
+      new THREE.BoxGeometry(2.05, 0.15, 1).translate(0, 1.225, -4.7),
+      'stone',
+    );
+    add(
+      '#766040',
+      new THREE.BoxGeometry(0.1, 1.5, 0.1).translate(0, 2.25, -5.55),
+      'wood',
+    );
+    add(
+      '#766040',
+      new THREE.BoxGeometry(0.8, 0.1, 0.1).translate(0, 2.55, -5.55),
+      'wood',
+    );
+    for (const side of [-1, 1]) {
+      for (const z of [-1, 1.5]) {
+        add(
+          '#735a41',
+          new THREE.BoxGeometry(0.8, 0.12, 1.1).translate(side * 2.45, 0.5, z),
+          'wood',
+        );
+        add(
+          '#735a41',
+          new THREE.BoxGeometry(0.12, 0.8, 1.1).translate(side * 2.8, 0.7, z),
+          'wood',
+        );
+      }
+      for (const z of [-3, 2.5]) {
+        add(
+          '#d4c18b',
+          new THREE.ShapeGeometry(arch(0.65, 1.2))
+            .rotateY((side * Math.PI) / 2)
+            .translate(side * 3.8, 1.5, z),
+          'glass',
+        );
+        const light = new THREE.PointLight('#ffe3af', 12, 12);
+        light.position.set(side * 3.3, 2.6, z);
+        group.add(light);
+      }
+    }
+  } else if (kind === 'lawrence') {
     makeLawrenceRuins(add);
     add(
       '#bdb7a6',

@@ -336,15 +336,16 @@ export function makeApproach(add: AddGeometry) {
     ];
     const garden = court.id === 53573788;
     const inactive = court.tags.note?.includes('mimo provoz') ?? false;
-    add(
-      garden
-        ? '#8b8461'
-        : court.tags.surface === 'clay'
-          ? '#b77754'
-          : '#809361',
-      drapedPolygon(court.points, 0.07),
-      garden || inactive ? 'grass' : 'cobble',
-    );
+    if (!inactive || garden)
+      add(
+        garden
+          ? '#8b8461'
+          : court.tags.surface === 'clay'
+            ? '#b77754'
+            : '#809361',
+        drapedPolygon(court.points, 0.07),
+        garden || inactive ? 'grass' : 'cobble',
+      );
     if (garden) {
       for (let u = -9; u <= 9; u += 4.5)
         for (const v of [-3.6, 1.8]) {
@@ -418,7 +419,7 @@ export function makeApproach(add: AddGeometry) {
       const level =
         flight.levels[0] +
         ((flight.levels[1] - flight.levels[0]) * i) / flight.count;
-      if (northern) {
+      if (northern || flight.feature.id === 255297754) {
         const bottom = Math.min(...flight.levels) - 0.25;
         const height = level + 0.05 - bottom;
         const a = points[i],

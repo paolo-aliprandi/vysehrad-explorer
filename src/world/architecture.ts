@@ -38,7 +38,6 @@ import {
   cathedralPortals,
   cathedralDoorLeaf,
   aveMariaFrontage,
-  aveMariaFloor,
   aveMariaCourtCuts,
   aveMariaCourtElevation,
   spickaGate,
@@ -1531,34 +1530,6 @@ export function makeAveMaria(
 }
 
 export function makeAveMariaWall(add: AddGeometry) {
-  makeAveMaria(aveMariaFloor(), 4.4, add);
-  const wing = new THREE.Shape();
-  wing.moveTo(aveMariaFrontage.width / 2, -0.5);
-  wing.lineTo(6.6, -0.5);
-  wing.lineTo(6.6, 4.4);
-  wing.lineTo(aveMariaFrontage.width / 2, 4.4);
-  wing.closePath();
-  const gate = new THREE.Path();
-  gate.moveTo(2.4, -0.4);
-  gate.lineTo(4.7, -0.4);
-  gate.lineTo(4.7, 2.1);
-  gate.absarc(3.55, 2.1, 1.15, 0, Math.PI, false);
-  gate.closePath();
-  wing.holes.push(gate);
-  add(
-    '#a29b87',
-    positioned(
-      new THREE.ExtrudeGeometry(wing, {
-        depth: 0.8,
-        bevelEnabled: false,
-        curveSegments: 24,
-      }).translate(0, 0, -0.6),
-      aveMariaFrontage.point,
-      aveMariaFloor(),
-      aveMariaFrontage.angle,
-    ),
-    'stone',
-  );
   for (const cut of aveMariaCourtCuts)
     add('#b3aa97', drapedPolygon(cut, 0.055, aveMariaCourtElevation), 'cobble');
 }
