@@ -411,7 +411,7 @@ describe('OSM world and movement', () => {
   });
 
   it('supports shared building floors above final terraced ground without moving the terrain', () => {
-    for (const id of [49810585, -89545110, -89545120, -89545130]) {
+    for (const id of [49810585, -89545120, -89545130]) {
       const feature = buildings.find((building) => building.id === id);
       if (!feature)
         throw new Error(`Missing support regression building ${id}.`);

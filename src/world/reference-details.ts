@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import polygonClipping, { type Polygon } from 'polygon-clipping';
 import {
   referenceSites,
   paths,
@@ -18,6 +19,10 @@ import {
   sculptures,
   slavin,
   panoramaSites,
+  panoramaOpening,
+  wallOpening,
+  courtBankBoundary,
+  buildings,
   type Point,
   type Feature,
 } from './geo';
@@ -307,43 +312,69 @@ export function makeStairCross(add: AddGeometry) {
 
 export function makeReferenceBankIvy(add: AddGeometry) {
   for (const wall of retainedStreetWalls) {
-    const samples = samplePolyline(wall.points, 1.2);
+    const samples = samplePolyline(wall.points, 0.75);
     for (let i = 1; i < samples.length; i++) {
       const a = samples[i - 1],
         b = samples[i];
-      if (Math.hypot(a[0] + 45, a[1] + 45) > 31) continue;
+      if (a[0] < -104 || a[0] > 15 || a[1] > -17) continue;
       const projection = projectRoute(a, wall.points);
       const normal = projection.normal;
       const crestA = wallProfile(wall, a, normal).top;
       const crestB = wallProfile(wall, b, normal).top;
-      const drop = 0.65 + 0.9 * (0.5 + 0.5 * Math.sin(i * 2.3));
-      const vertices: number[] = [];
-      for (const sign of [-1, 1]) {
-        const offset = sign * 0.57;
-        const p = [
-          a[0] + normal[0] * offset,
-          crestA - 0.08,
-          a[1] + normal[1] * offset,
-        ];
-        const q = [
-          b[0] + normal[0] * offset,
-          crestB - 0.08,
-          b[1] + normal[1] * offset,
-        ];
-        const r = [p[0], p[1] - drop, p[2]],
-          s = [q[0], q[1] - drop * 0.8, q[2]];
-        vertices.push(...p, ...r, ...q, ...q, ...r, ...s);
-      }
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute(
-        'position',
-        new THREE.Float32BufferAttribute(vertices, 3),
+      const crest = Math.min(crestA, crestB);
+      const drop = Math.min(
+        crest - elevation(...a) - 0.35,
+        1.3 + 1.5 * (0.5 + 0.5 * Math.sin(i * 0.31)),
       );
-      geometry.computeVertexNormals();
-      add(i % 3 ? '#354e37' : '#40593b', geometry, 'foliage');
+      for (const sign of [-1, 1]) {
+        const offset = sign * (wallThickness(wall, a) / 2 + 0.045);
+        makeIvyClump(
+          [
+            (a[0] + b[0]) / 2 + normal[0] * offset,
+            (a[1] + b[1]) / 2 + normal[1] * offset,
+          ],
+          crest,
+          drop,
+          -Math.atan2(b[1] - a[1], b[0] - a[0]),
+          i,
+          add,
+        );
+      }
     }
   }
   makeRoyalWallIvy(add);
+}
+
+function makeIvyClump(
+  point: Point,
+  crest: number,
+  drop: number,
+  angle: number,
+  seed: number,
+  add: AddGeometry,
+) {
+  if (drop < 0.25) return;
+  const emit = localEmitter(point, crest, angle, add);
+  for (let row = 0; row <= Math.ceil(drop / 0.32); row++) {
+    const down = Math.min(drop, row * 0.32);
+    const taper = 1 - 0.55 * (down / drop) ** 3;
+    emit(
+      new THREE.SphereGeometry(1, 9, 6)
+        .scale((0.42 + 0.08 * Math.sin(seed * 1.7 + row)) * taper, 0.24, 0.1)
+        .rotateZ(0.2 * Math.sin(seed + row))
+        .translate(0.12 * Math.sin(seed * 0.7 + row * 0.6), 0.06 - down, 0),
+      (seed + row) % 3 ? '#405d3c' : '#506c42',
+      'foliage',
+    );
+    if (row % 2 === 0)
+      emit(
+        new THREE.SphereGeometry(1, 7, 5)
+          .scale(0.16, 0.12, 0.065)
+          .translate(0.4 * taper, -down - 0.08, 0.02),
+        '#5b7548',
+        'foliage',
+      );
+  }
 }
 
 function makeRoyalWallIvy(add: AddGeometry) {
@@ -354,7 +385,11 @@ function makeRoyalWallIvy(add: AddGeometry) {
     const a = samples[i - 1],
       b = samples[i];
     if (
-      Math.hypot(a[0] + 279, a[1] - 116) > 19 ||
+      Math.hypot(a[0] + 279, a[1] - 116) > 48 ||
+      wallOpening(a) ||
+      wallOpening(b) ||
+      panoramaOpening(a) ||
+      panoramaOpening(b) ||
       riversideDoorways.some(
         (door) => Math.hypot(a[0] - door.point[0], a[1] - door.point[1]) < 1.65,
       )
@@ -362,47 +397,160 @@ function makeRoyalWallIvy(add: AddGeometry) {
       continue;
     const projection = projectRoute(a, rampart.points);
     const normal = projection.normal;
-    const inward = inside([a[0] + normal[0], a[1] + normal[1]], rampart.points)
+    const inward = inside(
+      [a[0] + normal[0] * 0.2, a[1] + normal[1] * 0.2],
+      courtBankBoundary,
+    )
       ? 1
       : -1;
     const profile = wallProfile(rampart, a, normal);
     const offsets = retainedWallOffsets(a, wallThickness(rampart, a), profile);
-    const offset = (offsets.inset + wallThickness(rampart, a) + 0.08) * inward;
     const crest = Math.min(profile.top, wallProfile(rampart, b, normal).top);
-    const bottom = Math.max(
-      elevation(...a) + 0.25 + 0.45 * Math.sin(i * 1.7),
-      crest - 2.8,
-    );
-    if (bottom >= crest) continue;
-    const emit = localEmitter(
-      [
+    for (const side of [-1, 1]) {
+      const offset =
+        side > 0
+          ? (offsets.inset + wallThickness(rampart, a) + 0.045) * inward
+          : (offsets.outer - 0.045) * inward;
+      const point: Point = [
         (a[0] + b[0]) / 2 + normal[0] * offset,
         (a[1] + b[1]) / 2 + normal[1] * offset,
-      ],
-      bottom,
-      -Math.atan2(b[1] - a[1], b[0] - a[0]),
-      add,
-    );
-    emit(
-      new THREE.BoxGeometry(0.76, crest - bottom + 0.13, 0.15).translate(
-        0,
-        (crest - bottom) / 2,
-        0,
-      ),
-      i % 3 ? '#354b36' : '#40593c',
-      'foliage',
-    );
-    for (const y of [0.2, 0.65, 1]) {
-      const height = (crest - bottom) * y;
-      emit(
-        new THREE.SphereGeometry(1, 7, 5)
-          .scale(0.4, 0.25, 0.23)
-          .translate(0, height, 0),
-        i % 2 ? '#3d573b' : '#314c35',
-        'foliage',
+      ];
+      if (
+        buildings.some(
+          (building) =>
+            inside(point, building.points) ||
+            projectRoute(point, building.points).distance < 0.75,
+        )
+      )
+        continue;
+      const drop = Math.min(
+        2.1 + 1.8 * (0.5 + 0.5 * Math.sin(i * 0.27)),
+        crest -
+          elevation(
+            point[0] + normal[0] * side * inward,
+            point[1] + normal[1] * side * inward,
+          ) -
+          0.2,
+      );
+      makeIvyClump(
+        point,
+        crest,
+        drop,
+        -Math.atan2(b[1] - a[1], b[0] - a[0]),
+        i,
+        add,
       );
     }
   }
+}
+
+export function makeGardenKiosk(add: AddGeometry) {
+  const site = referenceSites.gardenKiosk;
+  const ground = Math.max(
+    ...[-1, 1].flatMap((u) =>
+      [-1, 1].map((v) =>
+        elevation(
+          site.point[0] +
+            (Math.cos(site.angle) * u * site.width) / 2 +
+            (Math.sin(site.angle) * v * site.depth) / 2,
+          site.point[1] -
+            (Math.sin(site.angle) * u * site.width) / 2 +
+            (Math.cos(site.angle) * v * site.depth) / 2,
+        ),
+      ),
+    ),
+  );
+  const emit = localEmitter(site.point, ground, site.angle, add);
+  emit(
+    new THREE.BoxGeometry(site.width + 0.3, 0.55, site.depth + 0.3).translate(
+      0,
+      -0.2,
+      0,
+    ),
+    '#99917f',
+  );
+  emit(
+    new THREE.BoxGeometry(site.width, 2.6, site.depth).translate(0, 1.3, 0),
+    '#5a634c',
+    'wood',
+  );
+  for (const u of [-site.width / 2 + 0.08, site.width / 2 - 0.08])
+    emit(
+      new THREE.BoxGeometry(0.15, 2.8, site.depth + 0.08).translate(u, 1.4, 0),
+      '#484e3c',
+      'wood',
+    );
+  emit(
+    new THREE.BoxGeometry(3.55, 1.2, 0.08).translate(
+      -0.3,
+      1.64,
+      site.depth / 2 + 0.045,
+    ),
+    '#28342e',
+    'glass',
+  );
+  for (const u of [-2.12, 1.52])
+    emit(
+      new THREE.BoxGeometry(0.1, 1.36, 0.12).translate(
+        u,
+        1.64,
+        site.depth / 2 + 0.1,
+      ),
+      '#c1ae83',
+      'wood',
+    );
+  emit(
+    new THREE.BoxGeometry(3.95, 0.11, 0.55).translate(
+      -0.3,
+      1.06,
+      site.depth / 2 + 0.24,
+    ),
+    '#b7a177',
+    'wood',
+  );
+  emit(
+    new THREE.BoxGeometry(3.95, 0.13, 1.25)
+      .rotateX(-0.18)
+      .translate(-0.3, 2.55, site.depth / 2 + 0.38),
+    '#7a8a62',
+    'wood',
+  );
+  emit(
+    new THREE.BoxGeometry(site.width + 0.55, 0.16, site.depth + 0.5)
+      .rotateX(-0.08)
+      .translate(0, 2.91, 0),
+    '#4a5650',
+    'metal',
+  );
+  emit(
+    new THREE.BoxGeometry(0.68, 0.95, 0.08).translate(
+      2.13,
+      1.56,
+      site.depth / 2 + 0.08,
+    ),
+    '#293b31',
+    'wood',
+  );
+  for (let i = 0; i < 4; i++)
+    emit(
+      new THREE.BoxGeometry(0.42 - i * 0.04, 0.023, 0.03).translate(
+        2.13,
+        1.82 - i * 0.17,
+        site.depth / 2 + 0.13,
+      ),
+      '#d2c49b',
+      'wood',
+    );
+  for (const u of [-1.4, -0.95, -0.5, 0.3, 0.75])
+    emit(
+      new THREE.CylinderGeometry(0.07, 0.055, 0.18, 8).translate(
+        u,
+        1.21,
+        site.depth / 2 + 0.18,
+      ),
+      '#d7ceb1',
+      'plaster',
+    );
 }
 
 export function makeProvostFrontage(
@@ -609,7 +757,7 @@ export function arcadeInterior(bay: (typeof cemeteryArcadeBays)[number]) {
   };
 }
 
-export function makeArcadeVault(
+export function makeArcadeCeiling(
   bay: (typeof cemeteryArcadeBays)[number],
   ground: number,
   add: AddGeometry,
@@ -617,84 +765,34 @@ export function makeArcadeVault(
   const { normal, depth, at } = arcadeInterior(bay);
   const radius = (bay.width - 0.42) / 2;
   if (radius < 0.4) return;
-  const rise = Math.min(1.5, radius);
-  const point = (u: number, v: number): Vertex => {
-    const [x, z] = at(u * radius, ((v + 1) * depth) / 2);
-    return [
-      x,
-      ground +
-        2.25 +
-        rise *
-          Math.max(
-            Math.sqrt(Math.max(0, 1 - u * u)),
-            Math.sqrt(Math.max(0, 1 - v * v)),
-          ),
-      z,
-    ];
-  };
-  const vertices: number[] = [];
-  const uvs: number[] = [];
-  for (let row = 0; row < 12; row++)
-    for (let col = 0; col < 16; col++) {
-      const a = point(col / 8 - 1, row / 6 - 1),
-        b = point((col + 1) / 8 - 1, row / 6 - 1),
-        c = point(col / 8 - 1, (row + 1) / 6 - 1),
-        d = point((col + 1) / 8 - 1, (row + 1) / 6 - 1);
-      if (bay.axis[0] * normal[1] - bay.axis[1] * normal[0] > 0) {
-        vertices.push(...a, ...b, ...c, ...c, ...b, ...d);
-      } else {
-        vertices.push(...a, ...c, ...b, ...c, ...d, ...b);
-      }
-      const u = col / 16,
-        v = row / 12;
-      if (bay.axis[0] * normal[1] - bay.axis[1] * normal[0] > 0)
-        uvs.push(
-          u,
-          v,
-          u + 1 / 16,
-          v,
-          u,
-          v + 1 / 12,
-          u,
-          v + 1 / 12,
-          u + 1 / 16,
-          v,
-          u + 1 / 16,
-          v + 1 / 12,
-        );
-      else
-        uvs.push(
-          u,
-          v,
-          u,
-          v + 1 / 12,
-          u + 1 / 16,
-          v,
-          u,
-          v + 1 / 12,
-          u + 1 / 16,
-          v + 1 / 12,
-          u + 1 / 16,
-          v,
-        );
-    }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute(
-    'position',
-    new THREE.Float32BufferAttribute(vertices, 3),
+  const panel: Polygon = [
+    [at(-radius, 0), at(radius, 0), at(radius, depth), at(-radius, depth)].map(
+      ([x, z]) => [x, z],
+    ),
+  ];
+  const ceiling: Polygon = [bay.feature.points, ...bay.feature.holes].map(
+    (ring) => ring.map(([x, z]) => [x, z]),
   );
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.computeVertexNormals();
-  add('#e8dbc1', geometry, 'fresco');
-  for (const direction of [-1, 1]) {
-    const curve = new THREE.CatmullRomCurve3(
-      Array.from({ length: 25 }, (_, i) => {
-        const t = i / 12 - 1;
-        const p = point(t, direction * t);
-        return new THREE.Vector3(p[0], p[1] - 0.025, p[2]);
-      }),
+  for (const polygon of polygonClipping.intersection(panel, ceiling)) {
+    const rings = polygon.map((ring) =>
+      ring.map(([x, z]) => new THREE.Vector2(x, z)),
     );
-    add('#b39170', new THREE.TubeGeometry(curve, 32, 0.035, 5, false));
+    const shape = new THREE.Shape(rings[0]);
+    shape.holes = rings.slice(1).map((ring) => new THREE.Path(ring));
+    const geometry = new THREE.ShapeGeometry(shape).rotateX(Math.PI / 2);
+    const position = geometry.attributes.position;
+    const uv = geometry.attributes.uv;
+    for (let i = 0; i < position.count; i++) {
+      const dx = position.getX(i) - bay.center[0];
+      const dz = position.getZ(i) - bay.center[1];
+      uv.setXY(
+        i,
+        ((dx * bay.axis[0] + dz * bay.axis[1]) / radius + 1) / 2,
+        (dx * normal[0] + dz * normal[1]) / depth,
+      );
+    }
+    geometry.translate(0, ground + 4.045, 0);
+    add('#e8dbc1', geometry, 'fresco');
   }
   const back = at(0, depth - 0.35);
   const angle = Math.atan2(-normal[0], -normal[1]);
@@ -1028,6 +1126,7 @@ export function makeCemeteryEntranceDetails(add: AddGeometry) {
 
 export function makeReferenceDetails(add: AddGeometry) {
   makeGardenReferences(add);
+  makeGardenKiosk(add);
   makeHiddenChurch(add);
   makeStairCross(add);
   makeReferenceBankIvy(add);

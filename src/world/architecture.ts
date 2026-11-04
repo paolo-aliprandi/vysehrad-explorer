@@ -38,6 +38,9 @@ import {
   cathedralPortals,
   cathedralDoorLeaf,
   aveMariaFrontage,
+  aveMariaFloor,
+  aveMariaCourtCuts,
+  aveMariaCourtElevation,
   spickaGate,
   panoramaSites,
   westFacade as buildingFront,
@@ -45,7 +48,7 @@ import {
   type Point,
 } from './geo';
 import type { MaterialKind } from './materials';
-import { makeArcadeVault } from './reference-details';
+import { makeArcadeCeiling } from './reference-details';
 import {
   samplePolyline,
   continuousWall,
@@ -1392,6 +1395,33 @@ export function makeAveMaria(
   ];
   const doorstep = [at(-0.95), at(0.95), at(0.95, 0.65), at(-0.95, 0.65)];
   const floor = Math.max(...doorstep.map((p) => upperElevation(...p))) + 0.05;
+  const panel = new THREE.Shape();
+  panel.moveTo(-frame.width / 2, -0.4);
+  panel.lineTo(frame.width / 2, -0.4);
+  panel.lineTo(frame.width / 2, wallHeight);
+  panel.lineTo(-frame.width / 2, wallHeight);
+  panel.closePath();
+  const opening = new THREE.Path();
+  opening.moveTo(-0.825, -0.3);
+  opening.lineTo(0.825, -0.3);
+  opening.lineTo(0.825, 2.15);
+  opening.absarc(0, 2.15, 0.825, 0, Math.PI, false);
+  opening.closePath();
+  panel.holes.push(opening);
+  add(
+    '#e5e0cf',
+    positioned(
+      new THREE.ExtrudeGeometry(panel, {
+        depth: 0.5,
+        bevelEnabled: false,
+        curveSegments: 24,
+      }).translate(0, 0, -0.5),
+      point,
+      ground,
+      angle,
+    ),
+    'plaster',
+  );
   makeBuildingDoor(
     { ...frame, width: 1.65, height: 2.1, ground: floor, doorstep, score: 0 },
     add,
@@ -1498,36 +1528,39 @@ export function makeAveMaria(
       positioned(geometry, at(0, -0.08), top + 2.35, angle),
       'metal',
     );
-  for (const wall of frame.feature.points
-    .slice(1)
-    .map((b, i) => [frame.feature.points[i], b] as const)) {
-    if (
-      wall[0] === frame.wall[0] ||
-      Math.hypot(wall[1][0] - wall[0][0], wall[1][1] - wall[0][1]) < 4
-    )
-      continue;
-    const p: Point = [
-      (wall[0][0] + wall[1][0]) / 2,
-      (wall[0][1] + wall[1][1]) / 2,
-    ];
-    let nx = -(wall[1][1] - wall[0][1]),
-      nz = wall[1][0] - wall[0][0];
-    const length = Math.hypot(nx, nz);
-    nx /= length;
-    nz /= length;
-    if (inside([p[0] + nx * 0.1, p[1] + nz * 0.1], frame.feature.points)) {
-      nx = -nx;
-      nz = -nz;
-    }
-    archWindow(
-      add,
-      [p[0] + nx * 0.03, p[1] + nz * 0.03],
-      ground + 1.0,
-      Math.atan2(nx, nz),
-      0.8,
-      1.65,
-    );
-  }
+}
+
+export function makeAveMariaWall(add: AddGeometry) {
+  makeAveMaria(aveMariaFloor(), 4.4, add);
+  const wing = new THREE.Shape();
+  wing.moveTo(aveMariaFrontage.width / 2, -0.5);
+  wing.lineTo(6.6, -0.5);
+  wing.lineTo(6.6, 4.4);
+  wing.lineTo(aveMariaFrontage.width / 2, 4.4);
+  wing.closePath();
+  const gate = new THREE.Path();
+  gate.moveTo(2.4, -0.4);
+  gate.lineTo(4.7, -0.4);
+  gate.lineTo(4.7, 2.1);
+  gate.absarc(3.55, 2.1, 1.15, 0, Math.PI, false);
+  gate.closePath();
+  wing.holes.push(gate);
+  add(
+    '#a29b87',
+    positioned(
+      new THREE.ExtrudeGeometry(wing, {
+        depth: 0.8,
+        bevelEnabled: false,
+        curveSegments: 24,
+      }).translate(0, 0, -0.6),
+      aveMariaFrontage.point,
+      aveMariaFloor(),
+      aveMariaFrontage.angle,
+    ),
+    'stone',
+  );
+  for (const cut of aveMariaCourtCuts)
+    add('#b3aa97', drapedPolygon(cut, 0.055, aveMariaCourtElevation), 'cobble');
 }
 
 export function makeSpickaGate(add: AddGeometry) {
@@ -2351,11 +2384,42 @@ export function makeSlavin(add: AddGeometry) {
       color,
       'metal',
     );
+  const groundedBlock = (
+    width: number,
+    top: number,
+    depth: number,
+    x: number,
+    z: number,
+    color: string,
+  ) => {
+    const bottom = Math.min(
+      -0.3,
+      ...[-1, 0, 1].flatMap((u) =>
+        [-1, 0, 1].map((v) => {
+          const localX = x + (u * width) / 2,
+            localZ = z + (v * depth) / 2;
+          return (
+            elevation(
+              slavin.point[0] +
+                Math.cos(slavin.angle) * localX +
+                Math.sin(slavin.angle) * localZ,
+              slavin.point[1] -
+                Math.sin(slavin.angle) * localX +
+                Math.cos(slavin.angle) * localZ,
+            ) -
+            ground -
+            0.15
+          );
+        }),
+      ),
+    );
+    block(width, top - bottom, depth, x, (top + bottom) / 2, z, color);
+  };
   for (let i = 0; i < 7; i++) {
     const top = (i + 1) * 0.15;
-    block(15.4, top + 0.3, 0.7, 0, (top - 0.3) / 2, 6.05 - i * 0.7, '#a9a28d');
+    groundedBlock(15.4, top, 0.7, 0, 6.05 - i * 0.7, '#a9a28d');
   }
-  block(15.4, 1.15, 3.8, 0, 0.475, 0, '#aaa28d');
+  groundedBlock(15.4, 1.05, 3.8, 0, 0, '#aaa28d');
   for (const side of [-1, 1]) {
     block(4.6, 2.7, 0.75, side * 5.2, 2.4, -1.05);
     block(4.85, 0.2, 1.05, side * 5.2, 3.85, -1.05, '#c9bfa6');
@@ -2433,12 +2497,12 @@ export function makeSlavin(add: AddGeometry) {
     feathers.rotateY(side * 0.25);
     emit(feathers, '#817c5d', 'metal');
   }
-  block(2.5, 0.4, 1.65, 0, 0.35, 3.6, '#a79c83');
-  block(2.15, 1.05, 1.3, 0, 1.075, 3.6);
-  block(2.65, 0.2, 1.8, 0, 1.7, 3.6, '#c2b69a');
-  block(0.17, 1.75, 0.16, 0, 2.67, 3.65, '#52715c', 'metal');
-  block(1.15, 0.17, 0.16, 0, 3.12, 3.65, '#52715c', 'metal');
-  sphere(0, 2.93, 3.8, 0.16, 0.28, 0.1, '#5e725a');
+  groundedBlock(2.5, 0.95, 1.65, 0, 3.6, '#a79c83');
+  block(2.15, 1.05, 1.3, 0, 1.475, 3.6);
+  block(2.65, 0.2, 1.8, 0, 2.1, 3.6, '#c2b69a');
+  block(0.17, 1.75, 0.16, 0, 3.07, 3.65, '#52715c', 'metal');
+  block(1.15, 0.17, 0.16, 0, 3.52, 3.65, '#52715c', 'metal');
+  sphere(0, 3.33, 3.8, 0.16, 0.28, 0.1, '#5e725a');
 }
 
 export function makeStulcovaGardenWall(
@@ -2734,7 +2798,7 @@ export function makeCemeteryArcade(feature: Feature, add: AddGeometry) {
     arch.rotateY(-Math.atan2(bay.axis[1], bay.axis[0]));
     arch.translate(bay.center[0], ground, bay.center[1]);
     add('#c8bda2', arch, 'plaster');
-    makeArcadeVault(bay, ground, add);
+    makeArcadeCeiling(bay, ground, add);
     for (const side of [-1, 1]) {
       const point: Point = [
         bay.center[0] + ((bay.axis[0] * bay.width) / 2) * side,

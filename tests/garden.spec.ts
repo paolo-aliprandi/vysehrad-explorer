@@ -60,9 +60,10 @@ test('joins bank ends, keeps the corner shrine open, and animates quiet garden a
         [.25,.5,.75].flatMap(t=>[-.02,.02].map(offset=>{
           const length=Math.hypot(b[0]-a[0],b[1]-a[1]);
           const point=[a[0]+(b[0]-a[0])*t-(b[1]-a[1])*offset/length,a[1]+(b[1]-a[1])*t+(b[0]-a[0])*offset/length];
-          w.raycaster.set(w.position.clone().set(point[0]*1.5,200,point[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=400;
-          const hit=w.raycaster.intersectObjects(terrain,false)[0];
-          return {point,height:hit?.point.y/1.5,expected:g.elevation(...point)};
+          const court=g.onAveMariaCourt(point),ground=g.elevation(...point);
+          w.raycaster.set(w.position.clone().set(point[0]*1.5,court?(ground+.3)*1.5:200,point[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=court?1:400;
+          const hit=w.raycaster.intersectObjects(court?w.scene.children:terrain,court)[0];
+          return {point,height:hit?.point.y/1.5,expected:ground+(court ? 0.055 : 0)};
         })));
     });
   `);

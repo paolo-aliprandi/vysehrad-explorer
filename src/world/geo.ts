@@ -67,14 +67,6 @@ aveMariaFeature.tags = {
   'roof:shape': 'gabled',
   'building:colour': '#e5e0cf',
 };
-const chapelCenter = center(aveMariaFeature.points);
-aveMariaRetaining.points = aveMariaRetaining.points.map(([x, z]) => {
-  const distance = Math.hypot(x - chapelCenter[0], z - chapelCenter[1]);
-  return [
-    x + ((x - chapelCenter[0]) / distance) * 1.5,
-    z + ((z - chapelCenter[1]) / distance) * 1.5,
-  ];
-});
 export const exposedRocks = features.filter(
   (feature) => feature.tags.natural === 'bare_rock',
 );
@@ -550,6 +542,7 @@ export const aveMariaFrontage = (() => {
   return {
     ...edge,
     feature: aveMariaFeature,
+    approach,
     angle: Math.atan2(...edge.normal),
     point: [
       edge.face[0] + edge.normal[0] * 0.025,
@@ -557,6 +550,64 @@ export const aveMariaFrontage = (() => {
     ] as Point,
   };
 })();
+export function aveMariaPoint(u: number, v: number): Point {
+  const { point, normal, angle } = aveMariaFrontage;
+  return [
+    point[0] + Math.cos(angle) * u + normal[0] * v,
+    point[1] - Math.sin(angle) * u + normal[1] * v,
+  ];
+}
+const aveMariaCourtBounds = [
+  [-4.8, 6.6, -0.5, 10.1],
+  [2.4, 6.6, -11, -0.5],
+];
+export const aveMariaCourtCuts = aveMariaCourtBounds.map(
+  ([left, right, back, front]) => [
+    aveMariaPoint(left, back),
+    aveMariaPoint(right, back),
+    aveMariaPoint(right, front),
+    aveMariaPoint(left, front),
+    aveMariaPoint(left, back),
+  ],
+);
+export function onAveMariaCourt([x, z]: Point) {
+  const { point, normal, angle } = aveMariaFrontage;
+  const dx = x - point[0],
+    dz = z - point[1];
+  const u = dx * Math.cos(angle) - dz * Math.sin(angle);
+  const v = dx * normal[0] + dz * normal[1];
+  return aveMariaCourtBounds.some(
+    ([left, right, back, front]) =>
+      u >= left - 1e-6 &&
+      u <= right + 1e-6 &&
+      v >= back - 1e-6 &&
+      v <= front + 1e-6,
+  );
+}
+export function aveMariaFloor() {
+  return unretainedElevation(...aveMariaFrontage.point);
+}
+export function aveMariaCourtElevation(x: number, z: number) {
+  const { point, normal } = aveMariaFrontage;
+  const v = (x - point[0]) * normal[0] + (z - point[1]) * normal[1];
+  const floor = aveMariaFloor();
+  const target =
+    v >= 0
+      ? unretainedElevation(...aveMariaFrontage.approach)
+      : unretainedElevation(87.36, 28.13);
+  return floor + (target - floor) * (Math.abs(v) / (v >= 0 ? 9.9 : 9.3));
+}
+aveMariaRetaining.points = [
+  [78.05, 25.37],
+  aveMariaPoint(-4.8, -0.25),
+  aveMariaPoint(-aveMariaFrontage.width / 2, -0.25),
+];
+walls.push({
+  id: -89545111,
+  tags: { barrier: 'retaining_wall' },
+  holes: [],
+  points: [aveMariaPoint(6.6, -0.25), aveMariaPoint(6.6, -11), [88.04, 26.4]],
+});
 export const casemateEntrance = (() => {
   const wall = walls.find((feature) => feature.id === 377578901);
   if (!wall) throw new Error('The surveyed casemate entrance wall is missing.');
@@ -1856,6 +1907,7 @@ function softenedLandscape(x: number, z: number) {
 }
 
 export function foundation(feature: Feature): number {
+  if (feature.id === aveMariaFrontage.feature.id) return aveMariaFloor();
   if (feature.id === brickGateId)
     return brickGateGrade(brickGateFrame.center).level;
   if (feature.id === 51718887) return leopoldLevel;
@@ -2543,6 +2595,7 @@ export function unretainedElevation(x: number, z: number) {
   return clearGardenExit([x, z], level);
 }
 export function elevation(x: number, z: number) {
+  if (onAveMariaCourt([x, z])) return aveMariaCourtElevation(x, z);
   const ground = unretainedElevation(x, z);
   const section = retainedStreetSection([x, z]);
   if (section) return retainedStreetElevation(section, ground);
@@ -3209,6 +3262,11 @@ function terrainWallProfile(feature: Feature, point: Point, normal: Point) {
     ),
   );
   const bottom = minimum - (retaining ? 1.5 : 0.3);
+  if ([515345432, -89545111].includes(feature.id))
+    return {
+      bottom: Math.min(bottom, aveMariaFloor() - 0.5),
+      top: aveMariaFloor() + 4.4,
+    };
   if (feature.id === 51700612) return { bottom, top: ground + 1.05 };
   if (feature.id === 55117755) return { bottom, top: ground + 0.95 };
   if (cemeterySolidWallIds.has(feature.id))
@@ -4194,6 +4252,115 @@ export type SiteProp = {
   ground?: number;
 };
 export const siteProps: SiteProp[] = [];
+export const karlachBorderBushes = (() => {
+  const garden = features.find((feature) => feature.id === 380920698);
+  if (!garden) throw new Error('Missing Karlach garden boundary.');
+  return garden.points.slice(15).flatMap((b, index, boundary) => {
+    if (!index) return [];
+    const a = boundary[index - 1];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const normal: Point = [-(b[1] - a[1]) / length, (b[0] - a[0]) / length];
+    const middle: Point = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const sign = inside(
+      [middle[0] + normal[0], middle[1] + normal[1]],
+      garden.points,
+    )
+      ? 1
+      : -1;
+    return Array.from({ length: Math.floor(length / 1.35) }, (_, i) => {
+      const t = (i + 0.5) / Math.floor(length / 1.35);
+      return [
+        a[0] + (b[0] - a[0]) * t + normal[0] * sign * 0.85,
+        a[1] + (b[1] - a[1]) * t + normal[1] * sign * 0.85,
+      ] as Point;
+    })
+      .filter(
+        (point) =>
+          !paths.some(
+            (path) =>
+              projectRoute(point, path.points).distance <
+              pathWidth(path) / 2 + 0.9,
+          ) &&
+          !siteDetails.some(
+            (seat) =>
+              seat.tags.amenity === 'bench' &&
+              Math.hypot(point[0] - seat.point[0], point[1] - seat.point[1]) <
+                2.1,
+          ),
+      )
+      .map((point, i) => ({
+        id: `karlach-border-${index}-${i}`,
+        point,
+        angle: -Math.atan2(b[1] - a[1], b[0] - a[0]),
+        width: 1.8,
+        depth: 1.15,
+        height: 0.85,
+      }));
+  });
+})();
+export const karlachBorderBeds = (() => {
+  const beds = karlachBorderBushes.map(
+    (bush): Polygon => [
+      [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+        [-1, -1],
+      ].map(
+        ([u, v]): Pair => [
+          bush.point[0] +
+            Math.cos(bush.angle) * u * 0.9 +
+            Math.sin(bush.angle) * v * 0.78,
+          bush.point[1] -
+            Math.sin(bush.angle) * u * 0.9 +
+            Math.cos(bush.angle) * v * 0.78,
+        ],
+      ),
+    ],
+  );
+  const first = beds[0];
+  if (!first)
+    throw new Error('The Karlach border has no viable planting beds.');
+  return polygonClipping.union(first, ...beds.slice(1));
+})();
+export const retainedGardenGuards = retainedStreetWalls
+  .filter((wall) => wall.id === -9000103)
+  .map((wall) => ({
+    wall,
+    points: wall.points.filter(([x, z]) => x > -104 && x < 15 && z < -17),
+  }));
+siteProps.push(...karlachBorderBushes);
+for (const [u, width] of [
+  [2.3, 0.15],
+  [5.65, 1.9],
+])
+  siteProps.push({
+    id: `ave-maria-side-pier-${u}`,
+    point: aveMariaPoint(u, -0.2),
+    angle: aveMariaFrontage.angle,
+    width,
+    depth: 0.8,
+    height: 4.4,
+    ground: aveMariaFloor(),
+  });
+for (const guard of retainedGardenGuards)
+  for (let i = 1; i < guard.points.length; i++) {
+    const a = guard.points[i - 1],
+      b = guard.points[i];
+    const point: Point = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const projection = projectRoute(point, guard.wall.points);
+    siteProps.push({
+      id: `retained-garden-guard-${i}`,
+      point,
+      angle: -Math.atan2(b[1] - a[1], b[0] - a[0]),
+      width: Math.hypot(b[0] - a[0], b[1] - a[1]),
+      depth: 0.14,
+      height: 1.1,
+      ground:
+        wallProfile(guard.wall, projection.point, projection.normal).top + 0.05,
+    });
+  }
 export const referenceSites = {
   gardenWell: {
     point: [-30.19, 5.53] as Point,
@@ -4222,6 +4389,13 @@ export const referenceSites = {
     width: 9.2,
     depth: 4,
     height: 5.4,
+  },
+  gardenKiosk: {
+    point: [46.5, 55.2] as Point,
+    angle: 0.196,
+    width: 5.4,
+    depth: 3.6,
+    height: 3.5,
   },
 };
 siteProps.push(

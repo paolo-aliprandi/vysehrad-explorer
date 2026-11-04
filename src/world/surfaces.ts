@@ -24,6 +24,8 @@ import {
   cemeteryArcades,
   brickGateStairCuts,
   panoramaDecks,
+  aveMariaCourtCuts,
+  onAveMariaCourt,
   foundation,
   casemateDoor,
   casemateRecess,
@@ -70,6 +72,12 @@ export function clipTerrainAtArcades(
     },
   ].map((area) => ({ ...area, seal: true }));
   outlines.push(
+    ...aveMariaCourtCuts.map((points) => ({
+      points,
+      floorBottom: 0,
+      ceiling: Infinity,
+      seal: false,
+    })),
     ...panoramaDecks.map((deck) => ({
       points: deck.points,
       floorBottom: deck.floor - 0.16,
@@ -339,9 +347,12 @@ function emitCourtBankPolygon(
       sample &&
       sample !== elevation &&
       riversideGallerySupport([point.x, -point.y]);
-    const street = sample && onRetainedStreetSurface([point.x, -point.y]);
+    const constructed =
+      sample &&
+      (onRetainedStreetSurface([point.x, -point.y]) ||
+        onAveMariaCourt([point.x, -point.y]));
     const height =
-      gallery || street
+      gallery || constructed
         ? sample(point.x, -point.y) + offset
         : ground([point.x, -point.y], interior) +
           offset +

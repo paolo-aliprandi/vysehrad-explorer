@@ -28,6 +28,10 @@ import {
   gardenExitAccess,
   gardenExitFenceRuns,
   aveMariaFrontage,
+  retainedGardenGuards,
+  karlachBorderBushes,
+  karlachBorderBeds,
+  wallProfile,
   type Point,
   type SiteProp,
 } from './geo';
@@ -556,6 +560,48 @@ export function makeSpickaFrontage(add: AddGeometry) {
 }
 
 function makeHedges(add: AddGeometry) {
+  for (const bed of karlachBorderBeds) {
+    add(
+      '#657e47',
+      drapedPolygon(bed[0], 0.06, elevation, bed.slice(1)),
+      'grass',
+    );
+    add(
+      '#a9a38d',
+      continuousWall(
+        bed[0],
+        0.09,
+        (point) => ({
+          bottom: elevation(...point) - 0.06,
+          top: elevation(...point) + 0.08,
+        }),
+        false,
+      ),
+      'stone',
+    );
+  }
+  for (const [index, bush] of karlachBorderBushes.entries())
+    for (const [u, radius] of [
+      [-0.42, 0.48],
+      [0, 0.62],
+      [0.42, 0.46],
+    ]) {
+      const x = bush.point[0] + Math.cos(bush.angle) * u;
+      const z = bush.point[1] - Math.sin(bush.angle) * u;
+      add(
+        index % 3 ? '#506a40' : '#637b48',
+        new THREE.SphereGeometry(1, 12, 8)
+          .scale(radius, 0.43, 0.55)
+          .rotateY(bush.angle)
+          .translate(x, upperElevation(x, z) + 0.4, z),
+        'foliage',
+      );
+    }
+  for (const { wall, points } of retainedGardenGuards)
+    makeFence(points, 1.05, add, (x, z) => {
+      const projection = projectRoute([x, z], wall.points);
+      return wallProfile(wall, projection.point, projection.normal).top + 0.05;
+    });
   for (const [index, hedge] of pevnostiHedges.entries()) {
     const { point, angle } = hedge;
     const ground = upperElevation(...point);

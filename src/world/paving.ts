@@ -17,6 +17,9 @@ import {
   stairFlights,
   stairwellFootprint,
   retainedStreetCorridors,
+  aveMariaCourtCuts,
+  aveMariaFrontage,
+  karlachBorderBeds,
   type Feature,
   type Point,
 } from './geo';
@@ -367,6 +370,14 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
       ? undefined
       : additions.get(feature.id);
     if (sidewalks?.length) full = polygonBoolean('union', full, sidewalks);
+    if (feature.points.some(([x, z]) => x > -120 && x < 20 && z > 20 && z < 60))
+      full = polygonBoolean('difference', full, karlachBorderBeds);
+    if (projectRoute(aveMariaFrontage.point, feature.points).distance < 20)
+      full = polygonBoolean(
+        'difference',
+        full,
+        aveMariaCourtCuts.map((cut) => [cut.map(([x, z]): Pair => [x, z])]),
+      );
     if (cutouts.has(feature.id))
       full = polygonBoolean('difference', full, [
         [stairwellFootprint.map(([x, z]): Pair => [x, z])],

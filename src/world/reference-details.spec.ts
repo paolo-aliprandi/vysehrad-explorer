@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import {
   arcadeInterior,
-  makeArcadeVault,
+  makeArcadeCeiling,
   makeGardenReferences,
   makeHiddenChurch,
+  makeGardenKiosk,
+  makeReferenceBankIvy,
 } from './reference-details';
 import {
   brickGateStairs,
@@ -14,12 +16,37 @@ import {
   sculptures,
   stairElevation,
   panoramaDecks,
+  aveMariaFrontage,
+  aveMariaCourtCuts,
+  aveMariaCourtElevation,
+  aveMariaPoint,
+  aveMariaFloor,
+  foundation,
+  unretainedElevation,
+  karlachBorderBushes,
+  retainedGardenGuards,
+  paths,
+  pathWidth,
+  projectRoute,
+  walls,
+  wallProfile,
+  wallThickness,
+  riversideDoorways,
+  blocked,
+  slavin,
   type Point,
 } from './geo';
 import { makeApproach, makePassages } from './passages';
 import { makeMonuments } from './monuments';
 import { clipTerrainAtArcades, drapedPolygon } from './surfaces';
-import { makePanoramaLookouts, type AddGeometry } from './architecture';
+import {
+  makePanoramaLookouts,
+  makeAveMariaWall,
+  makeFence,
+  makeSlavin,
+  type AddGeometry,
+} from './architecture';
+import { pavingGeometry, pavingSurfaces } from './paving';
 
 function geometryScene(
   make: (add: AddGeometry) => void,
@@ -42,12 +69,241 @@ function geometryScene(
   };
 }
 
-it('renders each photographed cemetery vault from below without closing its walk-through bay', () => {
+it('embeds Ave Maria in the retaining wall with a clear graded approach, a closed chapel door and an open side arch', () => {
+  const scene = geometryScene(makeAveMariaWall, THREE.DoubleSide);
+  try {
+    expect(foundation(aveMariaFrontage.feature)).toBeCloseTo(
+      aveMariaFloor(),
+      6,
+    );
+    expect(unretainedElevation(89.32, 34.71)).toBeGreaterThan(
+      aveMariaFloor() + 0.6,
+    );
+    for (const [u, v] of [
+      [0, 0.8],
+      [0, 5],
+      [0, 9.5],
+      [3.55, -0.5],
+      [3.55, -7],
+    ]) {
+      const point = aveMariaPoint(u, v);
+      const level = aveMariaCourtElevation(...point);
+      expect(elevation(...point)).toBeCloseTo(level, 6);
+      const floor = new THREE.Raycaster(
+        new THREE.Vector3(point[0], level + 0.3, point[1]),
+        new THREE.Vector3(0, -1, 0),
+        0,
+        0.5,
+      ).intersectObjects(scene.meshes)[0];
+      expect(floor).toBeDefined();
+      expect(
+        Math.abs(floor.point.y - level - 0.055),
+        JSON.stringify({
+          u,
+          v,
+          level,
+          hit: floor.point.y,
+          kind: floor.object.name,
+        }),
+      ).toBeLessThan(0.035);
+      expect(blocked(point, level)).toBe(false);
+    }
+    const level = aveMariaFloor();
+    const cast = (u: number) => {
+      const start = aveMariaPoint(u, 1);
+      return new THREE.Raycaster(
+        new THREE.Vector3(start[0], level + 1.65, start[1]),
+        new THREE.Vector3(
+          -aveMariaFrontage.normal[0],
+          0,
+          -aveMariaFrontage.normal[1],
+        ),
+        0,
+        2,
+      ).intersectObjects(scene.meshes);
+    };
+    expect(cast(0)[0]?.object.name).toMatch(/^wood:/);
+    expect(cast(3.55)).toHaveLength(0);
+    const lintel = aveMariaPoint(3.55, -0.2);
+    expect(
+      new THREE.Raycaster(
+        new THREE.Vector3(lintel[0], level + 1.6, lintel[1]),
+        new THREE.Vector3(0, 1, 0),
+        0,
+        3,
+      ).intersectObjects(scene.meshes)[0]?.object.name,
+    ).toMatch(/^stone:/);
+    for (const cut of aveMariaCourtCuts) {
+      const soil = drapedPolygon(cut, 0, unretainedElevation);
+      clipTerrainAtArcades(soil, false, false);
+      const point: Point = [
+        (cut[0][0] + cut[2][0]) / 2,
+        (cut[0][1] + cut[2][1]) / 2,
+      ];
+      const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+      expect(
+        new THREE.Raycaster(
+          new THREE.Vector3(point[0], 80, point[1]),
+          new THREE.Vector3(0, -1, 0),
+        ).intersectObject(new THREE.Mesh(soil, material)),
+      ).toHaveLength(0);
+      soil.dispose();
+      material.dispose();
+    }
+    const legacy = geometryScene((add) => {
+      for (const surface of pavingSurfaces(
+        paths.filter((path) =>
+          [255297766, 255297792, 515345427].includes(path.id),
+        ),
+      ))
+        add('#ffffff', pavingGeometry(surface), 'cobble');
+    }, THREE.DoubleSide);
+    try {
+      const point = aveMariaPoint(0, 4);
+      expect(
+        new THREE.Raycaster(
+          new THREE.Vector3(point[0], 80, point[1]),
+          new THREE.Vector3(0, -1, 0),
+        ).intersectObjects(legacy.meshes),
+      ).toHaveLength(0);
+    } finally {
+      legacy.dispose();
+    }
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('plants the Karlach roadside border without closing garden paths or spreading onto the cobbled street', () => {
+  expect(karlachBorderBushes.length).toBeGreaterThan(30);
+  for (const bush of karlachBorderBushes) {
+    expect(sitePropBlocked(bush.point, elevation(...bush.point))).toBe(true);
+    for (const path of paths)
+      expect(
+        projectRoute(bush.point, path.points).distance,
+      ).toBeGreaterThanOrEqual(pathWidth(path) / 2 + 0.89);
+  }
+  const street = paths.find((path) => path.id === 587280816);
+  if (!street) throw new Error('Missing K Rotunde street.');
+  for (const point of street.points.slice(1, -1))
+    expect(blocked(point, elevation(...point))).toBe(false);
+  const scene = geometryScene((add) => {
+    for (const surface of pavingSurfaces([street]))
+      add('#ffffff', pavingGeometry(surface), 'cobble');
+  }, THREE.DoubleSide);
+  try {
+    for (const bush of karlachBorderBushes)
+      expect(
+        new THREE.Raycaster(
+          new THREE.Vector3(bush.point[0], 80, bush.point[1]),
+          new THREE.Vector3(0, -1, 0),
+        ).intersectObjects(scene.meshes),
+      ).toHaveLength(0);
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('puts a supported kiosk and its counter in the marked lawn without blocking the road or the Procopius niche', () => {
+  const scene = geometryScene(makeGardenKiosk, THREE.DoubleSide);
+  try {
+    const kiosk = referenceSites.gardenKiosk;
+    const ground = elevation(...kiosk.point);
+    expect(sitePropBlocked(kiosk.point, ground)).toBe(true);
+    const roof = new THREE.Raycaster(
+      new THREE.Vector3(kiosk.point[0], ground + 8, kiosk.point[1]),
+      new THREE.Vector3(0, -1, 0),
+    ).intersectObjects(scene.meshes)[0];
+    expect(roof?.object.name).toMatch(/^metal:/);
+    expect(roof.point.y - ground).toBeGreaterThan(2.8);
+    const front: Point = [
+      kiosk.point[0] + Math.sin(kiosk.angle) * 3,
+      kiosk.point[1] + Math.cos(kiosk.angle) * 3,
+    ];
+    const counter = new THREE.Raycaster(
+      new THREE.Vector3(front[0], ground + 1.7, front[1]),
+      new THREE.Vector3(-Math.sin(kiosk.angle), 0, -Math.cos(kiosk.angle)),
+    ).intersectObjects(scene.meshes)[0];
+    expect(counter?.object.name).toMatch(/^glass:/);
+    expect(sitePropBlocked(front, elevation(...front))).toBe(false);
+    const procopius = sculptures.find(
+      (sculpture) => sculpture.id === 4294837398,
+    );
+    if (!procopius) throw new Error('Missing Procopius niche.');
+    expect(
+      Math.hypot(
+        kiosk.point[0] - procopius.point[0],
+        kiosk.point[1] - procopius.point[1],
+      ),
+    ).toBeGreaterThan(10);
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('hangs ivy down the marked bank and grounds its iron fence on the crest, while leaving riverside arches clear', () => {
+  const scene = geometryScene((add) => {
+    makeReferenceBankIvy(add);
+    for (const guard of retainedGardenGuards)
+      makeFence(guard.points, 1.05, add, (x, z) => {
+        const projection = projectRoute([x, z], guard.wall.points);
+        return (
+          wallProfile(guard.wall, projection.point, projection.normal).top +
+          0.05
+        );
+      });
+  }, THREE.DoubleSide);
+  try {
+    const wall = walls.find((wall) => wall.id === -9000103);
+    if (!wall) throw new Error('Missing marked garden retaining wall.');
+    const projection = projectRoute([-48, -34], wall.points);
+    const profile = wallProfile(wall, projection.point, projection.normal);
+    const start = new THREE.Vector3(
+      projection.point[0] + projection.normal[0] * 2,
+      profile.top - 0.6,
+      projection.point[1] + projection.normal[1] * 2,
+    );
+    const leaf = new THREE.Raycaster(
+      start,
+      new THREE.Vector3(-projection.normal[0], 0, -projection.normal[1]),
+      0,
+      3,
+    ).intersectObjects(scene.meshes)[0];
+    expect(leaf?.object.name).toMatch(/^foliage:/);
+    expect(leaf.distance).toBeCloseTo(
+      2 - wallThickness(wall, projection.point) / 2 - 0.1,
+      0,
+    );
+    start.y = profile.top + 0.05 + 0.28;
+    expect(
+      new THREE.Raycaster(
+        start,
+        new THREE.Vector3(-projection.normal[0], 0, -projection.normal[1]),
+        0,
+        3,
+      ).intersectObjects(scene.meshes)[0]?.object.name,
+    ).toMatch(/^metal:/);
+    for (const door of riversideDoorways) {
+      const point = door.point;
+      const ivy = new THREE.Raycaster(
+        new THREE.Vector3(point[0], door.floor + 1.7, point[1]),
+        new THREE.Vector3(door.frame.axis[1], 0, -door.frame.axis[0]),
+        0,
+        0.8,
+      ).intersectObjects(scene.meshes);
+      expect(ivy).toHaveLength(0);
+    }
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('paints the photographed ceiling details flush beneath the porch slab without closing its walk-through bay', () => {
   for (const bay of [cemeteryArcadeBays[0], cemeteryArcadeBays.at(-1)]) {
     if (!bay) throw new Error('Missing cemetery bay fixture.');
     const { at, depth, normal } = arcadeInterior(bay);
-    const floor = elevation(...bay.center);
-    const scene = geometryScene((add) => makeArcadeVault(bay, floor, add));
+    const floor = foundation(bay.feature);
+    const scene = geometryScene((add) => makeArcadeCeiling(bay, floor, add));
     try {
       const point = at(0, depth / 2);
       const ceiling = new THREE.Raycaster(
@@ -61,6 +317,16 @@ it('renders each photographed cemetery vault from below without closing its walk
       expect(ceiling?.object.name).toMatch(/^fresco:/);
       expect(ceiling.point.y - floor).toBeGreaterThan(2.7);
       expect(ceiling.face?.normal.y).toBeLessThan(0);
+      expect(ceiling.point.y - floor).toBeGreaterThan(4.04);
+      expect(ceiling.point.y - floor).toBeLessThan(4.05);
+      for (const mesh of scene.meshes.filter((mesh) =>
+        mesh.name.startsWith('fresco:'),
+      )) {
+        mesh.geometry.computeBoundingBox();
+        const bounds = mesh.geometry.boundingBox;
+        if (!bounds) throw new Error('Missing ceiling bounds.');
+        expect(bounds.max.y - bounds.min.y).toBeLessThan(0.001);
+      }
       const passage = new THREE.Raycaster(
         new THREE.Vector3(
           bay.center[0] - normal[0] * 0.1,
@@ -75,6 +341,39 @@ it('renders each photographed cemetery vault from below without closing its walk
     } finally {
       scene.dispose();
     }
+  }
+});
+
+it('supports the cemetery altar and each stair flight on masonry reaching the underlying ground', () => {
+  const scene = geometryScene(makeSlavin, THREE.DoubleSide);
+  const ground = elevation(...slavin.point);
+  const at = (u: number, v: number): Point => [
+    slavin.point[0] + Math.cos(slavin.angle) * u + Math.sin(slavin.angle) * v,
+    slavin.point[1] - Math.sin(slavin.angle) * u + Math.cos(slavin.angle) * v,
+  ];
+  try {
+    const altar = scene.meshes.find((mesh) => mesh.name === 'stone:#a79c83');
+    if (!altar) throw new Error('Missing cemetery altar footing.');
+    altar.geometry.computeBoundingBox();
+    const bottom = altar.geometry.boundingBox?.min.y;
+    for (const u of [-1.25, 0, 1.25])
+      for (const v of [2.775, 3.6, 4.425]) {
+        const point = at(u, v);
+        expect(bottom).toBeLessThan(elevation(...point));
+      }
+    for (let i = 0; i < 7; i++) {
+      const point = at(-6, 6.05 - i * 0.7);
+      const hit = new THREE.Raycaster(
+        new THREE.Vector3(point[0], elevation(...point) + 0.01, point[1]),
+        new THREE.Vector3(0, 1, 0),
+        0,
+        5,
+      ).intersectObjects(scene.meshes)[0];
+      expect(hit?.face?.normal.y).toBeGreaterThan(0.9);
+      expect(hit.point.y).toBeCloseTo(ground + (i + 1) * 0.15, 4);
+    }
+  } finally {
+    scene.dispose();
   }
 });
 

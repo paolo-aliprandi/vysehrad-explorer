@@ -91,7 +91,12 @@ export class Materials {
       color: pigment,
       map: texture,
       bumpMap: texture,
-      bumpScale: kind === 'rock' ? 0.045 : kind === 'grass' ? 0 : 0.012,
+      bumpScale:
+        kind === 'rock'
+          ? 0.045
+          : ['grass', 'fresco'].includes(kind)
+            ? 0
+            : 0.012,
       side: THREE.DoubleSide,
     };
     const material = ['glass', 'metal', 'lamp'].includes(kind)

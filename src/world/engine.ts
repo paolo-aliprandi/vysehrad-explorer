@@ -75,6 +75,7 @@ import {
   makeCemetery,
   makeCemeteryArcade,
   makeFence,
+  makeAveMariaWall,
   makeRotunda,
   makeEnclosureDetails,
   makePanoramaLookouts,
@@ -181,6 +182,7 @@ import {
   panoramaSites,
   panoramaOpening,
   panoramaDecks,
+  aveMariaCourtCuts,
   exposedRocks,
   cemeteryArcades,
   cemeteryArcadeWallIds,
@@ -1296,6 +1298,10 @@ export class World {
     const tags = { ...parent?.tags, ...feature.tags };
     feature = { ...feature, tags };
     const ground = foundation(feature);
+    if (feature.id === -89545110) {
+      makeAveMariaWall(this.batch.bind(this));
+      return;
+    }
     if (feature.id === chapelSites.lawrence.feature.id) {
       makeLawrenceExterior(this.batch.bind(this));
       return;
@@ -1605,6 +1611,7 @@ export class World {
           ) ||
           excluded.some((area) => contains(point, area)) ||
           panoramaDecks.some((deck) => inside(point, deck.points)) ||
+          aveMariaCourtCuts.some((cut) => inside(point, cut)) ||
           retainedStreetSection(point) ||
           exposedRocks.some((rock) => inside(point, rock.points)) ||
           routes.some(
