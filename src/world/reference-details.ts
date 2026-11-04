@@ -23,12 +23,14 @@ import {
   wallOpening,
   courtBankBoundary,
   buildings,
+  foundation,
+  unretainedElevation,
   artilleryEntrance,
   type Point,
   type Feature,
 } from './geo';
 import type { AddGeometry } from './architecture';
-import { drapedPolygon, samplePolyline } from './surfaces';
+import { continuousWall, drapedPolygon, samplePolyline } from './surfaces';
 
 type Vertex = readonly [number, number, number];
 type Kind = Parameters<AddGeometry>[2];
@@ -290,36 +292,42 @@ export function makeArtilleryEntrance(add: AddGeometry) {
     '#c2b59b',
   );
   emit(
-    new THREE.BoxGeometry(1.76, 2.3, 0.12).translate(0, 1.15, -0.04),
+    new THREE.ExtrudeGeometry(new THREE.Shape(hole.getPoints()), {
+      depth: 0.12,
+      bevelEnabled: false,
+      curveSegments: 24,
+    }).translate(0, 0, 0.06),
     '#405d4c',
     'wood',
   );
   for (const y of [0.55, 1.65])
     emit(
-      new THREE.BoxGeometry(1.7, 0.06, 0.05).translate(0, y, 0.05),
+      new THREE.BoxGeometry(1.7, 0.06, 0.05).translate(0, y, 0.21),
       '#36433c',
       'metal',
     );
   emit(
-    new THREE.BoxGeometry(0.12, 0.12, 0.1).translate(0.57, 1.15, 0.08),
+    new THREE.BoxGeometry(0.12, 0.12, 0.1).translate(0.57, 1.15, 0.23),
     '#b5a16f',
     'metal',
   );
-  const n = site.normal,
-    t: Point = [n[1], -n[0]];
-  const apron = [
-    [-1.6, 0],
-    [1.6, 0],
-    [1.6, 3.2],
-    [-1.6, 3.2],
-    [-1.6, 0],
-  ].map(
-    ([u, v]): Point => [
-      site.point[0] + t[0] * u + n[0] * v,
-      site.point[1] + t[1] * u + n[1] * v,
-    ],
+  add(
+    '#b3aa97',
+    new THREE.ShapeGeometry(
+      new THREE.Shape(site.apron.map(([x, z]) => new THREE.Vector2(x, -z))),
+    )
+      .rotateX(-Math.PI / 2)
+      .translate(0, site.floor + 0.045, 0),
+    'cobble',
   );
-  add('#b3aa97', drapedPolygon(apron, 0.045), 'cobble');
+  add(
+    '#a9a38d',
+    continuousWall(site.apron, 0.1, (point) => ({
+      bottom: Math.min(unretainedElevation(...point) - 0.2, site.floor - 0.2),
+      top: site.floor + 0.045,
+    })),
+    'stone',
+  );
 }
 
 export function makeStairCross(add: AddGeometry) {
@@ -390,7 +398,10 @@ export function makeReferenceBankIvy(add: AddGeometry) {
     for (let i = 1; i < samples.length; i++) {
       const a = samples[i - 1],
         b = samples[i];
-      if (a[0] < -104 || a[0] > 15 || a[1] > -17) continue;
+      const brickApproach = a[0] >= -104 && a[0] <= 15 && a[1] <= -17;
+      const recessedStreet =
+        a[0] >= 15 && a[0] <= 65 && a[1] >= -20 && a[1] <= 63;
+      if (!brickApproach && !recessedStreet) continue;
       const projection = projectRoute(a, wall.points);
       const normal = projection.normal;
       const crestA = wallProfile(wall, a, normal).top;
@@ -416,6 +427,31 @@ export function makeReferenceBankIvy(add: AddGeometry) {
       }
     }
   }
+  const shed = buildings.find((building) => building.id === 49811200);
+  if (!shed) throw new Error('Missing long shed beside the park path.');
+  const facade = projectRoute([141, 175], shed.points);
+  const a = shed.points[facade.segment],
+    b = shed.points[facade.segment + 1];
+  const normal = facade.normal;
+  const sign = inside(
+    [facade.point[0] + normal[0] * 0.1, facade.point[1] + normal[1] * 0.1],
+    shed.points,
+  )
+    ? -1
+    : 1;
+  const crest = foundation(shed) + 2.85;
+  for (const [seed, t] of [0.18, 0.26, 0.56, 0.64, 0.83].entries())
+    makeIvyClump(
+      [
+        a[0] + (b[0] - a[0]) * t + normal[0] * sign * 0.07,
+        a[1] + (b[1] - a[1]) * t + normal[1] * sign * 0.07,
+      ],
+      crest,
+      0.65 + 0.12 * (seed % 3),
+      -Math.atan2(b[1] - a[1], b[0] - a[0]),
+      seed,
+      add,
+    );
   makeRoyalWallIvy(add);
 }
 

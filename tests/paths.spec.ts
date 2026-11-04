@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 test('renders coherent paving at Charles IV, the rotunda street and ramparts, preserves the park and keeps raids playable', async ({
   page,
 }) => {
+  test.setTimeout(180_000);
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
@@ -41,7 +42,64 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     .toBe(24);
   expect(
     await inspect('return w.scene.getObjectByName("Paving").children.length;'),
-  ).toBe(2);
+  ).toBe(3);
+  const sidewalkChecks = await inspect(`
+    const g=await import('/src/world/geo.ts'),p=await import('/src/world/paving.ts'),s=await import('/src/world/surfaces.ts');
+    const group=w.scene.getObjectByName('Paving');
+    w.scene.updateMatrixWorld(true);
+    const materials=group.children.map(mesh=>({name:mesh.name,color:mesh.material.color.getHexString()}));
+    const surfaces=p.pavingSurfaces([g.paths.find(path=>path.id===587280816)]);
+    const doors=surfaces[0].doorways.map(door=>{
+      const point=[door.point[0]+door.normal[0]*.7,door.point[1]+door.normal[1]*.7];
+      w.raycaster.set(w.position.clone().set(point[0]*1.5,120,point[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=200;
+      const hit=w.raycaster.intersectObjects(group.children,false)[0];
+      return {point,threshold:door.ground,rendered:hit?.point.y/1.5,material:hit?.object.name,blocked:w.outdoorBlocked(point,door.ground,false),support:w.support(point,door.ground+.2)};
+    });
+    const terrain=w.blockers.filter(mesh=>mesh.name==='Terrain'||mesh.name==='Terrain rock');
+    const points=s.samplePolyline(g.rotundaStreet.points,2).slice(1,-1).flatMap(point=>{
+      const normal=g.projectRoute(point,g.rotundaStreet.points).normal;
+      return [-2.7,0,2.7].map(offset=>[point[0]+normal[0]*offset,point[1]+normal[1]*offset]);
+    });
+    points.push([68.3082,106.76358],[68.52926,103.36625],[68.65567,99.68444],[61.62993,58.8394]);
+    for(let x=59.5;x<=64;x+=.5)for(let z=59.5;z<=66;z+=.5) {
+      const point=[x,z];
+      if(g.retainedStreetCorridors.some(c=>g.inside(point,c.polygon))&&!g.blocked(point,g.elevation(x,z)))points.push(point);
+    }
+    const street=points.flatMap(point=>{
+      w.raycaster.set(w.position.clone().set(point[0]*1.5,180,point[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=300;
+      const road=w.raycaster.intersectObjects(group.children,false)[0];
+      if(!road)return [{point,missing:true}];
+      const earth=w.raycaster.intersectObjects(terrain,false)[0];
+      return [{point,road:road.point.y/1.5,earth:earth?.point.y/1.5}];
+    });
+    return {materials,doors,street};
+  `);
+  expect(sidewalkChecks.materials).toContainEqual({
+    name: 'Paving: sidewalk cobble',
+    color: 'd8bd94',
+  });
+  expect(sidewalkChecks.materials).toContainEqual({
+    name: 'Paving: cobble',
+    color: 'b2b5ae',
+  });
+  for (const door of sidewalkChecks.doors) {
+    expect(door.material, JSON.stringify(door)).toBe('Paving: sidewalk cobble');
+    expect(
+      Math.abs(door.rendered - door.threshold),
+      JSON.stringify(door),
+    ).toBeLessThan(0.025);
+    expect(
+      Math.abs(door.support - door.threshold),
+      JSON.stringify(door),
+    ).toBeLessThan(0.03);
+    expect(door.blocked, JSON.stringify(door)).toBe(false);
+  }
+  for (const point of sidewalkChecks.street) {
+    expect(point.missing, JSON.stringify(point)).not.toBe(true);
+    expect(point.road - point.earth, JSON.stringify(point)).toBeGreaterThan(
+      0.005,
+    );
+  }
   const streetMaterials = await inspect(`
     const group=w.scene.getObjectByName('Paving');
     w.scene.updateMatrixWorld(true);
@@ -113,7 +171,8 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
           w.raycaster.set(w.position.clone().set(p[0]*1.5,200,p[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=400;
           const earth=w.raycaster.intersectObjects(terrain,false)[0];
           const paving=w.raycaster.intersectObjects(group.children,false)[0];
-          return {point:p,earth:earth?.point.y/1.5,paving:paving?.point.y/1.5,material:paving?.object.name};
+          const occupied=g.buildings.some(building=>building.tags.historic!=='city_gate'&&!g.meters(building.tags.min_height,0)&&g.inside(p,building.points)&&!building.holes.some(hole=>g.inside(p,hole)));
+          return {point:p,occupied,earth:earth?.point.y/1.5,paving:paving?.point.y/1.5,material:paving?.object.name};
         });
       }));
     const uphill=s.samplePolyline(g.retainedStreetAccess.points,2).slice(2,-1).map(p=>{
@@ -152,6 +211,10 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   }
   expect(probes.retainingHits).toBeGreaterThan(0);
   for (const sample of [...probes.renderedStreets, ...probes.uphill]) {
+    if (sample.occupied) {
+      expect(sample.paving, JSON.stringify(sample)).toBeNull();
+      continue;
+    }
     expect(sample.paving, JSON.stringify(sample)).toBeDefined();
     expect(sample.earth, JSON.stringify(sample)).toBeDefined();
     expect(

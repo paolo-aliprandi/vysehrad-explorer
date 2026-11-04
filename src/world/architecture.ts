@@ -3,6 +3,7 @@ import polygonClipping, { type Polygon } from 'polygon-clipping';
 import {
   center,
   elevation,
+  unretainedElevation,
   upperElevation,
   coverAt,
   paths,
@@ -1530,8 +1531,20 @@ export function makeAveMaria(
 }
 
 export function makeAveMariaWall(add: AddGeometry) {
-  for (const cut of aveMariaCourtCuts)
+  for (const cut of aveMariaCourtCuts) {
     add('#b3aa97', drapedPolygon(cut, 0.055, aveMariaCourtElevation), 'cobble');
+    add(
+      '#a9a38d',
+      continuousWall(cut, 0.12, (point) => ({
+        bottom: Math.min(
+          unretainedElevation(...point) - 0.15,
+          aveMariaCourtElevation(...point) - 0.2,
+        ),
+        top: aveMariaCourtElevation(...point) + 0.055,
+      })),
+      'stone',
+    );
+  }
 }
 
 export function makeSpickaGate(add: AddGeometry) {

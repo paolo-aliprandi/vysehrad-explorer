@@ -6,14 +6,15 @@ import {
   makeHiddenChurch,
   makeGardenKiosk,
   makeReferenceBankIvy,
+  makeArtilleryEntrance,
 } from './reference-details';
 import {
   brickGateStairs,
   brickGateFenceLevel,
+  artilleryEntrance,
   upperElevation,
   upperCovers,
   coverElevation,
-  originalElevation,
   cemeteryArcadeBays,
   elevation,
   referenceSites,
@@ -43,6 +44,7 @@ import {
   aveMariaStairCut,
   referenceBorderBushes,
   retainedStreetWalls,
+  retainedWallOffsets,
   type Point,
 } from './geo';
 import { makeApproach, makePassages } from './passages';
@@ -79,7 +81,7 @@ function geometryScene(
   };
 }
 
-it('grades the lawn above Brick Gate into a straight crest while preserving its perimeter and the road beneath', () => {
+it('grades the lawn and masonry perimeter above Brick Gate into one straight crest while preserving the road beneath', () => {
   const cover = upperCovers.find((cover) => cover.id === 51700613);
   const fence = walls.find((wall) => wall.id === 1303806149);
   if (!cover || !fence) throw new Error('Missing Brick Gate crest.');
@@ -110,9 +112,94 @@ it('grades the lawn above Brick Gate into a straight crest while preserving its 
     }
     for (const point of cover.footprint)
       expect(coverElevation(cover, ...point)).toBeCloseTo(
-        originalElevation(...point),
+        brickGateFenceLevel(...point) - 0.03,
         6,
       );
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('embeds the artillery portal into the wall near the left corner and keeps its door and approach accessible', () => {
+  const wall = walls.find((wall) => wall.id === 1532977610);
+  if (!wall) throw new Error('Missing gallery rampart.');
+  const site = artilleryEntrance;
+  const projection = projectRoute(site.point, wall.points);
+  const corner = wall.points[projection.segment];
+  expect(
+    Math.hypot(
+      projection.point[0] - corner[0],
+      projection.point[1] - corner[1],
+    ),
+  ).toBeCloseTo(2.3, 5);
+  expect(
+    Math.hypot(site.point[0] - 135.2, site.point[1] - 132.97),
+  ).toBeGreaterThan(15);
+  expect(blocked(site.approach, elevation(...site.approach))).toBe(false);
+  const scene = geometryScene(makeArtilleryEntrance, THREE.DoubleSide);
+  try {
+    const frame = scene.meshes.find((mesh) => mesh.name === 'stone:#c2b59b');
+    if (!frame) throw new Error('Missing gallery stone frame.');
+    const positions = frame.geometry.attributes.position;
+    const depths = Array.from(
+      { length: positions.count },
+      (_, i) =>
+        (positions.getX(i) - projection.point[0]) * site.normal[0] +
+        (positions.getZ(i) - projection.point[1]) * site.normal[1],
+    );
+    const face = -retainedWallOffsets(
+      projection.point,
+      wallThickness(wall, projection.point),
+      wallProfile(wall, projection.point, projection.normal),
+    ).outer;
+    expect(Math.min(...depths)).toBeCloseTo(face - 0.08, 4);
+    expect(Math.max(...depths)).toBeCloseTo(face + 0.37, 4);
+    for (const height of [1.2, 2.45]) {
+      const door = new THREE.Raycaster(
+        new THREE.Vector3(
+          site.point[0] + site.normal[0],
+          site.floor + height,
+          site.point[1] + site.normal[1],
+        ),
+        new THREE.Vector3(-site.normal[0], 0, -site.normal[1]),
+        0,
+        1,
+      ).intersectObjects(scene.meshes)[0];
+      expect(door?.object.name).toMatch(/^wood:/);
+      expect(
+        (door.point.x - projection.point[0]) * site.normal[0] +
+          (door.point.z - projection.point[1]) * site.normal[1],
+      ).toBeGreaterThan(face);
+    }
+    for (const v of [0.8, 1.8, 2.8])
+      for (const u of [-1.25, 0, 1.25]) {
+        const x = site.point[0] + site.normal[1] * u + site.normal[0] * v;
+        const z = site.point[1] - site.normal[0] * u + site.normal[1] * v;
+        const floor = new THREE.Raycaster(
+          new THREE.Vector3(x, site.floor + 0.3, z),
+          new THREE.Vector3(0, -1, 0),
+          0,
+          0.5,
+        ).intersectObjects(scene.meshes)[0];
+        expect(floor?.object.name).toMatch(/^cobble:/);
+        expect(floor.point.y).toBeCloseTo(site.floor + 0.045, 4);
+      }
+    const soil = drapedPolygon(site.apron, 0, unretainedElevation);
+    clipTerrainAtArcades(soil);
+    const soilMesh = new THREE.Mesh(soil, scene.meshes[0].material);
+    for (const v of [0.8, 1.8, 2.8]) {
+      const x = site.point[0] + site.normal[0] * v;
+      const z = site.point[1] + site.normal[1] * v;
+      expect(
+        new THREE.Raycaster(
+          new THREE.Vector3(x, site.floor + 2, z),
+          new THREE.Vector3(0, -1, 0),
+          0,
+          5,
+        ).intersectObject(soilMesh),
+      ).toHaveLength(0);
+    }
+    soil.dispose();
   } finally {
     scene.dispose();
   }

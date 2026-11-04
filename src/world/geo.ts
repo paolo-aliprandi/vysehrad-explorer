@@ -305,7 +305,9 @@ export const buildings = features.filter(
   (f) =>
     f.tags.building &&
     f.points.length >= 4 &&
-    ![49810432, 364471135, 49810586, 51700617].includes(f.id),
+    ![49810432, 364471135, 49810586, 51700617, 457038757, 457038758].includes(
+      f.id,
+    ),
 );
 export const parts = features.filter(
   (f) => f.tags['building:part'] && f.points.length >= 4,
@@ -1283,6 +1285,32 @@ export const retainedStreetCorridors = [4646722, 587280816].map((id) => {
   };
 });
 
+const streetJunction = (() => {
+  const [a, b] = retainedStreetCorridors;
+  const point = a.points[a.points.length - 1];
+  const level = a.levels[a.levels.length - 1];
+  const incoming = [a, b].map((corridor) => {
+    const index = corridor.points.length - 2;
+    return [
+      corridor.points[index][0] - point[0],
+      corridor.points[index][1] - point[1],
+      corridor.levels[index] - level,
+    ];
+  });
+  const [[ax, az, ay], [bx, bz, by]] = incoming;
+  const determinant = ax * bz - bx * az;
+  if (Math.abs(determinant) < 1e-8)
+    throw new Error(
+      'The retained street junction has no shared grading plane.',
+    );
+  return {
+    point,
+    level,
+    slopeX: (ay * bz - by * az) / determinant,
+    slopeZ: (ax * by - bx * ay) / determinant,
+  };
+})();
+
 export function retainedStreetSection(point: Point) {
   let nearest:
     | {
@@ -1339,6 +1367,17 @@ export function retainedStreetSection(point: Point) {
       width,
       weight: smooth(Math.min(route.along, corridor.length - route.along) / 5),
     };
+  }
+  if (nearest) {
+    const dx = point[0] - streetJunction.point[0];
+    const dz = point[1] - streetJunction.point[1];
+    const blend = 1 - smooth((Math.hypot(dx, dz) - 8) / 12);
+    const level =
+      streetJunction.level +
+      streetJunction.slopeX * dx +
+      streetJunction.slopeZ * dz;
+    nearest.level += (level - nearest.level) * blend;
+    nearest.weight = Math.max(nearest.weight, blend);
   }
   return nearest;
 }
@@ -2616,6 +2655,25 @@ export function elevation(x: number, z: number) {
   const ground = unretainedElevation(x, z);
   const section = retainedStreetSection([x, z]);
   if (section) return retainedStreetElevation(section, ground);
+  if (
+    x >= rotundaStreet.minX &&
+    x <= rotundaStreet.maxX &&
+    z >= rotundaStreet.minZ &&
+    z <= rotundaStreet.maxZ &&
+    inside([x, z], rotundaStreet.polygon)
+  ) {
+    const projection = projectRoute([x, z], rotundaStreet.points);
+    const start = rotundaStreet.levels[projection.segment];
+    const level =
+      start +
+      (rotundaStreet.levels[projection.segment + 1] - start) *
+        projection.fraction;
+    return (
+      ground +
+      (level - ground) *
+        (1 - smooth(projection.distance - rotundaStreet.width / 2 - 3))
+    );
+  }
   const bank = retainedStreetBanks.find(
     (bank) =>
       x >= bank.minX &&
@@ -2856,9 +2914,44 @@ export const retainedStreetAccess = (() => {
     maxZ: Math.max(...polygon.map((point) => point[1])),
   };
 })();
+export const streetSidewalkWidth = 0.9;
+export const rotundaStreet = (() => {
+  const feature = paths.find((path) => path.id === 5016653);
+  if (!feature) throw new Error('Missing V Pevnosti beside the rotunda.');
+  const width = pathWidth(feature) + streetSidewalkWidth * 2;
+  const outline = (halfWidth: number) => {
+    const edges = feature.points.map((point) => {
+      const { normal } = projectRoute(point, feature.points);
+      return [-1, 1].map(
+        (side): Point => [
+          point[0] + normal[0] * side * halfWidth,
+          point[1] + normal[1] * side * halfWidth,
+        ],
+      );
+    });
+    return streetOutline([
+      ...edges.map((edge) => edge[0]),
+      ...edges.map((edge) => edge[1]).reverse(),
+    ]);
+  };
+  const polygon = outline(width / 2 + 4);
+  return {
+    feature,
+    points: feature.points,
+    width,
+    levels: feature.points.map((point) => unretainedElevation(...point)),
+    polygon,
+    pavingPolygon: outline(width / 2),
+    minX: Math.min(...polygon.map((point) => point[0])),
+    maxX: Math.max(...polygon.map((point) => point[0])),
+    minZ: Math.min(...polygon.map((point) => point[1])),
+    maxZ: Math.max(...polygon.map((point) => point[1])),
+  };
+})();
 export const retainedStreetAreas = [
   ...retainedStreetCorridors,
   retainedStreetAccess,
+  rotundaStreet,
   ...retainedStreetBanks,
 ];
 const retainedStreetBounds = retainedStreetAreas.map(({ polygon }) => ({
@@ -2889,10 +2982,14 @@ export function retainedStreetBankElevation(
   if (blendDistance < 1e-8) return ground;
   const projection = projectRoute(point, bank.wall.points);
   const crest = streetBankCrest(bank, projection);
+  const borderWidth = kioskBanks.includes(bank) ? 1.9 : 0.6;
   return (
     ground +
     (crest - ground) *
-      (1 - smooth((projection.distance - 0.6) / (streetBankWidth - 0.6))) *
+      (1 -
+        smooth(
+          (projection.distance - borderWidth) / (streetBankWidth - borderWidth),
+        )) *
       smooth(blendDistance / 3)
   );
 }
@@ -2941,9 +3038,7 @@ export function coverElevation(
   z: number,
 ) {
   if (cover.id === brickGateId) {
-    const original = originalElevation(x, z);
-    const blend = smooth(projectRoute([x, z], cover.footprint).distance / 3);
-    return original + (brickGateCrestElevation(x, z) - original) * blend;
+    return brickGateCrestElevation(x, z);
   }
   return cover.id === gardenDoorRoute.id
     ? gardenWallCrest([x, z]) + 0.16
@@ -3027,39 +3122,6 @@ export const aveMariaStairCut = (() => {
     offset(a, 1),
     offset(a, -1),
   ];
-})();
-export const artilleryEntrance = (() => {
-  const wall = walls.find((item) => item.id === 1532977610);
-  if (!wall) throw new Error('Missing gallery rampart wall.');
-  const projection = projectRoute([135.2, 132.97], wall.points);
-  const sign = inside(
-    [
-      projection.point[0] + projection.normal[0],
-      projection.point[1] + projection.normal[1],
-    ],
-    rampartBoundary,
-  )
-    ? -1
-    : 1;
-  const normal: Point = [
-    projection.normal[0] * sign,
-    projection.normal[1] * sign,
-  ];
-  const point: Point = [
-    projection.point[0] + normal[0] * 0.9,
-    projection.point[1] + normal[1] * 0.9,
-  ];
-  const approach: Point = [
-    point[0] + normal[0] * 1.5,
-    point[1] + normal[1] * 1.5,
-  ];
-  return {
-    point,
-    normal,
-    approach,
-    angle: Math.atan2(normal[0], normal[1]),
-    floor: unretainedElevation(...approach),
-  };
 })();
 function brickGateCrestElevation(x: number, z: number) {
   const fence = walls.find((wall) => wall.id === 1303806149);
@@ -3370,6 +3432,7 @@ export function featureElevation(feature: Feature, point: Point) {
     const gallery = riversideGallerySupport(point);
     if (gallery) return gallery.floor + (feature.id === 78879996 ? 0.18 : 0);
   }
+  if (feature.id === rotundaStreet.feature.id) return elevation(...point);
   if (pevnostiIds.includes(feature.id)) return originalElevation(...point);
   return lowerGatePathIds.has(feature.id) ||
     posternIds.has(feature.id) ||
@@ -3590,6 +3653,64 @@ export function retainedWallOffsets(
       : 0,
   };
 }
+export const artilleryEntrance = (() => {
+  const wall = walls.find((item) => item.id === 1532977610);
+  if (!wall) throw new Error('Missing gallery rampart wall.');
+  const face = projectRoute([135.2, 132.97], wall.points);
+  const corner = wall.points[face.segment];
+  const next = wall.points[face.segment + 1];
+  const distance = Math.hypot(next[0] - corner[0], next[1] - corner[1]);
+  const projection = projectRoute(
+    [
+      corner[0] + ((next[0] - corner[0]) * 2.3) / distance,
+      corner[1] + ((next[1] - corner[1]) * 2.3) / distance,
+    ],
+    wall.points,
+  );
+  const sign = inside(
+    [
+      projection.point[0] + projection.normal[0],
+      projection.point[1] + projection.normal[1],
+    ],
+    courtBankBoundary,
+  )
+    ? -1
+    : 1;
+  const normal: Point = [
+    projection.normal[0] * sign,
+    projection.normal[1] * sign,
+  ];
+  const { outer } = retainedWallOffsets(
+    projection.point,
+    wallThickness(wall, projection.point),
+    wallProfile(wall, projection.point, projection.normal),
+  );
+  const point: Point = [
+    projection.point[0] - normal[0] * (outer + 0.08),
+    projection.point[1] - normal[1] * (outer + 0.08),
+  ];
+  const approach: Point = [point[0] + normal[0] * 3, point[1] + normal[1] * 3];
+  const apron = [
+    [-1.6, -0.12],
+    [1.6, -0.12],
+    [1.6, 3.2],
+    [-1.6, 3.2],
+    [-1.6, -0.12],
+  ].map(
+    ([u, v]): Point => [
+      point[0] + normal[1] * u + normal[0] * v,
+      point[1] - normal[0] * u + normal[1] * v,
+    ],
+  );
+  return {
+    point,
+    normal,
+    approach,
+    apron,
+    angle: Math.atan2(normal[0], normal[1]),
+    floor: unretainedElevation(...approach),
+  };
+})();
 const mainRampart = walls.find((wall) => wall.id === rampartWallId);
 if (!mainRampart) throw new Error('The main rampart is missing.');
 
@@ -4475,7 +4596,7 @@ export const referenceBorderBushes = [
     angle: point[0] > 120 ? 0.71 : -0.2,
     width: 1.4,
     depth: 1.1,
-    height: 0.85,
+    height: point[0] > 120 ? 1.5 : 0.85,
   }));
 siteProps.push(...referenceBorderBushes);
 export const karlachBorderBushes = (() => {

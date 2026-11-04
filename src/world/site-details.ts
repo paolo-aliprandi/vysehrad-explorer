@@ -595,9 +595,9 @@ function makeHedges(add: AddGeometry) {
       add(
         index % 3 ? '#506a40' : '#637b48',
         new THREE.SphereGeometry(1, 12, 8)
-          .scale(radius, 0.43, 0.55)
+          .scale(radius, bush.height / 2, 0.55)
           .rotateY(bush.angle)
-          .translate(x, upperElevation(x, z) + 0.4, z),
+          .translate(x, upperElevation(x, z) + bush.height / 2 - 0.025, z),
         'foliage',
       );
     }

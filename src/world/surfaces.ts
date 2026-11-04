@@ -28,6 +28,7 @@ import {
   aveMariaCourtCuts,
   aveMariaStairCut,
   onAveMariaCourt,
+  artilleryEntrance,
   foundation,
   casemateDoor,
   casemateRecess,
@@ -94,6 +95,12 @@ export function clipTerrainAtArcades(
       ceiling: Infinity,
       seal: false,
     })),
+    {
+      points: artilleryEntrance.apron,
+      floorBottom: 0,
+      ceiling: Infinity,
+      seal: false,
+    },
     ...panoramaDecks.map((deck) => ({
       points: deck.points,
       floorBottom: deck.floor - 0.16,
@@ -529,9 +536,11 @@ function drapeTriangles(
   triangles: readonly (readonly Point[])[],
   offset: number,
   sample = elevation,
+  planarStreetCells = false,
 ) {
   const vertices: number[] = [];
   const heightCache = new Map<string, number>();
+  const sampleCache = new Map<string, number>();
   const coarseWidth =
     (terrainField.maxX - terrainField.minX) / terrainField.columns;
   const coarseDepth =
@@ -630,6 +639,35 @@ function drapeTriangles(
               for (let edge = 0; edge < 3 && polygon.length; edge++)
                 polygon = clip(polygon, cell[edge], cell[(edge + 1) % 3]);
               if (polygon.length < 3) continue;
+              let cellSample = sample;
+              if (planarStreetCells && streetDetail) {
+                const heights = cell.map((point) => {
+                  const key = `${point[0]},${point[1]}`;
+                  let height = sampleCache.get(key);
+                  if (height === undefined) {
+                    height = sample(...point);
+                    sampleCache.set(key, height);
+                  }
+                  return height;
+                });
+                const [a, b, c] = cell;
+                const determinant =
+                  (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1]);
+                cellSample = (x, z) => {
+                  if (Math.max(...heights) - Math.min(...heights) > 1)
+                    return sample(x, z);
+                  // Clipped soil and paving must share the same cell plane.
+                  const u =
+                    ((b[1] - c[1]) * (x - c[0]) + (c[0] - b[0]) * (z - c[1])) /
+                    determinant;
+                  const v =
+                    ((c[1] - a[1]) * (x - c[0]) + (a[0] - c[0]) * (z - c[1])) /
+                    determinant;
+                  return (
+                    u * heights[0] + v * heights[1] + (1 - u - v) * heights[2]
+                  );
+                };
+              }
               const cliff = onCliffTerrain(
                 x + cellWidth / 2,
                 z + cellDepth / 2,
@@ -675,7 +713,7 @@ function drapeTriangles(
                     ring,
                     inside(polygon[0], courtBankBoundary),
                     offset,
-                    sample,
+                    cellSample,
                     ground,
                     heightCache,
                   );
@@ -690,7 +728,7 @@ function drapeTriangles(
                     piece,
                     true,
                     offset,
-                    sample,
+                    cellSample,
                     ground,
                     heightCache,
                   );
@@ -703,7 +741,7 @@ function drapeTriangles(
                     piece,
                     false,
                     offset,
-                    sample,
+                    cellSample,
                     ground,
                     heightCache,
                   );
@@ -720,7 +758,7 @@ function drapeTriangles(
                   const key = `${v[0]},${v[1]}`;
                   let height = heightCache.get(key);
                   if (height === undefined) {
-                    height = sample(...v) + offset;
+                    height = cellSample(...v) + offset;
                     heightCache.set(key, height);
                   }
                   vertices.push(v[0], height, v[1]);
@@ -738,6 +776,7 @@ export function drapedPolygon(
   offset: number,
   sample = elevation,
   cutouts: readonly (readonly Point[])[] = [],
+  planarStreetCells = false,
 ) {
   const outer: Polygon = [points.map(([x, z]) => [x, z])];
   const polygons = cutouts.length
@@ -759,6 +798,7 @@ export function drapedPolygon(
     }),
     offset,
     sample,
+    planarStreetCells,
   );
 }
 
