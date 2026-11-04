@@ -82,19 +82,28 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       w.raycaster.far=600;
       return w.raycaster.intersectObjects(group.children,false).length;
     };
-    const road=g.paths.find(p=>p.id===4646722);
-    const old=s.pathRibbon(road.points,11.5,.055,(x,z)=>g.featureElevation(road,[x,z]));
-    const p=old.attributes.position,badBanks=[];
-    for(let i=0;i<p.count && badBanks.length<5;i+=3) {
-      const a=w.position.clone().fromBufferAttribute(p,i),b=w.position.clone().fromBufferAttribute(p,i+1),c=w.position.clone().fromBufferAttribute(p,i+2);
-      const normal=b.clone().sub(a).cross(c.clone().sub(a));
-      const point=[(a.x+b.x+c.x)/3,(a.z+b.z+c.z)/3];
-      if(Math.hypot(normal.x,normal.z)>Math.abs(normal.y)*.551 &&
-        g.projectRoute(point,road.points).distance>g.pathWidth(road)/2+.2 &&
-        !g.paths.some(f=>f.tags.highway==='steps' && g.projectRoute(point,f.points).distance<g.pathWidth(f)/2))
-        badBanks.push({point,hits:rayHits(point)});
-    }
-    old.dispose();
+    const streetSections=[[-46.11,-39.77],[32.18,3.68],[-49.87,44.96],[29.83,62.55]].map(point=>{
+      const corridor=g.retainedStreetCorridors.reduce((a,b)=>
+        g.projectRoute(point,a.points).distance<g.projectRoute(point,b.points).distance?a:b);
+      const normal=g.projectRoute(point,corridor.points).normal;
+      return [-4,0,4].map(offset=>{
+        const p=[point[0]+normal[0]*offset,point[1]+normal[1]*offset];
+        const floor=g.standingElevation(p);
+        w.raycaster.set(w.position.clone().set(p[0]*1.5,(floor+.8)*1.5,p[1]*1.5),w.position.clone().set(0,-1,0));
+        w.raycaster.far=2;
+        const hit=w.raycaster.intersectObjects(w.blockers,false)[0];
+        return {point:p,floor,mesh:hit?.point.y/1.5};
+      });
+    });
+    const wall=g.retainedStreetWalls.find(wall=>wall.points.length>20);
+    if(!wall)throw new Error('Missing street retaining wall.');
+    const edge=wall.points[Math.floor(wall.points.length/2)];
+    const centre=g.projectRoute(edge,g.retainedStreetCorridors[0].points).point;
+    const from=w.position.clone().set(centre[0],g.elevation(...centre)+.5,centre[1]).multiplyScalar(1.5);
+    const to=w.position.clone().set(edge[0]*1.5,from.y,edge[1]*1.5);
+    w.raycaster.set(from,to.clone().sub(from).normalize());
+    w.raycaster.far=from.distanceTo(to)+1;
+    const retainingHits=w.raycaster.intersectObjects(w.blockers,false).length;
     const exterior=[];
     for(const id of [351280742,1303802776,26694438,26694442]) {
       const feature=g.paths.find(p=>p.id===id),old=s.pathRibbon(feature.points,g.pathWidth(feature),.055,(x,z)=>g.featureElevation(feature,[x,z]));
@@ -115,13 +124,34 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       const point=points[Math.floor(points.length/2)];
       return {id,hits:rayHits([point[0]+.013,point[1]+.019])};
     });
-    return {badBanks,exterior,park};
+    return {streetSections,retainingHits,exterior,park};
   `);
-  expect(probes.badBanks.length).toBeGreaterThan(0);
-  expect(
-    probes.badBanks.every((p: { hits: number }) => p.hits === 0),
-    JSON.stringify(probes.badBanks),
-  ).toBe(true);
+  for (const section of probes.streetSections) {
+    for (const sample of section) {
+      expect(sample.floor).toBeCloseTo(section[1].floor, 3);
+      expect(sample.mesh).toBeCloseTo(sample.floor, 0);
+    }
+  }
+  expect(probes.retainingHits).toBeGreaterThan(0);
+  for (const point of [
+    [-46.11, -39.77],
+    [-49.87, 44.96],
+  ]) {
+    const before = await inspect(`
+      const g=await import('/src/world/geo.ts'),p=${JSON.stringify(point)};
+      w.position.set(p[0],g.standingElevation(p),p[1]);w.jumpVelocity=0;
+      w.yaw=${point[0] < -48 ? -Math.PI / 2 : -1.1};
+      return w.position.toArray();
+    `);
+    await page.keyboard.down('w');
+    await page.waitForTimeout(500);
+    await page.keyboard.up('w');
+    const after = await inspect('return w.position.toArray();');
+    expect(
+      Math.hypot(after[0] - before[0], after[2] - before[2]),
+    ).toBeGreaterThan(0.5);
+    expect(Math.abs(after[1] - before[1])).toBeLessThan(0.5);
+  }
   expect(probes.exterior.length).toBeGreaterThan(0);
   expect(
     probes.exterior.every((p: { hits: number }) => p.hits === 0),
@@ -138,6 +168,22 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     return progress;
   `);
   for (const view of [
+    {
+      name: 'cathedral-retaining-street',
+      point: [30, 62.5],
+      yaw: -Math.PI / 2,
+      zoom: 9,
+      pitch: 0.18,
+      height: 0,
+    },
+    {
+      name: 'brick-gate-retaining-street',
+      point: [-46, -40],
+      yaw: -1.1,
+      zoom: 10,
+      pitch: 0.18,
+      height: 0,
+    },
     {
       name: 'charles-iv-paving',
       point: [576, -485],
@@ -190,7 +236,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   ]) {
     await inspect(`
       const g=await import('/src/world/geo.ts'),p=${JSON.stringify(view.point)};
-      w.position.set(p[0],g.standingElevation(p)+20,p[1]);w.jumpVelocity=0;
+      w.position.set(p[0],g.standingElevation(p)+${'height' in view ? view.height : 20},p[1]);w.jumpVelocity=0;
       w.yaw=${view.yaw};w.zoom=${view.zoom};w.pitch=${view.pitch};
       w.camera.position.copy(w.position).multiplyScalar(1.5).add(w.position.clone().set(0,30,30));
     `);

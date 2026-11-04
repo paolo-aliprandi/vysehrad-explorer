@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import polygonClipping, { type Polygon } from 'polygon-clipping';
+import { polygonBoolean } from './polygons';
 import {
   elevation,
   terrainField,
@@ -25,6 +26,8 @@ import {
   casemateDoor,
   casemateRecess,
   casemateUphillExit,
+  retainedStreetCorridors,
+  retainedStreetBanks,
   segmentDistance,
   type Point,
 } from './geo';
@@ -32,6 +35,7 @@ import {
 export function clipTerrainAtArcades(
   source: THREE.BufferGeometry,
   sealExcavation = true,
+  streetCuts = true,
 ) {
   // Bound excavation to porch slabs and tunnel mouths, preserving rock above the entrance vault.
   const position = source.attributes.position;
@@ -52,7 +56,19 @@ export function clipTerrainAtArcades(
       floorBottom: casemateUphillExit.floor - 1.8,
       ceiling: Infinity,
     },
-  ].map((area) => ({
+  ].map((area) => ({ ...area, seal: true }));
+  if (streetCuts)
+    outlines.push(
+      ...[...retainedStreetCorridors, ...retainedStreetBanks].map(
+        (corridor) => ({
+          points: corridor.polygon,
+          floorBottom: 0,
+          ceiling: Infinity,
+          seal: false,
+        }),
+      ),
+    );
+  const areas = outlines.map((area) => ({
     ...area,
     polygon: [area.points.map(([x, z]) => [x, z])] as Polygon,
     minX: Math.min(...area.points.map((p) => p[0])),
@@ -64,7 +80,7 @@ export function clipTerrainAtArcades(
   const box = source.boundingBox;
   if (
     !box ||
-    !outlines.some(
+    !areas.some(
       (area) =>
         area.minX <= box.max.x &&
         area.maxX >= box.min.x &&
@@ -125,7 +141,7 @@ export function clipTerrainAtArcades(
     );
     const xs = points.map((p) => p[0]),
       zs = points.map((p) => p[1]);
-    const nearby = outlines.filter(
+    const nearby = areas.filter(
       (area) =>
         triangle.some((index) => position.getY(index) < area.ceiling) &&
         area.minX <= Math.max(...xs) &&
@@ -141,10 +157,17 @@ export function clipTerrainAtArcades(
         }
       continue;
     }
-    const fragments = polygonClipping.difference(
-      [points.map(([x, z]) => [x, z])] as Polygon,
-      ...nearby.map((area) => area.polygon),
-    );
+    const trianglePolygon: Polygon = [points.map(([x, z]) => [x, z])];
+    const fragments = nearby.some((area) => !area.seal)
+      ? polygonBoolean(
+          'difference',
+          [trianglePolygon],
+          ...nearby.map((area) => [area.polygon]),
+        )
+      : polygonClipping.difference(
+          trianglePolygon,
+          ...nearby.map((area) => area.polygon),
+        );
     for (const fragment of fragments) {
       const rings = fragment.map((ring) => ring.slice(0, -1));
       const vectors = rings.map((ring) =>
@@ -179,7 +202,7 @@ export function clipTerrainAtArcades(
                 );
               }),
             );
-            if (!outline) continue;
+            if (!outline?.seal) continue;
             // Use this terrain triangle's interpolated crest, not a resampled height,
             // so the cut face joins its exact mesh edge without cracks.
             emit(a, triangle, undefined, true);

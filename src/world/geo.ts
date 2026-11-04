@@ -1116,6 +1116,173 @@ const northPevnostiPoints = northPevnosti.points;
 const northPevnostiLevels = northPevnostiPoints.map((point) =>
   rawElevation(...point),
 );
+const brickGateApproach = paths.find((feature) => feature.id === 53573884);
+if (!brickGateApproach) throw new Error('The Brick Gate approach is missing.');
+function streetOutline(points: Point[]) {
+  const corners = points.filter((point, index) => {
+    const before = points[(index + points.length - 1) % points.length];
+    const after = points[(index + 1) % points.length];
+    return (
+      Math.abs(
+        (point[0] - before[0]) * (after[1] - point[1]) -
+          (point[1] - before[1]) * (after[0] - point[0]),
+      ) > 1e-7
+    );
+  });
+  return [...corners, corners[0]];
+}
+export const retainedStreetCorridors = [4646722, 587280816].map((id) => {
+  const feature = paths.find((path) => path.id === id);
+  if (!feature) throw new Error(`Missing recessed street ${id}.`);
+  const points =
+    id === 4646722
+      ? [brickGateApproach.points[0], ...feature.points]
+      : feature.points;
+  const levels = points.map((point, index) =>
+    id === 4646722 && index === 0
+      ? brickGateGrade(point).level
+      : rawElevation(...point),
+  );
+  const boundaryWalls = walls.filter((wall) =>
+    [51718886, 55987208, 55987209, 377578900, 56084052].includes(wall.id),
+  );
+  let along = 0;
+  const sections = points.flatMap((b, i) => {
+    if (!i) return [];
+    const a = points[i - 1];
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const count = Math.ceil(length / 2);
+    const samples = Array.from(
+      { length: count + (i === points.length - 1 ? 1 : 0) },
+      (_, j) => {
+        const t = j / count;
+        const point: Point = [
+          a[0] + (b[0] - a[0]) * t,
+          a[1] + (b[1] - a[1]) * t,
+        ];
+        const normal: Point = [-(b[1] - a[1]) / length, (b[0] - a[0]) / length];
+        const edges = ([-1, 1] as const).map((side) => {
+          const mapped = boundaryWalls
+            .map((wall) => ({ wall, ...projectRoute(point, wall.points) }))
+            .filter((edge) => {
+              const dx = edge.point[0] - point[0],
+                dz = edge.point[1] - point[1];
+              return (
+                edge.distance >= 5 &&
+                edge.distance <= 8.5 &&
+                (dx * normal[0] + dz * normal[1]) * side > 0 &&
+                Math.abs(dx * normal[1] - dz * normal[0]) < 0.4
+              );
+            })
+            .sort((a, b) => a.distance - b.distance)[0];
+          return {
+            point:
+              mapped?.point ??
+              ([
+                point[0] + normal[0] * side * 6.5,
+                point[1] + normal[1] * side * 6.5,
+              ] as Point),
+            mapped: Boolean(mapped),
+          };
+        });
+        return {
+          point,
+          along: along + length * t,
+          level: levels[i - 1] + (levels[i] - levels[i - 1]) * t,
+          edges,
+        };
+      },
+    );
+    along += length;
+    return samples;
+  });
+  const polygon = streetOutline([
+    ...sections.map((section) => section.edges[0].point),
+    ...sections.map((section) => section.edges[1].point).reverse(),
+  ]);
+  return {
+    feature,
+    points,
+    levels,
+    sections,
+    polygon,
+    length: along,
+    minX: Math.min(...polygon.map((point) => point[0])),
+    maxX: Math.max(...polygon.map((point) => point[0])),
+    minZ: Math.min(...polygon.map((point) => point[1])),
+    maxZ: Math.max(...polygon.map((point) => point[1])),
+  };
+});
+
+export function retainedStreetSection(point: Point) {
+  let nearest:
+    | {
+        level: number;
+        distance: number;
+        width: number;
+        weight: number;
+      }
+    | undefined;
+  for (const corridor of retainedStreetCorridors) {
+    if (
+      point[0] < corridor.minX ||
+      point[0] > corridor.maxX ||
+      point[1] < corridor.minZ ||
+      point[1] > corridor.maxZ
+    )
+      continue;
+    const route = projectRoute(point, corridor.points);
+    let low = 0,
+      high = corridor.sections.length - 1;
+    while (high - low > 1) {
+      const mid = Math.floor((low + high) / 2);
+      if (corridor.sections[mid].along <= route.along) low = mid;
+      else high = mid;
+    }
+    const a = corridor.sections[low],
+      b = corridor.sections[high];
+    const t = (route.along - a.along) / (b.along - a.along || 1);
+    const signed =
+      (point[0] - route.point[0]) * route.normal[0] +
+      (point[1] - route.point[1]) * route.normal[1];
+    const side = signed < 0 ? 0 : 1;
+    const widthA = Math.hypot(
+      a.edges[side].point[0] - a.point[0],
+      a.edges[side].point[1] - a.point[1],
+    );
+    const widthB = Math.hypot(
+      b.edges[side].point[0] - b.point[0],
+      b.edges[side].point[1] - b.point[1],
+    );
+    const width = widthA + (widthB - widthA) * t;
+    if (
+      route.distance > width + 0.01 ||
+      (nearest && route.distance >= nearest.distance)
+    )
+      continue;
+    nearest = {
+      level:
+        corridor.levels[route.segment] +
+        (corridor.levels[route.segment + 1] - corridor.levels[route.segment]) *
+          route.fraction,
+      distance: route.distance,
+      width,
+      weight: smooth(Math.min(route.along, corridor.length - route.along) / 5),
+    };
+  }
+  return nearest;
+}
+
+function retainedStreetElevation(point: Point, ground: number) {
+  const section = retainedStreetSection(point);
+  if (!section) return ground;
+  // Keep the carriageway and sidewalks level across the cut, not the whole hill.
+  const shoulder =
+    1 -
+    smooth(section.distance - section.width + 1) *
+      (1 - smooth((Math.abs(ground - section.level) - 0.35) / 0.2));
+  return ground + (section.level - ground) * section.weight * shoulder;
+}
 export const pevnostiRoad: Point[] = pevnostiIds.flatMap((id, index) => {
   const feature = features.find((feature) => feature.id === id);
   if (!feature) throw new Error(`Missing V Pevnosti segment ${id}.`);
@@ -2342,7 +2509,7 @@ for (let row = 0; row <= gardenTerrainField.rows; row++)
       coarse + (level - coarse) * smooth(edge / 5);
   }
 // Ground and roof decks use the same triangle interpolant as their rendered surfaces.
-export function elevation(x: number, z: number) {
+export function unretainedElevation(x: number, z: number) {
   const gallery = riversideGallerySupport([x, z]);
   if (gallery && !gallery.underground) return gallery.floor;
   if (onGardenBankTerrain(x, z))
@@ -2371,6 +2538,134 @@ export function elevation(x: number, z: number) {
       return Math.min(level, coverElevation(cover, x, z) - 0.08);
   }
   return clearGardenExit([x, z], level);
+}
+export function elevation(x: number, z: number) {
+  const ground = unretainedElevation(x, z);
+  const road = retainedStreetElevation([x, z], ground);
+  if (retainedStreetSection([x, z])) return road;
+  for (const bank of retainedStreetBanks) {
+    if (x < bank.minX || x > bank.maxX || z < bank.minZ || z > bank.maxZ)
+      continue;
+    const projection = projectRoute([x, z], bank.wall.points);
+    if (!inside([x, z], bank.polygon)) continue;
+    const crest = streetBankCrest(bank, projection);
+    return (
+      ground +
+      Math.max(0, crest - ground) *
+        (1 - smooth((projection.distance - 0.6) / 2.4))
+    );
+  }
+  return road;
+}
+export const retainedStreetWalls: Feature[] = retainedStreetCorridors.flatMap(
+  (corridor, index) => {
+    const result: Feature[] = [];
+    for (const side of [0, 1]) {
+      let run: Point[] = [];
+      const emit = () => {
+        if (
+          run.length > 1 &&
+          projectRoute(run.at(-1) ?? run[0], run).length > 2.5
+        )
+          result.push({
+            id: -9000000 - index * 1000 - side * 100 - result.length,
+            points: run,
+            holes: [],
+            tags: { barrier: 'retaining_wall', material: 'stone' },
+          });
+        run = [];
+      };
+      for (const section of corridor.sections) {
+        const edge = section.edges[side];
+        const dx = edge.point[0] - section.point[0];
+        const dz = edge.point[1] - section.point[1];
+        const distance = Math.hypot(dx, dz);
+        const bankHeight = Math.max(
+          unretainedElevation(...edge.point),
+          unretainedElevation(
+            edge.point[0] + (dx / distance) * 3,
+            edge.point[1] + (dz / distance) * 3,
+          ),
+        );
+        const opening = paths.some(
+          (path) =>
+            path !== corridor.feature &&
+            path.tags.footway !== 'sidewalk' &&
+            path.tags.footway !== 'crossing' &&
+            path.points.some(
+              (point) =>
+                projectRoute(point, corridor.points).distance <
+                pathWidth(corridor.feature) / 2 + 0.5,
+            ) &&
+            projectRoute(edge.point, path.points).distance <
+              pathWidth(path) / 2 + 0.4,
+        );
+        if (
+          !edge.mapped &&
+          !opening &&
+          section.along > 5 &&
+          section.along < corridor.length - 5 &&
+          bankHeight - section.level > 0.8
+        ) {
+          run.push(edge.point);
+        } else emit();
+      }
+      emit();
+    }
+    return result;
+  },
+);
+walls.push(...retainedStreetWalls);
+export const retainedStreetBanks = retainedStreetWalls.map((wall) => {
+  const corridor = retainedStreetCorridors.reduce((a, b) =>
+    projectRoute(wall.points[0], a.points).distance <
+    projectRoute(wall.points[0], b.points).distance
+      ? a
+      : b,
+  );
+  const outer = wall.points.map((point) => {
+    const road = projectRoute(point, corridor.points);
+    const dx = point[0] - road.point[0],
+      dz = point[1] - road.point[1];
+    const length = Math.hypot(dx, dz);
+    return [
+      point[0] + (dx / length) * 3,
+      point[1] + (dz / length) * 3,
+    ] as Point;
+  });
+  const crests = wall.points.map((point, index) =>
+    Math.max(
+      unretainedElevation(...point),
+      unretainedElevation(...outer[index]),
+    ),
+  );
+  const polygon = streetOutline([...wall.points, ...outer.reverse()]);
+  return {
+    wall,
+    crests,
+    polygon,
+    minX: Math.min(...polygon.map((point) => point[0])),
+    maxX: Math.max(...polygon.map((point) => point[0])),
+    minZ: Math.min(...polygon.map((point) => point[1])),
+    maxZ: Math.max(...polygon.map((point) => point[1])),
+  };
+});
+function streetBankCrest(
+  bank: (typeof retainedStreetBanks)[number],
+  projection: ReturnType<typeof projectRoute>,
+) {
+  const crest =
+    bank.crests[projection.segment] +
+    (bank.crests[projection.segment + 1] - bank.crests[projection.segment]) *
+      projection.fraction;
+  const ground = unretainedElevation(...projection.point);
+  return (
+    ground +
+    (crest - ground) *
+      smooth(
+        Math.min(projection.along, projection.length - projection.along) / 2,
+      )
+  );
 }
 export function upperElevation(x: number, z: number) {
   const cover = coverAt([x, z]);
@@ -2802,6 +3097,16 @@ function terrainWallProfile(feature: Feature, point: Point, normal: Point) {
 
 const wallCrests = new WeakMap<Feature, number[]>();
 export function wallProfile(feature: Feature, point: Point, normal: Point) {
+  if (retainedStreetWalls.includes(feature)) {
+    const bank = retainedStreetBanks.find((bank) => bank.wall === feature);
+    if (!bank) throw new Error('Missing retained street bank.');
+    const projection = projectRoute(point, feature.points);
+    return {
+      bottom:
+        (retainedStreetSection(point)?.level ?? elevation(...point)) - 0.3,
+      top: streetBankCrest(bank, projection) + 0.18,
+    };
+  }
   const profile = terrainWallProfile(feature, point, normal);
   if (
     feature.id === 51718886 &&
@@ -4609,6 +4914,7 @@ export function treePositions(): Point[] {
   );
   const add = (point: Point) => {
     if (
+      retainedStreetSection(point) ||
       blocked(point) ||
       inside(point, spickaFrontage.plantingPlot) ||
       exposedRockAt(point) ||

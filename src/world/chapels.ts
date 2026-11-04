@@ -141,6 +141,19 @@ export function makeLawrenceExterior(add: AddGeometry) {
   const feature = chapelSites.lawrence.feature,
     ground = foundation(feature);
   const tangent: Point = [-outward[1], outward[0]];
+  const roof = new THREE.Shape(
+    feature.points.map(([x, z]) => new THREE.Vector2(x, -z)),
+  );
+  add(
+    '#a49f91',
+    new THREE.ExtrudeGeometry(roof, {
+      depth: 0.18,
+      bevelEnabled: false,
+    })
+      .rotateX(-Math.PI / 2)
+      .translate(0, ground + 2.7, 0),
+    'plaster',
+  );
   const apron: Point[] = [
     [-1.05, 0.02],
     [1.05, 0.02],
@@ -306,6 +319,21 @@ export function makeChapelInterior(
   };
   if (kind === 'lawrence') {
     makeLawrenceRuins(add);
+    add(
+      '#bdb7a6',
+      new THREE.BoxGeometry(9.75, 0.18, 20.25).translate(0, 2.79, 0),
+      'plaster',
+    );
+    for (const z of [-5, 1, 7]) {
+      add(
+        '#eadbb3',
+        new THREE.BoxGeometry(0.65, 0.035, 0.3).translate(0, 2.68, z),
+        'glass',
+      );
+      const light = new THREE.PointLight('#ffe9c2', 10, 10);
+      light.position.set(0, 2.5, z);
+      group.add(light);
+    }
     for (const x of [-4.6, 4.6])
       add(
         '#a29a88',

@@ -27,7 +27,7 @@ describe('accessible Romanesque churches', () => {
     expect(chapelBlocked('lawrence', [4.6, 0])).toBe(true);
   });
 
-  it('builds a domed rotunda but leaves the basilica roofless, with actual raised hexagonal tiles and low foundations', () => {
+  it('builds a domed rotunda and flat-covered basilica remains, preserving the raised hexagonal floor below the ceiling', () => {
     const material = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide });
     const interiors = (['rotunda', 'lawrence'] as const).map((kind) =>
       makeChapelInterior(kind, { get: () => material }),
@@ -41,6 +41,10 @@ describe('accessible Romanesque churches', () => {
     expect(
       ray.intersectObjects(rotunda.blockers, false)[0].point.y,
     ).toBeGreaterThan(7);
+    expect(ray.intersectObjects(ruins.blockers, false)[0].point.y).toBeCloseTo(
+      2.88,
+    );
+    ray.set(new THREE.Vector3(0, 2, -0.468), new THREE.Vector3(0, -1, 0));
     const floor = ray.intersectObjects(ruins.blockers, false)[0];
     expect(floor.object.name).toBe('Romanesque floor tiles');
     expect(floor.point.y).toBeGreaterThan(0.03);
@@ -52,7 +56,7 @@ describe('accessible Romanesque churches', () => {
     material.dispose();
   });
 
-  it('replaces the full-height basilica building with the reference stone enclosure, arched wooden entrance and open courtyard', () => {
+  it('covers the reference stone enclosure with a flat roof without blocking its arched wooden entrance', () => {
     const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
     const meshes: THREE.Mesh[] = [],
       stone: THREE.Mesh[] = [];
@@ -87,8 +91,16 @@ describe('accessible Romanesque churches', () => {
       new THREE.Vector3(0, -1, 0),
     );
     ray.far = 40;
-    expect(ray.intersectObjects(meshes, false)[0].point.y).toBeLessThan(
-      foundation(site.feature) + 0.1,
+    const roofHeight = foundation(site.feature) + 2.88;
+    expect(ray.intersectObjects(meshes, false)[0].point.y).toBeCloseTo(
+      roofHeight,
+    );
+    ray.set(
+      new THREE.Vector3(-98, door.y + 20, 96),
+      new THREE.Vector3(0, -1, 0),
+    );
+    expect(ray.intersectObjects(meshes, false)[0].point.y).toBeCloseTo(
+      roofHeight,
     );
     meshes.forEach((mesh) => mesh.geometry.dispose());
     material.dispose();

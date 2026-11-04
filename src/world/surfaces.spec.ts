@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import {
   elevation,
+  unretainedElevation,
+  retainedStreetCorridors,
+  retainedStreetWalls,
   walls,
   wallProfile,
   wallThickness,
@@ -31,6 +34,94 @@ import {
 import { makeCemeteryArcade } from './architecture';
 
 describe('connected world surfaces', () => {
+  it('excavates the old street bank mesh and replaces it with a cross-level floor and a raycastable retaining face', () => {
+    const junction = new THREE.PlaneGeometry(10, 10, 2, 2)
+      .rotateX(-Math.PI / 2)
+      .translate(-20, 0, -40);
+    const junctionPositions = junction.attributes.position;
+    for (let i = 0; i < junctionPositions.count; i++)
+      junctionPositions.setY(
+        i,
+        unretainedElevation(
+          junctionPositions.getX(i),
+          junctionPositions.getZ(i),
+        ),
+      );
+    expect(() => clipTerrainAtArcades(junction)).not.toThrow();
+    junction.dispose();
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const ground = new THREE.PlaneGeometry(35, 35, 7, 7)
+      .rotateX(-Math.PI / 2)
+      .translate(-46, 0, -40);
+    const positions = ground.attributes.position;
+    for (let i = 0; i < positions.count; i++)
+      positions.setY(
+        i,
+        unretainedElevation(positions.getX(i), positions.getZ(i)),
+      );
+    const oldBank = new THREE.Mesh(ground, material);
+    const down = new THREE.Raycaster(
+      new THREE.Vector3(-46, 80, -26),
+      new THREE.Vector3(0, -1, 0),
+    );
+    const outsideBefore = down.intersectObject(oldBank)[0].point.y;
+    clipTerrainAtArcades(ground);
+    expect(down.intersectObject(oldBank)[0].point.y).toBeCloseTo(
+      outsideBefore,
+      5,
+    );
+    down.set(
+      new THREE.Vector3(-46.11, 80, -39.77),
+      new THREE.Vector3(0, -1, 0),
+    );
+    expect(down.intersectObject(oldBank)).toHaveLength(0);
+    const corridor = retainedStreetCorridors[0];
+    const floor = new THREE.Mesh(
+      drapedPolygon(corridor.polygon, 0, elevation),
+      material,
+    );
+    const normal = projectRoute([-46.11, -39.77], corridor.points).normal;
+    for (const offset of [-4, 0, 4]) {
+      const point: Point = [
+        -46.11 + normal[0] * offset,
+        -39.77 + normal[1] * offset,
+      ];
+      down.set(
+        new THREE.Vector3(point[0], 80, point[1]),
+        new THREE.Vector3(0, -1, 0),
+      );
+      expect(down.intersectObject(floor)[0].point.y).toBeCloseTo(
+        elevation(...point),
+        2,
+      );
+    }
+    const wall = retainedStreetWalls.find((wall) => wall.points.length > 20);
+    if (!wall) throw new Error('Missing continuous street retaining face.');
+    const face = new THREE.Mesh(
+      continuousWall(wall.points, 0.55, (point, normal) =>
+        wallProfile(wall, point, normal),
+      ),
+      material,
+    );
+    const point = wall.points[Math.floor(wall.points.length / 2)];
+    const centre = projectRoute(point, corridor.points).point;
+    const from = new THREE.Vector3(
+      centre[0],
+      elevation(...centre) + 0.5,
+      centre[1],
+    );
+    const target = new THREE.Vector3(point[0], from.y, point[1]);
+    const ray = new THREE.Raycaster(
+      from,
+      target.clone().sub(from).normalize(),
+      0,
+      from.distanceTo(target) + 1,
+    );
+    expect(ray.intersectObject(face).length).toBeGreaterThan(0);
+    for (const mesh of [oldBank, floor, face]) mesh.geometry.dispose();
+    material.dispose();
+  });
+
   it('excavates only mapped arcade interiors while preserving exterior soil and supporting the unchanged porch floor', () => {
     const arcade = cemeteryArcades.find(
       (arcade) => arcade.feature.id === -4226810,

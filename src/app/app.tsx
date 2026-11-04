@@ -1197,7 +1197,7 @@ export function App() {
                     : snapshot.interior === 'rotunda'
                       ? 'Romanesque nave, domed ceiling and altar apse. An illustrative interior.'
                       : snapshot.interior === 'lawrence'
-                        ? 'Open-air foundations and interpretive hexagonal floor tiles; not a standing church.'
+                        ? 'Sheltered archaeological foundations and interpretive hexagonal floor tiles beneath a flat roof; not a rebuilt basilica.'
                         : 'An illustrative cathedral nave.'}
                   <br />
                   {snapshot.interior === 'casemates'

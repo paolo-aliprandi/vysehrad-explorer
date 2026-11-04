@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('enters, explores and leaves the rotunda and roofless St Lawrence remains in both modes', async ({
+test('enters, explores and leaves the rotunda and flat-covered St Lawrence remains in both modes', async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -61,6 +61,17 @@ test('enters, explores and leaves the rotunda and roofless St Lawrence remains i
       await expect(page.locator('.location-pill')).toContainText(
         kind === 'rotunda' ? 'St. Martin' : 'St. Lawrence',
       );
+      if (kind === 'lawrence') {
+        expect(await inspect('return w.sky.visible;')).toBe(false);
+        const ceiling = await inspect(`
+          const ray=w.raycaster;
+          w.scene.updateMatrixWorld(true);
+          ray.set(w.position.clone().set(0,1.5*1.5,0),w.position.clone().set(0,1,0));
+          ray.far=10;
+          return ray.intersectObjects(w.activeInterior.blockers,false)[0]?.point.y/1.5;
+        `);
+        expect(ceiling).toBeCloseTo(2.7);
+      }
       const before = await inspect('return w.position.z;');
       await page.keyboard.down('w');
       await expect

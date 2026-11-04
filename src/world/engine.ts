@@ -113,6 +113,10 @@ import {
   elevation,
   upperElevation,
   originalElevation,
+  unretainedElevation,
+  retainedStreetCorridors,
+  retainedStreetBanks,
+  retainedStreetWalls,
   standingElevation,
   coverAt,
   lowerPassage,
@@ -780,6 +784,7 @@ export class World {
         [
           'plaster',
           'stone',
+          'rubble',
           'brick',
           'slate',
           'wood',
@@ -795,7 +800,7 @@ export class World {
   }
 
   private batchGround(color: string, geometry: THREE.BufferGeometry) {
-    clipTerrainAtArcades(geometry, false);
+    clipTerrainAtArcades(geometry, false, false);
     const { ground, rock } = splitRockySlopes(geometry);
     this.batch(color, ground, 'grass');
     if (rock) this.batch('#a29a87', rock, 'rock');
@@ -885,12 +890,20 @@ export class World {
     const courtBanks = courtBankTerrain();
     const cliffs = cliffTerrain();
     const gardenBanks = gardenBankTerrain();
+    const streetPolygons = [
+      ...retainedStreetCorridors,
+      ...retainedStreetBanks,
+    ].map((area) => area.polygon);
+    const streetBeds = streetPolygons.map((polygon, index) =>
+      groundPolygon(polygon, 0, elevation, streetPolygons.slice(0, index)),
+    );
     for (const surface of [
       terrain,
       ...detailed,
       courtBanks,
       cliffs,
       gardenBanks,
+      ...streetBeds,
     ]) {
       const positions = surface.attributes.position;
       const colors = [];
@@ -900,9 +913,10 @@ export class World {
         const y =
           surface === courtBanks ||
           surface === cliffs ||
-          surface === gardenBanks
+          surface === gardenBanks ||
+          streetBeds.includes(surface)
             ? positions.getY(i)
-            : elevation(x, z);
+            : unretainedElevation(x, z);
         positions.setY(i, y);
         const color = new THREE.Color(y > 25 ? '#9ebc6c' : '#b5bb87');
         color.multiplyScalar(0.96 + 0.04 * Math.sin(x * 0.035 + z * 0.045));
@@ -912,7 +926,7 @@ export class World {
         'color',
         new THREE.Float32BufferAttribute(colors, 3),
       );
-      clipTerrainAtArcades(surface);
+      clipTerrainAtArcades(surface, true, !streetBeds.includes(surface));
       surface.computeVertexNormals();
       worldUVs(surface, 'grass');
       const material = this.surfaceMaterials.get('grass', '#ffffff').clone();
@@ -967,6 +981,8 @@ export class World {
           tags.landuse === 'cemetery' ? '#73805a' : '#7b8959',
           groundPolygon(points, 0.025, elevation, [
             ...feature.holes,
+            ...retainedStreetCorridors.map((corridor) => corridor.polygon),
+            ...retainedStreetBanks.map((bank) => bank.polygon),
             ...exposedRocks.map((rock) => rock.points),
             ...riversideGallery.approaches.map((approach) => approach.polygon),
           ]),
@@ -977,6 +993,8 @@ export class World {
           groundPolygon(points, 0.04, elevation, [
             ...feature.holes,
             summerTheatre.enclosure.points,
+            ...retainedStreetCorridors.map((corridor) => corridor.polygon),
+            ...retainedStreetBanks.map((bank) => bank.polygon),
             ...riversideGallery.approaches.map((approach) => approach.polygon),
           ]),
           'rock',
@@ -1092,7 +1110,11 @@ export class World {
                 !suspended,
                 feature.id === 1532977610 ? courtBankBoundary : undefined,
               ),
-              feature.tags.barrier === 'city_wall' ? 'brick' : 'stone',
+              feature.tags.barrier === 'city_wall'
+                ? 'brick'
+                : retainedStreetWalls.includes(feature)
+                  ? 'rubble'
+                  : 'stone',
             );
           run = [];
         };
@@ -2347,7 +2369,6 @@ export class World {
         child.visible = false;
       }
     this.activeInterior.group.visible = true;
-    if (kind === 'lawrence') this.sky.visible = true;
     this.applyDaylight();
     this.position.set(
       uphill ? 38 : 0,

@@ -18,6 +18,9 @@ import {
   gatePassage,
   orientedBounds,
   elevation,
+  unretainedElevation,
+  retainedStreetCorridors,
+  retainedStreetWalls,
   riverElevation,
   cemeteries,
   gravePlots,
@@ -68,6 +71,58 @@ import {
 } from './geo';
 
 describe('screenshot geometry repairs', () => {
+  it('cuts only the two main street corridors into cross-level roadbeds while preserving their uphill grades and other paths', () => {
+    for (const corridor of retainedStreetCorridors) {
+      for (const [index, end] of corridor.points.entries()) {
+        if (!index) continue;
+        const start = corridor.points[index - 1];
+        if (Math.hypot(end[0] - start[0], end[1] - start[1]) < 25) continue;
+        const point: Point = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+        const normal = projectRoute(point, corridor.points).normal;
+        const level = elevation(...point);
+        for (const side of [-4, 4])
+          expect(
+            elevation(point[0] + normal[0] * side, point[1] + normal[1] * side),
+          ).toBeCloseTo(level, 5);
+      }
+      expect(
+        Math.abs(
+          elevation(...corridor.points[0]) -
+            elevation(...corridor.points[corridor.points.length - 1]),
+        ),
+      ).toBeGreaterThan(1);
+    }
+    for (const point of [
+      [79, 88],
+      [139, 193],
+      [-185, -143],
+      [170.9, 125.54],
+      [-150, 100],
+    ] as Point[])
+      expect(elevation(...point)).toBe(unretainedElevation(...point));
+  });
+
+  it('adds solid bank-height masonry only along recessed shoulders, leaving street centres and the gate approach walkable', () => {
+    expect(retainedStreetWalls.length).toBeGreaterThan(0);
+    for (const wall of retainedStreetWalls) {
+      const point = wall.points[Math.floor(wall.points.length / 2)];
+      const normal = projectRoute(point, wall.points).normal;
+      const profile = wallProfile(wall, point, normal);
+      expect(profile.top).toBeGreaterThanOrEqual(
+        unretainedElevation(...point) + 0.18 - 0.001,
+      );
+      expect(profile.top - profile.bottom).toBeGreaterThan(0.55);
+      expect(blocked(point, profile.bottom + 0.35)).toBe(true);
+    }
+    for (const point of [
+      [-98.2, -74],
+      [-46.11, -39.77],
+      [32.18, 3.68],
+      [-49.87, 44.96],
+    ] as Point[])
+      expect(blocked(point, standingElevation(point))).toBe(false);
+  });
+
   it('removes the two screenshot buildings and their invisible footprint collisions while retaining the source survey', () => {
     for (const id of [49810432, 364471135, 49810586, 51700617]) {
       const source = features.find((feature) => feature.id === id);
@@ -297,6 +352,13 @@ describe('screenshot geometry repairs', () => {
     const opening: Point = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
     expect(blocked(opening, standingElevation(opening))).toBe(false);
     const trees = treePositions();
+    expect(
+      trees.some((point) =>
+        retainedStreetCorridors.some((corridor) =>
+          inside(point, corridor.polygon),
+        ),
+      ),
+    ).toBe(false);
     for (const zone of requestedPlantingZones.slice(1))
       expect(
         trees.filter((point) => inside(point, zone)).length,
@@ -924,8 +986,16 @@ describe('OSM world and movement', () => {
       throw new Error('Missing surveyed retaining-profile fixture.');
     expect(walls).not.toContain(retaining);
     const profile = wallProfile(retaining, point, normal);
+    const adjacentSoil = Math.max(
+      ...[-1.5, -1, -0.5, 0.5, 1, 1.5].map((offset) =>
+        upperElevation(
+          point[0] + normal[0] * offset,
+          point[1] + normal[1] * offset,
+        ),
+      ),
+    );
     expect(profile.top - elevation(...point)).toBeGreaterThan(0.8);
-    expect(profile.top - elevation(...point)).toBeLessThan(2);
+    expect(profile.top).toBeLessThanOrEqual(adjacentSoil + 0.25);
     expect(wallProfile(retaining, point, [-normal[0], -normal[1]])).toEqual(
       profile,
     );
