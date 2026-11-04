@@ -2671,7 +2671,7 @@ export function elevation(x: number, z: number) {
     return (
       ground +
       (level - ground) *
-        (1 - smooth(projection.distance - rotundaStreet.width / 2 - 3))
+        (1 - smooth(projection.distance - rotundaStreet.width / 2 - 4))
     );
   }
   const bank = retainedStreetBanks.find(
@@ -2914,11 +2914,10 @@ export const retainedStreetAccess = (() => {
     maxZ: Math.max(...polygon.map((point) => point[1])),
   };
 })();
-export const streetSidewalkWidth = 0.9;
 export const rotundaStreet = (() => {
   const feature = paths.find((path) => path.id === 5016653);
   if (!feature) throw new Error('Missing V Pevnosti beside the rotunda.');
-  const width = pathWidth(feature) + streetSidewalkWidth * 2;
+  const width = pathWidth(feature);
   const outline = (halfWidth: number) => {
     const edges = feature.points.map((point) => {
       const { normal } = projectRoute(point, feature.points);
@@ -2934,7 +2933,7 @@ export const rotundaStreet = (() => {
       ...edges.map((edge) => edge[1]).reverse(),
     ]);
   };
-  const polygon = outline(width / 2 + 4);
+  const polygon = outline(width / 2 + 5);
   return {
     feature,
     points: feature.points,

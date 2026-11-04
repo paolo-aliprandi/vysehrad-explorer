@@ -18,7 +18,6 @@ import {
   stairwellFootprint,
   retainedStreetCorridors,
   rotundaStreet,
-  streetSidewalkWidth,
   aveMariaCourtCuts,
   aveMariaFrontage,
   karlachBorderBeds,
@@ -30,19 +29,12 @@ import {
   type Point,
 } from './geo';
 import { drapedPolygon, ribbonEdges, samplePolyline } from './surfaces';
-import { buildingEntrance } from './architecture';
 
 type PavingKind = 'cobble' | 'gravel';
 export type PavingSurface = {
   feature: Feature;
   polygons: MultiPolygon;
   style: { kind: PavingKind; color: string };
-  sidewalk?: boolean;
-  doorways?: NonNullable<ReturnType<typeof buildingEntrance>>[];
-};
-export const sidewalkPavingStyle: PavingSurface['style'] = {
-  kind: 'cobble',
-  color: '#d8bd94',
 };
 export const upperPromenadePaving: Feature = {
   id: -51700613,
@@ -67,13 +59,9 @@ const streetKinds = new Set([
   'living_street',
   'service',
 ]);
-const sidewalkStreetIds = new Set([
+const streetRoadIds = new Set([
   4646722, 587280816, 5016653, 494921190, 370193785,
 ]);
-const doorwayCache = new WeakMap<
-  Feature,
-  NonNullable<ReturnType<typeof buildingEntrance>>[]
->();
 const streetWallFootprints: MultiPolygon = retainedStreetWalls.flatMap(
   (wall) => {
     const edges = ribbonEdges(wall.points, (point) =>
@@ -104,47 +92,8 @@ function streetBuildings(feature: Feature) {
   );
 }
 
-function sidewalkDoorways(feature: Feature) {
-  if (!sidewalkStreetIds.has(feature.id)) return [];
-  const cached = doorwayCache.get(feature);
-  if (cached) return cached;
-  const doorways = streetBuildings(feature).flatMap((building) => {
-    const door = buildingEntrance(building, meters(building.tags.height, 3.2));
-    if (!door) return [];
-    const road = projectRoute(door.point, feature.points);
-    return road.distance < 8.5 &&
-      (road.point[0] - door.point[0]) * door.normal[0] +
-        (road.point[1] - door.point[1]) * door.normal[1] >
-        0
-      ? [door]
-      : [];
-  });
-  doorwayCache.set(feature, doorways);
-  return doorways;
-}
-
-export function pavingLevel(feature: Feature, point: Point) {
-  let level = featureElevation(feature, point);
-  for (const door of sidewalkDoorways(feature)) {
-    const dx = point[0] - door.point[0],
-      dz = point[1] - door.point[1];
-    const u = Math.abs(dx * door.normal[1] - dz * door.normal[0]);
-    const v = dx * door.normal[0] + dz * door.normal[1];
-    if (v < -0.1 || v > 2.5 || u > door.width / 2 + 1.65) continue;
-    const smooth = (t: number) => {
-      const value = Math.max(0, Math.min(1, t));
-      return value * value * (3 - 2 * value);
-    };
-    const blend =
-      (1 - smooth((u - door.width / 2 - 0.15) / 1.5)) *
-      (1 - smooth((v - streetSidewalkWidth) / 1.6));
-    level += (door.ground - 0.055 - level) * blend;
-  }
-  return level;
-}
-
 export function pavingStyle(feature: Feature): PavingSurface['style'] {
-  if (isSidewalk(feature)) return sidewalkPavingStyle;
+  if (isSidewalk(feature)) return { kind: 'cobble', color: '#b2b5ae' };
   if (
     [
       370193790, 494921186, 255297801, 163474148, 163474150, 784512319,
@@ -442,33 +391,6 @@ function streetSidewalks(features: readonly Feature[]) {
   return { additions, cutouts };
 }
 
-function narrowSidewalks(feature: Feature, footprint: MultiPolygon) {
-  if (!sidewalkStreetIds.has(feature.id)) return [];
-  const borders = footprint.flatMap((polygon) =>
-    polygon.flatMap((ring) => {
-      const edges = ribbonEdges(ring, streetSidewalkWidth * 2);
-      return edges
-        .slice(1)
-        .map(
-          (edge, i): Polygon => [
-            [
-              [...edges[i].left],
-              [...edge.left],
-              [...edge.right],
-              [...edges[i].right],
-              [...edges[i].left],
-            ],
-          ],
-        );
-    }),
-  );
-  return polygonBoolean(
-    'intersection',
-    footprint,
-    polygonBoolean('union', borders),
-  );
-}
-
 export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
   const surfaces: PavingSurface[] = [];
   const index = new Map<string, PavingSurface[]>();
@@ -503,7 +425,7 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
       full = polygonBoolean('difference', full, [
         [stairwellFootprint.map(([x, z]): Pair => [x, z])],
       ]);
-    if (sidewalkStreetIds.has(feature.id))
+    if (streetRoadIds.has(feature.id))
       full = polygonBoolean(
         'difference',
         full,
@@ -516,8 +438,6 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
         streetWallFootprints,
       );
     const style = pavingStyle(feature);
-    const doorways = sidewalkDoorways(feature);
-    const borders = narrowSidewalks(feature, full);
     for (const key of cells(full)) {
       const [x, z] = key
         .split(',')
@@ -564,32 +484,9 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
         if (!polygons.length) break;
       }
       if (!polygons.length) continue;
-      const bands = borders.length
-        ? polygonBoolean('intersection', polygons, borders)
-        : [];
-      const lane = bands.length
-        ? polygonBoolean('difference', polygons, bands)
-        : polygons;
-      for (const surface of [
-        {
-          feature,
-          polygons: lane,
-          style,
-          sidewalk: isSidewalk(feature),
-          doorways,
-        },
-        {
-          feature,
-          polygons: bands,
-          style: sidewalkPavingStyle,
-          sidewalk: true,
-          doorways,
-        },
-      ]) {
-        if (!surface.polygons.length) continue;
-        surfaces.push(surface);
-        entries.push(surface);
-      }
+      const surface = { feature, polygons, style };
+      surfaces.push(surface);
+      entries.push(surface);
       index.set(key, entries);
     }
   }
@@ -604,7 +501,7 @@ export function pavingGeometry(surface: PavingSurface) {
     const source = drapedPolygon(
       rings[0],
       0.055,
-      (x, z) => pavingLevel(feature, [x, z]),
+      (x, z) => featureElevation(feature, [x, z]),
       rings.slice(1),
       feature.id === rotundaStreet.feature.id ||
         retainedStreetCorridors.some(

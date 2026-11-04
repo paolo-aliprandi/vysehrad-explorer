@@ -10,14 +10,12 @@ import {
   rampartTerrace,
   stairwellFootprint,
   rotundaStreet,
-  retainedStreetCorridors,
   elevation,
   type Point,
 } from './geo';
 import {
   pavingFootprint,
   pavingGeometry,
-  pavingLevel,
   pavingStyle,
   pavingSurfaces,
 } from './paving';
@@ -100,30 +98,23 @@ describe('rationalized paving', () => {
     expect(atCrossing).toHaveLength(1);
     expect(atCrossing[0].style.kind).toBe('cobble');
   });
-  it('adds contrasting cobbled sidewalks without replacing the central cobbled lane', () => {
+  it('keeps restored streets uniformly cobbled without added contrasting sidewalk bands', () => {
     for (const id of [4646722, 587280816, 5016653, 494921190, 370193785]) {
       const feature = way(id);
       const surfaces = pavingSurfaces([feature]);
-      const bands = surfaces.filter((surface) => surface.sidewalk);
-      const lane = surfaces.filter((surface) => !surface.sidewalk);
+      expect(surfaces.length).toBeGreaterThan(0);
       expect(
-        area(bands.flatMap((surface) => surface.polygons)),
-      ).toBeGreaterThan(8);
-      expect(area(lane.flatMap((surface) => surface.polygons))).toBeGreaterThan(
-        15,
-      );
-      expect(bands.every((surface) => surface.style.kind === 'cobble')).toBe(
-        true,
-      );
-      expect(bands[0].style.color).not.toBe(lane[0].style.color);
+        surfaces.every(
+          (surface) =>
+            surface.style.kind === 'cobble' &&
+            surface.style.color === '#b2b5ae',
+        ),
+      ).toBe(true);
       for (const point of samplePolyline(feature.points, 3).slice(1, -1)) {
         expect(
-          lane.some((surface) => contains(surface.polygons, point)),
+          surfaces.some((surface) => contains(surface.polygons, point)),
           JSON.stringify({ id, point }),
         ).toBe(true);
-        expect(bands.some((surface) => contains(surface.polygons, point))).toBe(
-          false,
-        );
       }
     }
   });
@@ -137,8 +128,11 @@ describe('rationalized paving', () => {
       paths.filter(
         (feature) =>
           feature.id === rotundaStreet.feature.id ||
-          feature.tags.footway === 'sidewalk' ||
-          [494921210, 494921219, 542667857].includes(feature.id),
+          ((feature.tags.footway === 'sidewalk' ||
+            [494921210, 494921219, 542667857].includes(feature.id)) &&
+            feature.points.some(
+              (point) => projectRoute(point, rotundaStreet.points).distance < 9,
+            )),
       ),
     )
       .filter((surface) => surface.feature.id === rotundaStreet.feature.id)
@@ -149,7 +143,7 @@ describe('rationalized paving', () => {
         -1,
       )) {
         const { normal } = projectRoute(point, rotundaStreet.points);
-        for (const side of [-2.7, -1.5, 0, 1.5, 2.7]) {
+        for (const side of [-2, -1.5, 0, 1.5, 2]) {
           const x = point[0] + normal[0] * side,
             z = point[1] + normal[1] * side;
           const ray = new THREE.Raycaster(
@@ -185,78 +179,6 @@ describe('rationalized paving', () => {
     } finally {
       soil.geometry.dispose();
       paving.forEach((mesh) => mesh.geometry.dispose());
-      material.dispose();
-    }
-  });
-  it('keeps house-front sidewalks walkable in width and flush with the door thresholds', () => {
-    const surfaces = pavingSurfaces([way(587280816)]);
-    const doors = surfaces[0].doorways ?? [];
-    expect(doors.length).toBeGreaterThan(3);
-    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-    const meshes = surfaces.map(
-      (surface) => new THREE.Mesh(pavingGeometry(surface), material),
-    );
-    const corridor = retainedStreetCorridors.find(
-      (street) => street.feature.id === 587280816,
-    );
-    if (!corridor) throw new Error('Missing house-front roadbed.');
-    const soil = new THREE.Mesh(
-      groundPolygon(
-        corridor.polygon,
-        0,
-        (x, z) => pavingLevel(corridor.feature, [x, z]),
-        [],
-        true,
-      ),
-      material,
-    );
-    try {
-      for (const door of doors) {
-        for (const distance of [0.55, 0.8]) {
-          const point: Point = [
-            door.point[0] + door.normal[0] * distance,
-            door.point[1] + door.normal[1] * distance,
-          ];
-          expect(
-            surfaces.some(
-              (surface) =>
-                surface.sidewalk && contains(surface.polygons, point),
-            ),
-            JSON.stringify({ point, door: door.point }),
-          ).toBe(true);
-          const hit = new THREE.Raycaster(
-            new THREE.Vector3(point[0], 70, point[1]),
-            new THREE.Vector3(0, -1, 0),
-          ).intersectObjects(meshes)[0];
-          expect(hit).toBeDefined();
-          expect(
-            Math.abs(hit.point.y - door.ground),
-            JSON.stringify({
-              point,
-              rendered: hit.point.y,
-              threshold: door.ground,
-            }),
-          ).toBeLessThan(0.025);
-          const ground = new THREE.Raycaster(
-            new THREE.Vector3(point[0], 70, point[1]),
-            new THREE.Vector3(0, -1, 0),
-          ).intersectObject(soil)[0];
-          expect(hit.point.y - ground.point.y).toBeGreaterThan(0.01);
-          expect(hit.point.y - ground.point.y).toBeLessThan(0.1);
-        }
-        const lane: Point = [
-          door.point[0] + door.normal[0] * 1.5,
-          door.point[1] + door.normal[1] * 1.5,
-        ];
-        expect(
-          surfaces.some(
-            (surface) => !surface.sidewalk && contains(surface.polygons, lane),
-          ),
-        ).toBe(true);
-      }
-    } finally {
-      meshes.forEach((mesh) => mesh.geometry.dispose());
-      soil.geometry.dispose();
       material.dispose();
     }
   });
@@ -425,9 +347,7 @@ describe('rationalized paving', () => {
       ),
     ).toBeLessThan(0.001);
     expect(pavingStyle(feature).kind).toBe(pavingStyle(way(4646722)).kind);
-    expect(pavingStyle(feature).color).not.toBe(
-      pavingStyle(way(4646722)).color,
-    );
+    expect(pavingStyle(feature).color).toBe(pavingStyle(way(4646722)).color);
   });
 
   it('joins parallel street-side paving into the carriageway without grass seams or a mismatched mosaic stripe', () => {

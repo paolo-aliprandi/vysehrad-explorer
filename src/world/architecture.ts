@@ -440,12 +440,18 @@ export function makeRotunda(
   const footprint = new THREE.Shape(
     feature.points.map(([x, z]) => new THREE.Vector2(x, -z)),
   );
+  const footingBottom = Math.min(
+    ground - 0.35,
+    ...samplePolyline(feature.points, 0.5).map(
+      ([x, z]) => Math.min(elevation(x, z), unretainedElevation(x, z)) - 0.2,
+    ),
+  );
   const base = new THREE.ExtrudeGeometry(footprint, {
-    depth: 0.5,
+    depth: ground + 0.15 - footingBottom,
     bevelEnabled: false,
   });
   base.rotateX(-Math.PI / 2);
-  base.translate(0, ground - 0.35, 0);
+  base.translate(0, footingBottom, 0);
   add('#958d79', base, 'stone');
   cylinder(drum.point, drum.radius, -0.1, wallHeight + 0.1, '#c0b49a');
   cylinder(apse.point, apse.radius, -0.1, apseHeight + 0.1, '#c0b49a');

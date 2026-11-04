@@ -48,7 +48,6 @@ import {
 import {
   pavingSurfaces,
   pavingGeometry,
-  pavingLevel,
   pavingStyle,
   upperPromenadePaving,
 } from './paving';
@@ -133,6 +132,7 @@ import {
   center,
   discoveredNear,
   elevation,
+  featureElevation,
   upperElevation,
   originalElevation,
   unretainedElevation,
@@ -1010,7 +1010,7 @@ export class World {
         bank
           ? (x, z) => retainedStreetBankElevation(bank, [x, z])
           : 'feature' in area && area !== retainedStreetAccess
-            ? (x, z) => pavingLevel(area.feature, [x, z])
+            ? (x, z) => featureElevation(area.feature, [x, z])
             : elevation,
         streetPolygons.slice(0, index),
         'feature' in area && area !== retainedStreetAccess,
@@ -1309,7 +1309,6 @@ export class World {
       string,
       {
         style: ReturnType<typeof pavingSurfaces>[number]['style'];
-        sidewalk: boolean;
         geometries: THREE.BufferGeometry[];
       }
     >();
@@ -1320,23 +1319,22 @@ export class World {
         continue;
       }
       worldUVs(geometry, surface.style.kind);
-      const key = `${surface.style.kind}:${surface.style.color}`;
+      const key = surface.style.kind;
       const batch = batches.get(key) ?? {
         style: surface.style,
-        sidewalk: surface.sidewalk ?? false,
         geometries: [],
       };
       batch.geometries.push(geometry);
       batches.set(key, batch);
     }
-    for (const { style, sidewalk, geometries } of batches.values()) {
+    for (const { style, geometries } of batches.values()) {
       const geometry = mergeGeometries(geometries);
       if (!geometry) throw new Error('Could not assemble the paving network.');
       const mesh = new THREE.Mesh(
         geometry,
         this.surfaceMaterials.get(style.kind, style.color),
       );
-      mesh.name = `Paving: ${sidewalk ? 'sidewalk ' : ''}${style.kind}`;
+      mesh.name = `Paving: ${style.kind}`;
       mesh.receiveShadow = true;
       group.add(mesh);
       this.blockers.push(mesh);

@@ -90,6 +90,7 @@ import {
   cliffTerrain,
   gardenBankTerrain,
   drapedPolygon,
+  samplePolyline,
 } from './surfaces';
 import { makeMonuments, makeCemeteryCornerShrine } from './monuments';
 import { makePassages, makeApproach, makeRiversideDoorways } from './passages';
@@ -937,6 +938,52 @@ it('fits rotated and concave building door frames to a real facade segment with 
     leaf[0].computeBoundingBox();
     expect(leaf[0].boundingBox?.min.y).toBeCloseTo(door.ground, 4);
     leaf.forEach((geometry) => geometry.dispose());
+  }
+});
+
+it('grounds the rotunda footing below the adjacent sloping terrain without an open underside', () => {
+  const feature = buildings.find((building) => building.id === 560209917);
+  if (!feature) throw new Error('Missing rotunda.');
+  const ground = foundation(feature);
+  const meshes: THREE.Mesh[] = [];
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  makeRotunda(feature, ground, (color, geometry) => {
+    if (color === '#958d79') meshes.push(new THREE.Mesh(geometry, material));
+    else geometry.dispose();
+  });
+  try {
+    let exposed = 0;
+    for (const point of samplePolyline(feature.points, 0.5)) {
+      const soil = elevation(...point);
+      if (soil >= ground - 0.55) continue;
+      const projection = projectRoute(point, feature.points);
+      const normal = projection.normal;
+      const sign = inside(
+        [point[0] + normal[0] * 0.1, point[1] + normal[1] * 0.1],
+        feature.points,
+      )
+        ? -1
+        : 1;
+      const ray = new THREE.Raycaster(
+        new THREE.Vector3(
+          point[0] + normal[0] * sign * 0.2,
+          soil + 0.1,
+          point[1] + normal[1] * sign * 0.2,
+        ),
+        new THREE.Vector3(-normal[0] * sign, 0, -normal[1] * sign),
+        0,
+        0.4,
+      );
+      expect(
+        ray.intersectObjects(meshes).length,
+        JSON.stringify(point),
+      ).toBeGreaterThan(0);
+      exposed++;
+    }
+    expect(exposed).toBeGreaterThan(0);
+  } finally {
+    meshes.forEach((mesh) => mesh.geometry.dispose());
+    material.dispose();
   }
 });
 
