@@ -22,6 +22,8 @@ import {
   riversideGallerySupport,
   inside,
   cemeteryArcades,
+  brickGateStairCuts,
+  panoramaDecks,
   foundation,
   casemateDoor,
   casemateRecess,
@@ -67,6 +69,20 @@ export function clipTerrainAtArcades(
       ceiling: Infinity,
     },
   ].map((area) => ({ ...area, seal: true }));
+  outlines.push(
+    ...panoramaDecks.map((deck) => ({
+      points: deck.points,
+      floorBottom: deck.floor - 0.16,
+      ceiling: Infinity,
+      seal: false,
+    })),
+    ...brickGateStairCuts.map((points) => ({
+      points,
+      floorBottom: 0,
+      ceiling: Infinity,
+      seal: false,
+    })),
+  );
   if (streetCuts)
     outlines.push(
       ...retainedStreetAreas.map((corridor) => ({

@@ -389,6 +389,27 @@ export function makeApproach(add: AddGeometry) {
     makeFence([local(0, -6.2), local(0, 6.2)], 0.9, add);
   }
   for (const flight of stairFlights) {
+    const northern = [26454844, 1106803168].includes(flight.feature.id);
+    const guardRuns = (points: Point[]) => {
+      if (!northern) return [points];
+      const runs: Point[][] = [];
+      let run: Point[] = [];
+      for (const point of samplePolyline(points, 0.15)) {
+        if (
+          stairFlights.some(
+            (other) =>
+              other !== flight &&
+              [26454844, 1106803168].includes(other.feature.id) &&
+              projectRoute(point, other.feature.points).distance < 1.65,
+          )
+        ) {
+          if (run.length > 1) runs.push(run);
+          run = [];
+        } else run.push(point);
+      }
+      if (run.length > 1) runs.push(run);
+      return runs;
+    };
     const stepLength = flight.length / flight.count;
     const points = Array.from({ length: flight.count + 1 }, (_, i) =>
       routePoint(flight.feature.points, i * stepLength),
@@ -397,11 +418,28 @@ export function makeApproach(add: AddGeometry) {
       const level =
         flight.levels[0] +
         ((flight.levels[1] - flight.levels[0]) * i) / flight.count;
-      add(
-        '#c1b59e',
-        pathRibbon([points[i], points[i + 1]], 2.7, 0.05, () => level),
-        'stone',
-      );
+      if (northern) {
+        const bottom = Math.min(...flight.levels) - 0.25;
+        const height = level + 0.05 - bottom;
+        const a = points[i],
+          b = points[i + 1];
+        add(
+          '#c1b59e',
+          new THREE.BoxGeometry(2.9, height, stepLength + 0.002)
+            .rotateY(Math.atan2(b[0] - a[0], b[1] - a[1]))
+            .translate(
+              (a[0] + b[0]) / 2,
+              bottom + height / 2,
+              (a[1] + b[1]) / 2,
+            ),
+          'stone',
+        );
+      } else
+        add(
+          '#c1b59e',
+          pathRibbon([points[i], points[i + 1]], 2.7, 0.05, () => level),
+          'stone',
+        );
       if (i === 0) continue;
       const edge = ribbonEdges([points[i], points[i + 1]], 2.7)[0];
       const previous =
@@ -420,56 +458,81 @@ export function makeApproach(add: AddGeometry) {
         'stone',
       );
     }
+    if (northern) {
+      const end = points[points.length - 1],
+        before = points[points.length - 2];
+      const angle = Math.atan2(end[0] - before[0], end[1] - before[1]);
+      const bottom = Math.min(...flight.levels) - 0.25;
+      const height = flight.levels[1] + 0.05 - bottom;
+      add(
+        '#c1b59e',
+        new THREE.BoxGeometry(2.9, height, 0.16)
+          .rotateY(angle)
+          .translate(
+            end[0] + Math.sin(angle) * 0.04,
+            bottom + height / 2,
+            end[1] + Math.cos(angle) * 0.04,
+          ),
+        'stone',
+      );
+    }
     if (flight.feature.tags.handrail === 'yes') {
       const edges = ribbonEdges(points, 3);
       for (const side of ['left', 'right'] as const)
-        makeFence(
-          edges.map((edge) => edge[side]),
-          0.9,
-          add,
-          (x, z) => {
-            const t =
-              projectRoute([x, z], flight.feature.points).along / flight.length;
-            return flight.levels[0] + (flight.levels[1] - flight.levels[0]) * t;
-          },
-        );
+        for (const route of guardRuns(edges.map((edge) => edge[side])))
+          makeFence(
+            northern ? [route[0], route[route.length - 1]] : route,
+            0.9,
+            add,
+            (x, z) => {
+              const t =
+                projectRoute([x, z], flight.feature.points).along /
+                flight.length;
+              return (
+                flight.levels[0] + (flight.levels[1] - flight.levels[0]) * t
+              );
+            },
+          );
     }
     const edges = ribbonEdges(points, 3.2);
     for (const side of ['left', 'right'] as const) {
-      const route = edges.map((edge) => edge[side]);
-      const top = (point: Point) => {
-        const t =
-          projectRoute(point, flight.feature.points).along / flight.length;
-        return (
-          flight.levels[0] + (flight.levels[1] - flight.levels[0]) * t + 0.45
+      for (const route of guardRuns(edges.map((edge) => edge[side]))) {
+        const top = (point: Point) => {
+          const t =
+            projectRoute(point, flight.feature.points).along / flight.length;
+          const crest =
+            flight.levels[0] + (flight.levels[1] - flight.levels[0]) * t + 0.45;
+          return northern ? Math.max(crest, elevation(...point) + 0.08) : crest;
+        };
+        add(
+          '#a99d88',
+          continuousWall(
+            route,
+            0.32,
+            (point) => ({
+              bottom: northern
+                ? Math.min(...flight.levels) - 0.25
+                : Math.min(elevation(...point), top(point) - 0.5) - 0.2,
+              top: top(point),
+            }),
+            false,
+          ),
+          'stone',
         );
-      };
-      add(
-        '#a99d88',
-        continuousWall(
-          route,
-          0.32,
-          (point) => ({
-            bottom: Math.min(elevation(...point), top(point) - 0.5) - 0.2,
-            top: top(point),
-          }),
-          false,
-        ),
-        'stone',
-      );
-      add(
-        '#d0c4ae',
-        continuousWall(
-          route,
-          0.42,
-          (point) => ({
-            bottom: top(point),
-            top: top(point) + 0.09,
-          }),
-          false,
-        ),
-        'stone',
-      );
+        add(
+          '#d0c4ae',
+          continuousWall(
+            route,
+            0.42,
+            (point) => ({
+              bottom: top(point),
+              top: top(point) + 0.09,
+            }),
+            false,
+          ),
+          'stone',
+        );
+      }
     }
   }
 }

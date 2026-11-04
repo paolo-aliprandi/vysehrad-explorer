@@ -162,6 +162,7 @@ const modeledSculptureIds = new Set([
   1200790222,
   3573420654,
   3573420655,
+  1751591206,
   4294837398,
   7016578061,
   12229297494,
@@ -2855,7 +2856,9 @@ export function posternVaultRoute(postern: (typeof posterns)[number]): Point[] {
   return points;
 }
 export const stairFlights = features
-  .filter((feature) => [284582284, 183917805].includes(feature.id))
+  .filter((feature) =>
+    [284582284, 183917805, 26454844, 1106803168].includes(feature.id),
+  )
   .map((feature) => ({
     feature,
     count: Number(feature.tags.step_count),
@@ -2867,6 +2870,29 @@ export const stairFlights = features
     ],
     length: projectRoute(feature.points[0], feature.points).length,
   }));
+export const brickGateStairs = stairFlights.filter((flight) =>
+  [26454844, 1106803168].includes(flight.feature.id),
+);
+export const brickGateStairCuts = brickGateStairs.map((flight) => {
+  const a = flight.feature.points[0],
+    b = flight.feature.points[flight.feature.points.length - 1];
+  const axis: Point = [
+    (b[0] - a[0]) / flight.length,
+    (b[1] - a[1]) / flight.length,
+  ];
+  return [
+    [-0.12, -1.6],
+    [flight.length + 0.12, -1.6],
+    [flight.length + 0.12, 1.6],
+    [-0.12, 1.6],
+    [-0.12, -1.6],
+  ].map(
+    ([u, v]): Point => [
+      a[0] + axis[0] * u - axis[1] * v,
+      a[1] + axis[1] * u + axis[0] * v,
+    ],
+  );
+});
 const accessStairs = stairFlights.find(
   (flight) => flight.feature.id === 284582284,
 );
@@ -2915,6 +2941,8 @@ for (let row = 0; row <= terrainField.rows; row++)
       terrainField.minZ + row * 5,
     ];
     for (const flight of stairFlights) {
+      // Exact channel cuts preserve the northern landings; coarse-grid excavation sinks them.
+      if (brickGateStairs.includes(flight)) continue;
       const projection = projectRoute(point, flight.feature.points);
       if (projection.distance >= 5) continue;
       const level =
@@ -3045,7 +3073,7 @@ export function stairElevation(
   point: Point,
 ) {
   const t = projectRoute(point, flight.feature.points).along / flight.length;
-  const step = Math.min(flight.count, Math.floor(t * flight.count));
+  const step = Math.min(flight.count, Math.floor(t * flight.count + 1e-8));
   return (
     flight.levels[0] +
     ((flight.levels[1] - flight.levels[0]) * step) / flight.count
@@ -3329,8 +3357,15 @@ export function wallProfile(feature: Feature, point: Point, normal: Point) {
   const { segment, fraction } = projectRoute(point, feature.points);
   const top =
     crests[segment] + (crests[segment + 1] - crests[segment]) * fraction;
-  const crest =
+  let crest =
     feature.id === 8888302 && point[1] <= 208.73 ? gardenWallCrest(point) : top;
+  if (feature.id === 1532977610) {
+    const distance = Math.hypot(point[0] + 279, point[1] - 116);
+    if (distance < 19)
+      crest +=
+        Math.max(0, originalElevation(-273.65, 121.15) + 3.15 - crest) *
+        (1 - smooth(Math.max(0, distance - 12) / 7));
+  }
   return {
     bottom: brickGateEnvelope(point)
       ? Math.min(
@@ -3378,7 +3413,9 @@ export const sculptures = monuments
     ({ id, point, tags }) =>
       modeledSculptureIds.has(id) &&
       tags.name &&
-      (tags.artwork_type === 'statue' || tags.memorial === 'statue') &&
+      (tags.artwork_type === 'statue' ||
+        tags.memorial === 'statue' ||
+        tags.memorial === 'bust') &&
       point[0] > bounds.minX &&
       point[0] < bounds.maxX &&
       point[1] > bounds.minZ &&
@@ -3428,23 +3465,49 @@ export const sculptures = monuments
               return Math.atan2(p.normal[0] * sign, p.normal[1] * sign);
             })()
           : -Math.PI / 2
-        : monument.id === 1200790218
-          ? Math.PI / 2
-          : Math.PI - (Number(monument.tags.direction ?? 0) * Math.PI) / 180,
+        : monument.id === 1751591206
+          ? Math.PI * 0.35
+          : monument.id === 4294837398
+            ? (() => {
+                const wall = walls.find((wall) => wall.id === 56084052);
+                if (!wall) throw new Error('Missing St. Procopius enclosure.');
+                const { normal } = projectRoute(point, wall.points);
+                return Math.atan2(normal[0], normal[1]);
+              })()
+            : monument.id === 1200790218
+              ? Math.PI / 2
+              : Math.PI -
+                (Number(monument.tags.direction ?? 0) * Math.PI) / 180,
       scale: myslbekIds.has(monument.id)
         ? 1.35
-        : monument.id === 1200790218
-          ? 0.85
-          : 1,
-      width: myslbekIds.has(monument.id) ? 4.4 * 1.35 : 2.2,
+        : monument.id === 4294837398
+          ? 0.72
+          : monument.id === 1200790218
+            ? 0.85
+            : 1,
+      width: myslbekIds.has(monument.id)
+        ? 4.4 * 1.35
+        : monument.id === 3573420654
+          ? 1
+          : monument.id === 1751591206
+            ? 3.2
+            : monument.id === 4294837398
+              ? 1.25
+              : 2.2,
       depth:
         monument.id === 1200790222
           ? 3.8
           : monument.id === 1200790218
             ? 1.1
-            : myslbekIds.has(monument.id)
-              ? 2.4 * 1.35
-              : 2.4,
+            : monument.id === 3573420654
+              ? 1
+              : monument.id === 1751591206
+                ? 2.8
+                : monument.id === 4294837398
+                  ? 0.95
+                  : myslbekIds.has(monument.id)
+                    ? 2.4 * 1.35
+                    : 2.4,
     };
   });
 sculptures.push({
@@ -4131,6 +4194,72 @@ export type SiteProp = {
   ground?: number;
 };
 export const siteProps: SiteProp[] = [];
+export const referenceSites = {
+  gardenWell: {
+    point: [-30.19, 5.53] as Point,
+    angle: 0,
+    width: 2.25,
+    depth: 2.25,
+    height: 4.5,
+  },
+  gardenFountain: {
+    point: [-12.5, 28.5] as Point,
+    angle: 0,
+    width: 2.5,
+    depth: 2.5,
+    height: 1.55,
+  },
+  stairCross: {
+    point: [-124, -63.1] as Point,
+    angle: Math.PI / 2,
+    width: 1.1,
+    depth: 1.1,
+    height: 5.1,
+  },
+  hiddenChurch: {
+    point: [95.3, 24.3] as Point,
+    angle: -1.32,
+    width: 9.2,
+    depth: 4,
+    height: 5.4,
+  },
+};
+siteProps.push(
+  ...Object.entries(referenceSites).map(([id, site]) => ({
+    id: `reference-${id}`,
+    ...site,
+  })),
+);
+const procopius = sculptures.find((sculpture) => sculpture.id === 4294837398);
+if (!procopius) throw new Error('The mapped St. Procopius niche is missing.');
+const procopiusNicheCenter = procopius.point;
+const procopiusNichePoint = (u: number, v: number): Point => [
+  procopius.point[0] +
+    (Math.cos(procopius.angle) * u + Math.sin(procopius.angle) * v) *
+      procopius.scale,
+  procopius.point[1] +
+    (-Math.sin(procopius.angle) * u + Math.cos(procopius.angle) * v) *
+      procopius.scale,
+];
+for (const side of [-1, 1])
+  siteProps.push({
+    id: `procopius-niche-${side}`,
+    point: procopiusNichePoint(side * 1.575, -0.08),
+    angle: procopius.angle,
+    width: 1.25 * procopius.scale,
+    depth: 0.6 * procopius.scale,
+    height: 4.4 * procopius.scale,
+    ground: elevation(...procopius.point),
+  });
+siteProps.push({
+  id: 'procopius-niche-back',
+  point: procopiusNichePoint(0, -0.37),
+  angle: procopius.angle,
+  width: 1.9 * procopius.scale,
+  depth: 0.08 * procopius.scale,
+  height: 4.1 * procopius.scale,
+  ground: elevation(...procopius.point),
+});
 siteProps.push(
   {
     id: 'spicka-pub-rear',
@@ -4579,6 +4708,13 @@ export function wallOpening(
   point: Point,
   height = elevation(...point),
 ): boolean {
+  if (
+    Math.hypot(
+      point[0] - procopiusNicheCenter[0],
+      point[1] - procopiusNicheCenter[1],
+    ) < 1.25
+  )
+    return true;
   if (
     projectRoute(point, [casemateUphillExit.start, casemateUphillExit.point])
       .distance < 1 &&
@@ -5277,6 +5413,19 @@ export const panoramaSites = [
     wall: mainRampart,
   };
 });
+
+export const panoramaDecks = panoramaSites
+  .filter((site) => site.sheltered)
+  .map((site) => ({
+    floor: site.floor,
+    points: [
+      site.at(-site.width / 2 - 0.15, 0.9),
+      site.at(site.width / 2 + 0.15, 0.9),
+      site.at(site.width / 2 + 0.15, 4),
+      site.at(-site.width / 2 - 0.15, 4),
+      site.at(-site.width / 2 - 0.15, 0.9),
+    ],
+  }));
 
 export function panoramaOpening(point: Point) {
   return panoramaSites.find((site) => {

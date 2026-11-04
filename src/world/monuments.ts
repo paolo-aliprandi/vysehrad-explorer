@@ -15,6 +15,9 @@ type Figure = {
   robe?: boolean;
   beard?: boolean;
   crown?: boolean;
+  cloak?: boolean;
+  lean?: number;
+  yaw?: number;
   left?: readonly Vertex[];
   right?: readonly Vertex[];
 };
@@ -78,10 +81,19 @@ export function makeMonuments(add: AddGeometry) {
     const width = monument.width / monument.scale,
       depth = monument.depth / monument.scale;
     const corner = monument.id === -91010;
+    const procopius = monument.id === 4294837398;
+    const karlach = monument.id === 3573420654;
+    const myslbek = monument.tags.artist_name === 'Josef Václav Myslbek';
     const ground = corner
       ? cemeteryCornerShrine.ground
       : elevation(...monument.point);
-    const stone = monument.tags.material === 'wood' ? '#9a7954' : '#c4bb9f';
+    const stone =
+      monument.tags.material === 'wood'
+        ? '#9a7954'
+        : myslbek
+          ? '#96998e'
+          : '#c4bb9f';
+    const detailStone = myslbek ? '#81877e' : '#b4aa91';
     const emit = (
       geometry: THREE.BufferGeometry,
       color = stone,
@@ -156,7 +168,34 @@ export function makeMonuments(add: AddGeometry) {
       0,
       '#a39c87',
     );
-    if (corner) {
+    if (monument.id === 1751591206) {
+      for (const [w, h, d, y] of [
+        [3.1, 0.18, 2.7, 0.25],
+        [2.8, 0.2, 2.45, 0.44],
+        [2.4, 1.1, 2.1, 1.08],
+        [2.8, 0.17, 2.4, 1.72],
+        [2.95, 0.13, 2.55, 1.88],
+        [1.1, 0.2, 0.95, 2.04],
+      ])
+        block(w, h, d, 0, y, 0, '#97745d');
+      for (const x of [-1.12, 1.12]) {
+        block(0.35, 0.42, 0.52, x, 2.12, -0.5, '#94735c');
+        block(0.45, 0.12, 0.64, x, 2.38, -0.5, '#a28268');
+      }
+      ellipsoid([0, 2.4, 0], [0.58, 0.34, 0.3], '#465d50');
+      ellipsoid([0, 2.72, 0], [0.16, 0.25, 0.15], '#465d50');
+      ellipsoid([0, 3.04, 0.04], [0.25, 0.3, 0.23], '#4c6254');
+      ellipsoid([0, 3.05, 0.275], [0.065, 0.075, 0.075], '#4b5c4d');
+      ellipsoid([0, 2.91, 0.21], [0.14, 0.07, 0.08], '#405246');
+      for (const side of [-1, 1]) {
+        ellipsoid([side * 0.1, 3.11, 0.25], [0.065, 0.025, 0.025], '#324538');
+        beam([side * 0.35, 2.56, 0.2], [0, 2.32, 0.3], 0.025, '#82917a');
+      }
+      continue;
+    }
+    if (karlach) {
+      block(width - 0.1, 0.12, depth - 0.1, 0, 0.16, 0);
+    } else if (corner || procopius) {
       block(width - 0.1, 0.15, depth - 0.1, 0, 0.3, 0);
       block(width - 0.25, 0.4, depth - 0.2, 0, 0.575, 0);
       block(width, 0.12, depth, 0, 0.835, 0);
@@ -165,14 +204,17 @@ export function makeMonuments(add: AddGeometry) {
       block(width - 0.65, 1, depth - 0.55, 0, 0.9, 0);
       block(width - 0.28, 0.22, depth - 0.15, 0, 1.49, 0);
     }
-    const plinth = corner ? 0.9 : 1.6;
+    const plinth = karlach ? 0.22 : corner || procopius ? 0.9 : 1.6;
     const figure = (pose: Figure, lift = 0) => {
       const base = plinth + lift;
-      const move = ([x, y, z]: Vertex): Vertex => [
-        x + pose.x,
-        y + base,
-        z + (pose.z ?? 0),
-      ];
+      const move = ([x, y, z]: Vertex): Vertex => {
+        const yaw = pose.yaw ?? 0;
+        return [
+          x * Math.cos(yaw) + z * Math.sin(yaw) + pose.x + (pose.lean ?? 0) * y,
+          y + base,
+          -x * Math.sin(yaw) + z * Math.cos(yaw) + (pose.z ?? 0),
+        ];
+      };
       const sphere = (at: Vertex, scale: Vertex, color = stone) =>
         ellipsoid(move(at), scale, color);
       const limb = (points: readonly Vertex[], radius: number) => {
@@ -183,6 +225,37 @@ export function makeMonuments(add: AddGeometry) {
       };
       const shoulder = pose.seated ? 1.55 : 1.95;
       const head = shoulder + 0.42;
+      if (pose.cloak) {
+        const cloth = new THREE.Shape();
+        cloth.moveTo(-0.3, 0.25);
+        cloth.bezierCurveTo(-0.85, 0.65, -0.9, 1.4, -0.39, shoulder);
+        cloth.lineTo(0.35, shoulder);
+        cloth.bezierCurveTo(0.72, 1.7, 0.87, 0.65, 0.55, 0.12);
+        cloth.quadraticCurveTo(0, -0.02, -0.3, 0.25);
+        const geometry = new THREE.ExtrudeGeometry(cloth, {
+          depth: 0.11,
+          bevelEnabled: true,
+          bevelSize: 0.04,
+          bevelThickness: 0.04,
+          bevelSegments: 2,
+          curveSegments: 16,
+        });
+        const positions = geometry.getAttribute('position');
+        for (let i = 0; i < positions.count; i++) {
+          const x = positions.getX(i),
+            y = positions.getY(i);
+          positions.setXYZ(
+            i,
+            ...move([
+              x,
+              y,
+              positions.getZ(i) - 0.28 + Math.sin(x * 13 + y * 0.5) * 0.045,
+            ]),
+          );
+        }
+        geometry.computeVertexNormals();
+        emit(geometry, detailStone);
+      }
       if (pose.robe) {
         const profile = [
           [0.43, 0.04],
@@ -211,7 +284,13 @@ export function makeMonuments(add: AddGeometry) {
           );
         }
         robe.computeVertexNormals();
-        emit(robe.translate(...move([0, 0, 0])));
+        for (let i = 0; i < positions.count; i++)
+          positions.setXYZ(
+            i,
+            ...move([positions.getX(i), positions.getY(i), positions.getZ(i)]),
+          );
+        robe.computeVertexNormals();
+        emit(robe);
       } else {
         sphere([0, shoulder - 0.38, 0], [0.37, 0.49, 0.24]);
         sphere([0, shoulder - 0.85, 0], [0.32, 0.22, 0.25]);
@@ -226,10 +305,17 @@ export function makeMonuments(add: AddGeometry) {
       }
       sphere([0, shoulder + 0.15, 0], [0.12, 0.22, 0.12]);
       sphere([0, head, 0.015], [0.2, 0.27, 0.2]);
-      sphere([0, head + 0.035, -0.07], [0.215, 0.24, 0.18], '#b4aa91');
+      sphere([0, head + 0.035, -0.07], [0.215, 0.24, 0.18], detailStone);
       sphere([0, head - 0.015, 0.205], [0.055, 0.075, 0.075]);
+      for (const side of [-1, 1])
+        sphere(
+          [side * 0.085, head + 0.055, 0.19],
+          [0.052, 0.018, 0.022],
+          detailStone,
+        );
+      sphere([0, head - 0.1, 0.2], [0.075, 0.014, 0.014], detailStone);
       if (pose.beard)
-        sphere([0, head - 0.22, 0.13], [0.14, 0.2, 0.11], '#b4aa91');
+        sphere([0, head - 0.22, 0.13], [0.14, 0.2, 0.11], detailStone);
       if (pose.crown) {
         emit(
           new THREE.CylinderGeometry(0.215, 0.215, 0.12, 16).translate(
@@ -270,7 +356,90 @@ export function makeMonuments(add: AddGeometry) {
         0.115,
       );
     };
-    if (corner) {
+    if (procopius) {
+      figure({
+        x: -0.12,
+        robe: true,
+        beard: true,
+        left: [
+          [-0.42, 1.65, 0.22],
+          [-0.1, 1.75, 0.34],
+        ],
+        right: [
+          [0.45, 1.45, 0.18],
+          [0.65, 1.1, 0.24],
+        ],
+      });
+      const mitre = new THREE.Shape();
+      mitre.moveTo(-0.24, plinth + 2.52);
+      mitre.quadraticCurveTo(-0.4, plinth + 2.88, -0.12, plinth + 3.22);
+      mitre.quadraticCurveTo(0.2, plinth + 2.95, 0.08, plinth + 2.52);
+      mitre.closePath();
+      emit(
+        new THREE.ExtrudeGeometry(mitre, {
+          depth: 0.3,
+          bevelEnabled: false,
+        }).translate(0, 0, -0.12),
+      );
+      block(0.075, 0.6, 0.07, -0.23, plinth + 1.65, 0.41);
+      block(0.34, 0.075, 0.07, -0.23, plinth + 1.78, 0.41);
+      ellipsoid([0.63, plinth + 0.36, 0.23], [0.27, 0.3, 0.22]);
+      ellipsoid([0.61, plinth + 0.81, 0.21], [0.2, 0.22, 0.2]);
+      for (const side of [-1, 1])
+        emit(
+          new THREE.ConeGeometry(0.055, 0.21, 8)
+            .rotateZ(-side * 0.35)
+            .translate(0.61 + side * 0.16, plinth + 1, 0.21),
+        );
+      const profile = new THREE.Shape();
+      profile.moveTo(-2.2, -0.2);
+      profile.lineTo(-2.2, 4.35);
+      profile.lineTo(2.2, 4.35);
+      profile.lineTo(2.2, -0.2);
+      profile.lineTo(0.95, -0.2);
+      profile.lineTo(0.95, 3.15);
+      profile.absarc(0, 3.15, 0.95, 0, Math.PI, false);
+      profile.lineTo(-0.95, -0.2);
+      profile.closePath();
+      emit(
+        new THREE.ExtrudeGeometry(profile, {
+          depth: 0.6,
+          bevelEnabled: false,
+          curveSegments: 28,
+        }).translate(0, 0, -0.38),
+        '#b6b09b',
+        'rubble',
+      );
+      emit(
+        new THREE.BoxGeometry(1.9, 4.1, 0.08).translate(0, 1.9, -0.37),
+        '#b6bdba',
+        'plaster',
+      );
+      emit(
+        new THREE.BoxGeometry(4.65, 0.12, 0.9)
+          .rotateZ(0.07)
+          .translate(0, 4.4, -0.08),
+        '#a26a52',
+        'slate',
+      );
+    } else if (karlach) {
+      figure({
+        x: 0,
+        robe: true,
+        left: [
+          [-0.45, 1.55, 0.18],
+          [-0.05, 1.35, 0.36],
+        ],
+        right: [
+          [0.45, 1.5, 0.2],
+          [0.12, 1.65, 0.35],
+        ],
+      });
+      block(0.42, 0.16, 0.38, 0, plinth + 2.55, 0);
+      for (const side of [-1, 1])
+        block(0.08, 0.18, 0.4, side * 0.14, plinth + 2.64, 0);
+      beam([-0.15, plinth + 1.6, 0.4], [0.37, plinth + 1.24, 0.4], 0.07);
+    } else if (corner) {
       figure({
         x: 0,
         robe: true,
@@ -287,19 +456,46 @@ export function makeMonuments(add: AddGeometry) {
       figure({
         x: -0.78,
         robe: true,
+        cloak: true,
+        yaw: -0.15,
         crown: true,
         right: [
           [0.65, 2.1, -0.25],
           [1.05, 2.38, -0.65],
         ],
       });
-      figure({ x: 0.7, beard: true });
+      figure({
+        x: 0.7,
+        beard: true,
+        cloak: true,
+        yaw: 0.15,
+        right: [
+          [0.55, 2.25, 0.1],
+          [0.82, 2.75, 0.16],
+        ],
+      });
+      for (let i = 0; i < 8; i++) {
+        const angle = (i * Math.PI) / 4;
+        beam(
+          [
+            1.52 + Math.sin(angle) * 0.25,
+            plinth + 2.75 + Math.cos(angle) * 0.25,
+            0.16,
+          ],
+          [
+            1.52 + Math.sin(angle + Math.PI / 4) * 0.25,
+            plinth + 2.75 + Math.cos(angle + Math.PI / 4) * 0.25,
+            0.16,
+          ],
+          0.028,
+        );
+      }
       beam([0.85, plinth + 0.15, 0.7], [1.45, plinth + 1.4, 0.45], 0.08);
       beam([0.4, plinth + 0.2, 0.9], [1.65, plinth + 0.25, 0.9], 0.07);
     } else if (monument.id === 1200812866) {
       block(1.05, 0.7, 0.8, -0.75, plinth + 0.35, -0.2);
-      figure({ x: -0.75, seated: true, beard: true });
-      figure({ x: 0.7, robe: true });
+      figure({ x: -0.75, seated: true, beard: true, cloak: true, yaw: 0.2 });
+      figure({ x: 0.7, robe: true, cloak: true, yaw: -0.2 });
       for (const x of [-0.32, 0.38])
         beam([x, plinth + 0.65, 0.7], [x, plinth + 1.7, 0.7], 0.07);
       beam([-0.32, plinth + 1.7, 0.7], [0.38, plinth + 1.7, 0.7], 0.09);
@@ -312,20 +508,41 @@ export function makeMonuments(add: AddGeometry) {
         );
     } else if (monument.id === 1200812876) {
       figure({
-        x: -0.7,
+        x: -0.65,
+        robe: true,
+        cloak: true,
+        lean: -0.22,
+        yaw: 0.25,
+        left: [
+          [-0.6, 2.3, 0.02],
+          [-0.65, 2.65, -0.1],
+        ],
         right: [
-          [0.6, 1.65, 0.25],
-          [0.9, 1.4, 0.4],
+          [0.6, 2.15, 0.25],
+          [0.9, 1.85, 0.3],
         ],
       });
-      figure({ x: 0.75, seated: true, robe: true });
+      figure({
+        x: 0.75,
+        seated: true,
+        beard: true,
+        cloak: true,
+        lean: -0.12,
+        yaw: -0.4,
+        left: [
+          [-0.55, 1.5, 0.25],
+          [-0.9, 1.9, 0.3],
+        ],
+      });
       beam([-1.2, plinth + 0.05, 0.4], [-1.12, plinth + 1.25, 0.4], 0.035);
       beam([-1.35, plinth + 1.05, 0.4], [-0.9, plinth + 1.05, 0.4], 0.045);
     } else if (monument.id === 1200812856) {
-      figure({ x: -0.72, beard: true });
+      figure({ x: -0.72, beard: true, cloak: true, yaw: 0.2 });
       figure({
         x: 0.7,
         beard: true,
+        cloak: true,
+        yaw: -0.12,
         right: [
           [0.6, 2.15, 0],
           [0.75, 2.55, 0.15],

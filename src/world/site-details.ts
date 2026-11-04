@@ -33,6 +33,7 @@ import {
 } from './geo';
 import { makeFence, type AddGeometry } from './architecture';
 import { drapedPolygon, samplePolyline, continuousWall } from './surfaces';
+import { makeInscription } from './reference-details';
 
 function siteProp(id: string) {
   const prop = siteProps.find((prop) => prop.id === id);
@@ -959,29 +960,20 @@ export function makeSiteDetails(add: AddGeometry) {
     angle = 0,
     pale = false,
   ) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 768;
-    canvas.height = 144;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Could not create site signage.');
-    context.fillStyle = pale ? '#e5dfcd' : '#283c34';
-    context.fillRect(0, 0, 768, 144);
-    context.strokeStyle = pale ? '#b5aa90' : '#c9b993';
-    context.lineWidth = 5;
-    context.strokeRect(8, 8, 752, 128);
-    context.fillStyle = pale ? '#9a8456' : '#f0e2bf';
-    context.font = '600 55px Georgia';
-    context.textAlign = 'center';
-    context.fillText(text, 384, 90, 710);
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    textures.push(texture);
-    const mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, (width * 144) / 768),
-      new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }),
+    const { mesh, texture } = makeInscription(
+      {
+        point,
+        ground: y,
+        width,
+        height: (width * 144) / 768,
+        angle,
+        lines: [text],
+        background: pale ? '#e5dfcd' : '#283c34',
+        ink: pale ? '#9a8456' : '#f0e2bf',
+      },
+      true,
     );
-    mesh.rotation.y = angle;
-    mesh.position.set(point[0], y, point[1]);
+    textures.push(texture);
     group.add(mesh);
   };
   const chapel = aveMariaFrontage;

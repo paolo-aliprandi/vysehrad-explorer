@@ -9,6 +9,7 @@ export type MaterialKind =
   | 'brick'
   | 'cobble'
   | 'mosaic'
+  | 'fresco'
   | 'gravel'
   | 'grass'
   | 'foliage'
@@ -215,6 +216,81 @@ export class Materials {
           x += width;
         }
       }
+    } else if (kind === 'fresco') {
+      context.fillStyle = '#e6d9bb';
+      context.fillRect(0, 0, 512, 512);
+      for (let quarter = 0; quarter < 4; quarter++) {
+        context.save();
+        context.translate(256, 256);
+        context.rotate((quarter * Math.PI) / 2);
+        context.fillStyle = quarter % 2 ? '#dfd1af' : '#914b40';
+        context.beginPath();
+        context.moveTo(0, 0);
+        context.lineTo(-256, -256);
+        context.lineTo(256, -256);
+        context.closePath();
+        context.fill();
+        context.strokeStyle = '#b19768';
+        context.lineWidth = 5;
+        context.beginPath();
+        context.moveTo(-225, -238);
+        context.lineTo(0, -22);
+        context.lineTo(225, -238);
+        context.stroke();
+        for (const side of [-1, 1]) {
+          context.strokeStyle = quarter % 2 ? '#a28460' : '#d0b386';
+          context.lineWidth = 3;
+          context.beginPath();
+          context.moveTo(0, -70);
+          context.bezierCurveTo(
+            side * 115,
+            -100,
+            side * 115,
+            -182,
+            side * 38,
+            -216,
+          );
+          context.stroke();
+          for (let leaf = 0; leaf < 5; leaf++) {
+            context.beginPath();
+            context.ellipse(
+              side * (40 + leaf * 9),
+              -114 - leaf * 17,
+              15,
+              5,
+              side * 0.6,
+              0,
+              Math.PI * 2,
+            );
+            context.stroke();
+          }
+        }
+        context.fillStyle = '#a48c60';
+        context.beginPath();
+        context.ellipse(0, -182, 30, 36, 0, 0, Math.PI * 2);
+        context.fill();
+        context.fillStyle = '#6e8582';
+        context.beginPath();
+        context.arc(0, -182, 22, 0, Math.PI * 2);
+        context.fill();
+        context.restore();
+      }
+      context.strokeStyle = '#806653';
+      context.lineWidth = 8;
+      for (const side of [-1, 1]) {
+        context.beginPath();
+        context.moveTo(side < 0 ? 0 : 512, 0);
+        context.lineTo(side < 0 ? 512 : 0, 512);
+        context.stroke();
+      }
+      context.fillStyle = '#b5a16f';
+      context.beginPath();
+      context.arc(256, 256, 29, 0, Math.PI * 2);
+      context.fill();
+      context.fillStyle = '#6e8582';
+      context.beginPath();
+      context.arc(256, 256, 20, 0, Math.PI * 2);
+      context.fill();
     } else if (kind === 'mosaic') {
       for (let row = 0; row < 32; row++)
         for (let col = 0; col < 32; col++) {

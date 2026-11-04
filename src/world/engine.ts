@@ -81,6 +81,12 @@ import {
   makeStulcovaGardenWall,
 } from './architecture';
 import { makeMonuments } from './monuments';
+import {
+  makeReferenceDetails,
+  makeReferenceLabels,
+  makeProvostFrontage,
+  makeCanonGables,
+} from './reference-details';
 import { makeNuselskyBridge } from './bridge';
 import { makeRiversideGallery } from './gallery';
 import { makePassages, makeApproach } from './passages';
@@ -174,6 +180,7 @@ import {
   onExposedRampartBank,
   panoramaSites,
   panoramaOpening,
+  panoramaDecks,
   exposedRocks,
   cemeteryArcades,
   cemeteryArcadeWallIds,
@@ -457,6 +464,7 @@ export class World {
   > | null = null;
   private markers: { id: string; ring: THREE.Mesh; light: THREE.Mesh }[] = [];
   private site: ReturnType<typeof makeSiteDetails>;
+  private referenceLabels: ReturnType<typeof makeReferenceLabels>;
   private batches = new Map<
     string,
     { kind: MaterialKind; color: string; geometries: THREE.BufferGeometry[] }
@@ -619,6 +627,9 @@ export class World {
     );
     this.batch('#c2baaa', groundPolygon(gardenPortal.points, 0.055), 'cobble');
     makeMonuments(this.batch.bind(this));
+    makeReferenceDetails(this.batch.bind(this));
+    this.referenceLabels = makeReferenceLabels();
+    this.scene.add(this.referenceLabels.group);
     makeCemetery(this.batch.bind(this));
     makeEnclosureDetails(this.batch.bind(this));
     makeNuselskyBridge(this.batch.bind(this));
@@ -824,7 +835,8 @@ export class World {
     }
     const normalized = geometry.index ? geometry.toNonIndexed() : geometry;
     if (normalized !== geometry) geometry.dispose();
-    worldUVs(normalized, kind);
+    if (kind !== 'fresco' || !normalized.getAttribute('uv'))
+      worldUVs(normalized, kind);
     const key = `${kind}|${color}`;
     const existing = this.batches.get(key) ?? { kind, color, geometries: [] };
     existing.geometries.push(normalized);
@@ -853,6 +865,7 @@ export class World {
           'bark',
           'metal',
           'foliage',
+          'fresco',
         ].includes(kind)
       )
         this.blockers.push(mesh);
@@ -1099,6 +1112,12 @@ export class World {
       const children = feature.tags.building
         ? parts.filter((p) => inside(center(p.points), feature.points))
         : [];
+      if (feature.id === 49810596)
+        makeProvostFrontage(
+          feature,
+          foundation(feature),
+          this.batch.bind(this),
+        );
       if (children.length) {
         const lowWall = Math.min(
           ...children.map((p) =>
@@ -1108,6 +1127,13 @@ export class World {
             ),
           ),
         );
+        if ([49810437, 49810440, 49810441].includes(feature.id))
+          makeCanonGables(
+            feature,
+            foundation(feature),
+            lowWall,
+            this.batch.bind(this),
+          );
         for (const uncovered of uncoveredBuilding(feature))
           this.makeBuilding({
             ...uncovered,
@@ -1352,6 +1378,8 @@ export class World {
         wallHeight,
         this.batch.bind(this),
       );
+    if ([49810437, 49810440, 49810441].includes(feature.id))
+      makeCanonGables(feature, ground, wallHeight, this.batch.bind(this));
     if (tags.height === '60' && tags['building:part']) {
       const crossY = ground + total + 1;
       this.batch('#d7c9a5', box(0.22, 2.4, 0.22, x, crossY, z), 'metal');
@@ -1576,6 +1604,7 @@ export class World {
               !patch.feature.holes.some((hole) => inside(point, hole)),
           ) ||
           excluded.some((area) => contains(point, area)) ||
+          panoramaDecks.some((deck) => inside(point, deck.points)) ||
           retainedStreetSection(point) ||
           exposedRocks.some((rock) => inside(point, rock.points)) ||
           routes.some(
@@ -3604,6 +3633,7 @@ export class World {
     this.renderer.dispose();
     this.surfaceMaterials.dispose();
     this.site.dispose();
+    this.referenceLabels.dispose();
     this.interior.dispose();
     this.stoneGeometry.dispose();
     this.contactShadow?.material.map?.dispose();

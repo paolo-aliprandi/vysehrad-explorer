@@ -14,6 +14,7 @@ import {
   summerTheatre,
   panoramaSites,
   riversideGallery,
+  referenceSites,
   type Point,
 } from './geo';
 
@@ -141,10 +142,18 @@ at(royal, [
   'Gothic palace remains',
   'Royal Palace (Královský palác)',
   'Royal courtyard',
-  'Church of the Decollation of St. John the Baptist',
-  'Memorial to the lost Church of St. John the Baptist',
   'Medieval defensive wall',
 ]);
+at(
+  vicinity(
+    referenceSites.hiddenChurch.point,
+    'Surviving church incorporated into the rampart behind Ave Maria; exterior representation only.',
+  ),
+  [
+    'Church of the Decollation of St. John the Baptist',
+    'Memorial to the lost Church of St. John the Baptist',
+  ],
+);
 at(mapped(-89545110), ['Chapel of Our Lady of the Ramparts']);
 at(mapped(49810588), [
   'Romanesque Basilica of St. Lawrence remains',

@@ -1,11 +1,11 @@
 [
   {
     "name": "Tábor Gate (Táborská brána)",
-    "historical description": "The outer southern entrance to the Vyšehrad fortress, built in the mid-17th century as part of its Baroque fortification system. Its position is best understood as part of a sequence of controlled entrances: visitors and troops passed through successive barriers rather than a single open doorway. The surviving structure therefore helps explain how the fortress regulated movement as well as defended itself."
+    "historical description": "The southern outer gate belongs to the Baroque fortress built in the mid-17th century. Earlier, the road from Prague toward South Bohemia passed through a busy settlement whose market space extended toward the site of the later Leopold Gate. By the late 19th century, arrivals passed a military guard and crossed the fortress moat before reaching the food-tax office, horse-watering pump and city guards near the remains of Špička."
   },
   {
     "name": "Špička Gate (Špička)",
-    "historical description": "A medieval Gothic gate associated with the former royal precinct. Only fragments and archaeological traces survive. Its position is best understood as part of a sequence of controlled entrances: visitors and troops passed through successive barriers rather than a single open doorway. The surviving structure therefore helps explain how the fortress regulated movement as well as defended itself."
+    "historical description": "Built in 1348–1350 under Charles IV, Špička was a Gothic gate with two towers linked by a walkway and nine pointed spires. A drawbridge crossed a moat cut into the rock. After the Tábor Gate extended the defences, Špička became a military storehouse and was gradually reduced to the surviving ground floor of its northern tower. Look for the two former portal arches, the portcullis groove and the ring used to fasten a closing chain; the masonry also preserves marks associated with guards sharpening their swords."
   },
   {
     "name": "Gothic wall fragments near Špička",
@@ -97,7 +97,7 @@
   },
   {
     "name": "Royal Palace (Královský palác)",
-    "historical description": "The medieval royal residence associated with Vyšehrad’s importance under Přemyslid rulers and later Charles IV. This feature belongs to the period when Vyšehrad was a royal and ecclesiastical centre, not merely a fortress. It helps reconstruct the settlement that preceded the Baroque military enclosure."
+    "historical description": "The fortified royal precinct combined palaces with a large courtyard. Charles IV commissioned four palaces on the site of the earlier, 11th-century residence. The former burgrave’s office survives, while low masonry near the later gunpowder store records the assembly palace and its upper-floor feasting hall. A cellar from the residential palace was adapted for ammunition storage in 1653 and now houses an exhibition. The low remains shown here should not be mistaken for a reconstruction of the lost buildings."
   },
   {
     "name": "Royal courtyard",
@@ -105,11 +105,11 @@
   },
   {
     "name": "Church of the Decollation of St. John the Baptist",
-    "historical description": "A medieval church that was destroyed during the construction and restructuring of the Baroque fortress. The building or remains reflect Vyšehrad’s role as a religious centre as well as a strategic stronghold. Its history should be read alongside the nearby chapter buildings and the changing patronage of Bohemian rulers and clergy."
+    "historical description": "This Gothic church survives, partly incorporated into the fortress rampart behind the Chapel of Our Lady of the Ramparts. Dating to at least the later 14th century, it served the local parish and cemetery between the 15th and 17th centuries. Fortress construction removed part of the building, but it was not completely destroyed. After a period of military use, the Vyšehrad Chapter bought and restored it in 1882. The real interior is accessible on guided tours; this model represents its exposed exterior, not a surveyed interior."
   },
   {
     "name": "Memorial to the lost Church of St. John the Baptist",
-    "historical description": "A commemorative marker recalling the medieval church that once stood in the Vyšehrad precinct. The building or remains reflect Vyšehrad’s role as a religious centre as well as a strategic stronghold. Its history should be read alongside the nearby chapter buildings and the changing patronage of Bohemian rulers and clergy."
+    "historical description": "The nearby interpretation board explains a hidden, surviving church, rather than a completely lost one. St. John the Baptist was partly demolished and absorbed into the Baroque rampart. Its remaining structure stands behind the later Ave Maria chapel and was restored after the Vyšehrad Chapter acquired it in 1882. Its concealed position is a particularly clear example of medieval religious architecture being reused by the fortress."
   },
   {
     "name": "Chapel of Our Lady of the Ramparts",
@@ -125,7 +125,7 @@
   },
   {
     "name": "Romanesque bridge remains",
-    "historical description": "Archaeological traces of a bridge in the former medieval royal precinct, associated with the historic layout of Vyšehrad. This feature belongs to the period when Vyšehrad was a royal and ecclesiastical centre, not merely a fortress. It helps reconstruct the settlement that preceded the Baroque military enclosure."
+    "historical description": "Built around 1070, this single-arch stone bridge crossed the moat of the Royal Acropolis. It was about 22 metres long and connected with a covered stone passage leading towards the earlier basilica, probably providing a ceremonial entrance for the ruler. It is the oldest known stone-bridge construction in the Czech Republic. The bridge and moat disappeared before the 13th century, and archaeologists uncovered the surviving masonry in 1935. Only the archaeological remains, not the complete medieval bridge, are represented here."
   },
   {
     "name": "Medieval defensive wall",
@@ -145,7 +145,7 @@
   },
   {
     "name": "Rotunda of St. Martin",
-    "historical description": "A Romanesque rotunda, generally dated to the 11th century, and one of Prague’s oldest surviving church buildings. Rotundas are characteristic of early medieval Central European church architecture. Its survival makes it a rare architectural witness to Prague before the city’s later Gothic and Baroque transformations."
+    "historical description": "St. Martin’s Rotunda was built around 1100, outside the Royal Acropolis, and is one of Prague’s oldest surviving churches. It later served as a prison and gunpowder store, was reconsecrated in 1719, and returned to military use in 1784. Karel Chotek helped save it when a new road threatened the building. The Vyšehrad Chapter bought it in 1875 and restored it, adding the present Neo-Romanesque entrance. The blocked earlier doorway remains visible above the road, and the cannonball recalls the Prussian siege of 1757."
   },
   {
     "name": "Basilica of St. Lawrence",
@@ -245,7 +245,7 @@
   },
   {
     "name": "Monument to Provost Václav Štulc",
-    "historical description": "A memorial to Václav Štulc, a priest and cultural figure involved in Vyšehrad’s religious and national revival. The memorial preserves a layer of memory that may not be visible in the architecture itself. It helps connect the site’s physical remains with the people, events, and institutions later generations chose to commemorate."
+    "historical description": "Václav Štulc commissioned the Neo-Gothic New Provost’s Residence in 1872–1874 and helped revive Vyšehrad’s cultural and religious life. His successor Mikuláš Karlach supported this memorial. Its bronze bust originally stood beneath a much taller Neo-Gothic sandstone canopy; erosion removed the upper structure, leaving the present shortened, reddish pedestal. The model follows that surviving form rather than restoring the lost canopy. The nearby equestrian St. Wenceslas is a copy of the Baroque statue Štulc rescued from Wenceslas Square."
   },
   {
     "name": "Memorial to Professor Krejčí",
@@ -341,11 +341,11 @@
   },
   {
     "name": "Popelka Biliánová’s House",
-    "historical description": "A small house associated with Popelka Biliánová, a Czech writer known for folklore and Vyšehrad legends. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+    "historical description": "House no. 12 combined the food-tax office with the tax collector's family home. Traders waited nearby with their carts and watered their horses at the pump; charges depended on the food being brought into Prague. The collector married the writer Popelka Biliánová in 1892. Her collecting and retelling of local legends made this modest roadside house part of Vyšehrad's literary history."
   },
   {
     "name": "Jedlička Institute",
-    "historical description": "An institution founded in 1913 to provide education and care for children and young people with physical disabilities. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+    "historical description": "Founded in 1913 through the work of Rudolf Jedlička and his collaborators, the institute developed education, practical workshops and rehabilitation for children and young people with physical disabilities. Its early Vyšehrad premises included house no. 13, a former inn and military lodging nicknamed 'Poland' after a brief stay by Polish soldiers. The institute continues its educational and rehabilitation work today."
   },
   {
     "name": "New Provost’s Residence",
@@ -373,7 +373,7 @@
   },
   {
     "name": "Karlach Gardens",
-    "historical description": "Gardens named after Provost Mikuláš Karlach, who played an important role in Vyšehrad’s 19th-century revival. The green space occupies ground shaped by military, religious, and residential uses. Its present peaceful appearance can conceal how radically the area was transformed when the fortress was built and later opened to the public."
+    "historical description": "The Karlach Gardens occupy ground associated with the chapter and the former settlement of Vyšehrad. They were named for Provost Mikuláš Karlach in 1911 and retain paths, benches, a fountain and a small Gothic-style well cover. The nearby New Deanery was built in 1877–1878 as part of Václav Štulc’s renewal of the precinct. In the southwest, the broken stones known as the Devil’s Column probably came from a church; the legend of a devil’s wager with a priest is older than their late-19th-century relocation."
   },
   {
     "name": "Vyšehrad Park",

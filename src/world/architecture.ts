@@ -45,6 +45,7 @@ import {
   type Point,
 } from './geo';
 import type { MaterialKind } from './materials';
+import { makeArcadeVault } from './reference-details';
 import {
   samplePolyline,
   continuousWall,
@@ -1136,7 +1137,7 @@ export function decorateBuilding(
   const church = feature.tags['building:colour'] === '#52514f';
   const tower = church && feature.tags.height === '60';
   const entrance = buildingEntrance(feature, wallHeight);
-  if (entrance) makeBuildingDoor(entrance, add);
+  if (feature.id !== 49810596 && entrance) makeBuildingDoor(entrance, add);
   const [cx, cz] = center(feature.points);
   if (!church && Math.hypot(cx + 80, cz - 40) > 390) return;
   const ring = feature.points;
@@ -1187,6 +1188,11 @@ export function decorateBuilding(
         remaining--;
         const t = (col + 0.5) / columns;
         const p: Point = [a[0] + dx * t + nx * 0.04, a[1] + dz * t + nz * 0.04];
+        if (
+          feature.id === 49810596 &&
+          Math.hypot(p[0] + 208.95, p[1] + 93.1) < 3
+        )
+          continue;
         if (
           entrance &&
           Math.hypot(p[0] - entrance.point[0], p[1] - entrance.point[1]) <
@@ -1387,9 +1393,31 @@ export function makeAveMaria(
   const doorstep = [at(-0.95), at(0.95), at(0.95, 0.65), at(-0.95, 0.65)];
   const floor = Math.max(...doorstep.map((p) => upperElevation(...p))) + 0.05;
   makeBuildingDoor(
-    { ...frame, width: 1.65, height: 2.65, ground: floor, doorstep, score: 0 },
+    { ...frame, width: 1.65, height: 2.1, ground: floor, doorstep, score: 0 },
     add,
   );
+  const arch = new THREE.Shape();
+  arch.absarc(0, 2.1, 0.825, 0, Math.PI, false);
+  arch.lineTo(-0.825, 2.1);
+  arch.closePath();
+  add(
+    '#35433a',
+    positioned(new THREE.ShapeGeometry(arch, 24), at(0, 0.1), floor, angle),
+    'wood',
+  );
+  for (const u of [-0.6, -0.3, 0, 0.3, 0.6]) {
+    const height = Math.sqrt(0.825 ** 2 - u ** 2);
+    add(
+      '#807953',
+      positioned(
+        new THREE.BoxGeometry(0.026, height, 0.04),
+        at(u, 0.14),
+        floor + 2.1 + height / 2,
+        angle,
+      ),
+      'metal',
+    );
+  }
   const top = ground + wallHeight;
   for (const side of [-1, 1]) {
     add(
@@ -1740,7 +1768,10 @@ export function makeGate(feature: Feature, ground: number, add: AddGeometry) {
   for (const { offset, halfWidth, spring } of openings) {
     outline.lineTo(offset - halfWidth, bottom);
     outline.lineTo(offset - halfWidth, spring);
-    outline.absarc(offset, spring, halfWidth, Math.PI, 0, true);
+    if (feature.id === 51700613 && Math.abs(offset) > 2.8) {
+      outline.lineTo(offset - halfWidth, spring + halfWidth);
+      outline.lineTo(offset + halfWidth, spring + halfWidth);
+    } else outline.absarc(offset, spring, halfWidth, Math.PI, 0, true);
     outline.lineTo(offset + halfWidth, bottom);
   }
   outline.lineTo(width / 2, bottom);
@@ -1789,7 +1820,15 @@ export function makeGate(feature: Feature, ground: number, add: AddGeometry) {
           (spring + halfWidth + 0.7) / 2,
           face * (depth / 2 + 0.12),
         );
-      for (let i = 0; i < 11; i++) {
+      const rectangular = feature.id === 51700613 && Math.abs(offset) > 2.8;
+      if (rectangular)
+        local(
+          new THREE.BoxGeometry(halfWidth * 2 + 0.9, 0.38, 0.5),
+          offset,
+          spring + halfWidth + 0.19,
+          face * (depth / 2 + 0.12),
+        );
+      for (let i = 0; !rectangular && i < 11; i++) {
         const a = (i * Math.PI) / 11,
           b = ((i + 1) * Math.PI) / 11;
         const sector = new THREE.Shape();
@@ -1812,7 +1851,51 @@ export function makeGate(feature: Feature, ground: number, add: AddGeometry) {
       (face * depth) / 2,
     );
   }
-  if (feature.id === 51700613) return;
+  if (feature.id === 51700613) {
+    for (const face of [-1, 1])
+      for (const fraction of [-0.38, -0.13, 0.13, 0.38]) {
+        const x = fraction * width,
+          bottom = Math.min(height - 2.15, 6.6);
+        const pane = new THREE.Shape();
+        pane.moveTo(-0.62, 0);
+        pane.lineTo(0.62, 0);
+        pane.lineTo(0.62, 1.55);
+        pane.quadraticCurveTo(0, 1.95, -0.62, 1.55);
+        pane.closePath();
+        const surface = face * (depth / 2 + 0.035);
+        local(
+          new THREE.ShapeGeometry(pane, 20).rotateY(face < 0 ? Math.PI : 0),
+          x,
+          bottom,
+          surface,
+          '#29332e',
+        );
+        for (const bar of [-0.45, -0.15, 0.15, 0.45])
+          local(
+            new THREE.BoxGeometry(0.03, 1.55, 0.045),
+            x + bar,
+            bottom + 0.78,
+            surface + face * 0.03,
+            '#716e58',
+          );
+        for (const y of [0.35, 1.1])
+          local(
+            new THREE.BoxGeometry(1.2, 0.03, 0.045),
+            x,
+            bottom + y,
+            surface + face * 0.03,
+            '#716e58',
+          );
+        local(
+          new THREE.BoxGeometry(1.4, 0.12, 0.3),
+          x,
+          bottom - 0.06,
+          surface,
+          '#c2b79a',
+        );
+      }
+    return;
+  }
   if (feature.id === 49811189) {
     local(
       new THREE.BoxGeometry(width + 0.5, 0.22, depth + 0.5),
@@ -1911,6 +1994,53 @@ export function makeGate(feature: Feature, ground: number, add: AddGeometry) {
   if (feature.id === 51718887) {
     for (const face of [-1, 1]) {
       const surface = face * (depth / 2 + 0.18);
+      local(
+        new THREE.SphereGeometry(1, 16, 12).scale(0.42, 0.52, 0.2),
+        0,
+        height - 2.05,
+        surface + face * 0.14,
+        '#9a9685',
+      );
+      for (const side of [-1, 1]) {
+        local(
+          new THREE.SphereGeometry(1, 12, 8).scale(0.09, 0.045, 0.045),
+          side * 0.16,
+          height - 1.93,
+          surface + face * 0.34,
+          '#555b4e',
+        );
+        local(
+          new THREE.TorusGeometry(0.23, 0.065, 6, 20).scale(1, 1.3, 1),
+          side * 0.42,
+          height - 2.15,
+          surface + face * 0.13,
+          '#aaa38e',
+        );
+        const rake = Math.hypot(width * 0.28, 0.8);
+        local(
+          new THREE.BoxGeometry(rake + 0.2, 0.17, 0.4).rotateZ(
+            -side * Math.atan2(0.8, width * 0.28),
+          ),
+          side * width * 0.14,
+          height + 1.9,
+          surface,
+          '#b0aa98',
+        );
+      }
+      local(
+        new THREE.SphereGeometry(1, 12, 8).scale(0.1, 0.2, 0.13),
+        0,
+        height - 2.07,
+        surface + face * 0.35,
+        '#b3aa92',
+      );
+      local(
+        new THREE.BoxGeometry(0.18, 0.05, 0.04),
+        0,
+        height - 2.3,
+        surface + face * 0.34,
+        '#555b4e',
+      );
       let left = -width / 2;
       for (const opening of [
         ...openings,
@@ -2159,27 +2289,31 @@ export function makePanoramaLookouts(add: AddGeometry) {
       site.width / 2 - 0.15,
     ]) {
       box(0.2, 2.8, 0.2, u, 1.45, 3.8);
-      box(0.18, 3, 0.18, u, 1.55, 1);
+      box(0.18, 3.2, 0.18, u, 1.6, 1);
     }
-    for (const v of [1, 3.8]) box(site.width + 0.45, 0.2, 0.2, 0, 2.8, v);
+    for (const v of [1, 3.8])
+      box(site.width + 0.45, 0.2, 0.2, 0, v === 1 ? 3.18 : 2.8, v);
+    for (const y of [0.2, 1.05]) box(site.width, 0.1, 0.1, 0, y, 3.8);
+    for (let u = -site.width / 2 + 0.15; u < site.width / 2; u += 0.21)
+      box(0.055, 0.83, 0.06, u, 0.62, 3.8);
     for (const u of [-site.width / 2, site.width / 2]) {
       box(0.1, 0.12, 2.8, u, 0.95, 2.4);
       for (let v = 1.3; v < 3.8; v += 0.35) box(0.07, 0.8, 0.07, u, 0.5, v);
     }
     const roof = new THREE.Shape();
-    roof.moveTo(-0.2, 2.95);
-    roof.lineTo(1.7, 3.55);
-    roof.lineTo(3.6, 2.95);
-    roof.lineTo(3.6, 2.77);
-    roof.lineTo(1.7, 3.37);
-    roof.lineTo(-0.2, 2.77);
+    roof.moveTo(-0.2, 3.55);
+    roof.lineTo(4.2, 2.95);
+    roof.lineTo(4.2, 2.77);
+    roof.lineTo(-0.2, 3.37);
     roof.closePath();
     const canopy = new THREE.ExtrudeGeometry(roof, {
       depth: site.width + 0.9,
       bevelEnabled: false,
     });
     canopy.rotateY(-Math.PI / 2);
-    canopy.translate((site.width + 0.9) / 2, 0, -4.1);
+    canopy.translate((site.width + 0.9) / 2, 0, 0);
+    if (site.inward[0] * Math.sin(angle) + site.inward[1] * Math.cos(angle) < 0)
+      canopy.scale(1, 1, -1);
     positioned(canopy, site.point, site.floor, angle);
     add('#695745', canopy, 'wood');
   }
@@ -2600,6 +2734,7 @@ export function makeCemeteryArcade(feature: Feature, add: AddGeometry) {
     arch.rotateY(-Math.atan2(bay.axis[1], bay.axis[0]));
     arch.translate(bay.center[0], ground, bay.center[1]);
     add('#c8bda2', arch, 'plaster');
+    makeArcadeVault(bay, ground, add);
     for (const side of [-1, 1]) {
       const point: Point = [
         bay.center[0] + ((bay.axis[0] * bay.width) / 2) * side,

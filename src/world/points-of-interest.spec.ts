@@ -1,5 +1,5 @@
 import catalogue from '../data/points-of-interest.json';
-import { features, cemeteries } from './geo';
+import { features, cemeteries, referenceSites } from './geo';
 import { nearbyPointsOfInterest, pointsOfInterest } from './points-of-interest';
 
 it('makes every supplied history entry discoverable once, merging duplicate place names', () => {
@@ -28,4 +28,15 @@ it('offers grave histories in the cemetery without pretending their individual p
   expect(
     histories.every((poi) => poi.location.note?.includes('not surveyed')),
   ).toBe(true);
+});
+
+it('locates the surviving St. John church behind Ave Maria instead of describing a lost church at the royal palace', () => {
+  const entries = nearbyPointsOfInterest(
+    referenceSites.hiddenChurch.point,
+  ).filter((poi) => /John the Baptist/.test(poi.name));
+  expect(entries).toHaveLength(2);
+  for (const poi of entries) {
+    expect(poi.description).toMatch(/surviv/i);
+    expect(poi.location.note).toMatch(/exterior/i);
+  }
 });
