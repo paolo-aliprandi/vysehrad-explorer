@@ -19,7 +19,11 @@ import {
   pavingStyle,
   pavingSurfaces,
 } from './paving';
-import { drapedPolygon as groundPolygon, samplePolyline } from './surfaces';
+import {
+  drapedPolygon as groundPolygon,
+  samplePolyline,
+  retainedStreetTerrain,
+} from './surfaces';
 
 function way(id: number) {
   const feature = paths.find((feature) => feature.id === id);
@@ -72,6 +76,32 @@ function steepTriangles(geometry: THREE.BufferGeometry) {
 }
 
 describe('rationalized paving', () => {
+  it('keeps kiosk road-edge cells below the paving instead of sampling the raised garden outside the cut', () => {
+    const terrain = retainedStreetTerrain();
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const meshes = pavingSurfaces([way(587280816)]).map(
+      (surface) => new THREE.Mesh(pavingGeometry(surface), material),
+    );
+    const ray = new THREE.Raycaster();
+    for (const point of [
+      [37.543447, 57.632085],
+      [37.6, 57.7],
+      [38, 57.8],
+    ] as const) {
+      const soil = terrain.heightAt(point);
+      expect(soil).toBeCloseTo(elevation(...point), 1);
+      ray.set(
+        new THREE.Vector3(point[0], 100, point[1]),
+        new THREE.Vector3(0, -1, 0),
+      );
+      const road = ray.intersectObjects(meshes, false)[0];
+      expect(road, JSON.stringify(point)).toBeDefined();
+      expect(road.point.y - soil).toBeGreaterThan(0.005);
+    }
+    meshes.forEach((mesh) => mesh.geometry.dispose());
+    terrain.geometries.forEach((geometry) => geometry.dispose());
+    material.dispose();
+  });
   it('keeps the main Leopold and cathedral streets cobbled and only the separate rotunda branch gravel', () => {
     const roads = [
       4646722, 5016653, 587280816, 494921190, 494921191, 370193790, 494921186,

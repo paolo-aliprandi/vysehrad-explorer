@@ -87,7 +87,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       const normal=g.projectRoute(point,g.rotundaStreet.points).normal;
       return [-2,0,2].map(offset=>[point[0]+normal[0]*offset,point[1]+normal[1]*offset]);
     });
-    points.push([68.3082,106.76358],[68.52926,103.36625],[68.65567,99.68444],[61.62993,58.8394]);
+    points.push([68.3082,106.76358],[68.52926,103.36625],[68.65567,99.68444],[61.62993,58.8394],[37.543447,57.632085],[37.6,57.7],[38,57.8]);
     for(let x=59.5;x<=64;x+=.5)for(let z=59.5;z<=66;z+=.5) {
       const point=[x,z];
       if(g.retainedStreetCorridors.some(c=>g.inside(point,c.polygon))&&!g.blocked(point,g.elevation(x,z)))points.push(point);

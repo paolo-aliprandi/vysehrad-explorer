@@ -2953,6 +2953,16 @@ export const retainedStreetAreas = [
   rotundaStreet,
   ...retainedStreetBanks,
 ];
+export function retainedStreetSurfaceElevation(
+  area: { polygon: readonly Point[] },
+  point: Point,
+) {
+  // Keep shared cell-corner samples on the graded side of the retaining cut.
+  const sample = inside(point, area.polygon)
+    ? point
+    : projectRoute(point, [...area.polygon, area.polygon[0]]).point;
+  return elevation(...sample);
+}
 const retainedStreetBounds = retainedStreetAreas.map(({ polygon }) => ({
   polygon,
   minX: Math.min(...polygon.map((point) => point[0])) - 0.002,

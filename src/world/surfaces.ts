@@ -37,6 +37,7 @@ import {
   retainedStreetAccess,
   retainedStreetBanks,
   retainedStreetBankElevation,
+  retainedStreetSurfaceElevation,
   onRetainedStreetSurface,
   segmentDistance,
   type Point,
@@ -305,12 +306,17 @@ export function retainedStreetTerrain() {
   const polygons = retainedStreetAreas.map((area) => area.polygon);
   const geometries = retainedStreetAreas.map((area, index) => {
     const bank = retainedStreetBanks.find((bank) => bank === area);
+    const road = 'feature' in area && area !== retainedStreetAccess;
     return drapedPolygon(
       area.polygon,
       0,
-      bank ? (x, z) => retainedStreetBankElevation(bank, [x, z]) : elevation,
+      bank
+        ? (x, z) => retainedStreetBankElevation(bank, [x, z])
+        : road
+          ? (x, z) => retainedStreetSurfaceElevation(area, [x, z])
+          : elevation,
       polygons.slice(0, index),
-      'feature' in area && area !== retainedStreetAccess,
+      road,
     );
   });
   const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });

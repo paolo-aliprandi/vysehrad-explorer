@@ -17,6 +17,7 @@ import {
   stairFlights,
   stairwellFootprint,
   retainedStreetCorridors,
+  retainedStreetSurfaceElevation,
   rotundaStreet,
   aveMariaCourtCuts,
   aveMariaFrontage,
@@ -495,18 +496,20 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
 
 export function pavingGeometry(surface: PavingSurface) {
   const { feature } = surface;
+  const road = [...retainedStreetCorridors, rotundaStreet].find(
+    (area) => area.feature.id === feature.id,
+  );
   const vertices: number[] = [];
   for (const polygon of surface.polygons) {
     const rings = polygon.map((ring) => ring.map(([x, z]): Point => [x, z]));
     const source = drapedPolygon(
       rings[0],
       0.055,
-      (x, z) => featureElevation(feature, [x, z]),
+      road
+        ? (x, z) => retainedStreetSurfaceElevation(road, [x, z])
+        : (x, z) => featureElevation(feature, [x, z]),
       rings.slice(1),
-      feature.id === rotundaStreet.feature.id ||
-        retainedStreetCorridors.some(
-          (corridor) => corridor.feature.id === feature.id,
-        ),
+      !!road,
     );
     const positions = source.attributes.position;
     const a = new THREE.Vector3(),
