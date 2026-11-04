@@ -17,7 +17,7 @@ import {
   pavingStyle,
   pavingSurfaces,
 } from './paving';
-import { pathRibbon, samplePolyline } from './surfaces';
+import { samplePolyline } from './surfaces';
 
 function way(id: number) {
   const feature = paths.find((feature) => feature.id === id);
@@ -149,7 +149,7 @@ describe('rationalized paving', () => {
     }
   });
 
-  it('keeps V Pevnosti a bounded street rather than spreading an eleven-metre strip over its rock banks', () => {
+  it('fills V Pevnosti across the retained roadbed without spreading paving onto the upper banks', () => {
     const feature = way(4646722);
     expect(Number(feature.tags.width)).toBe(11.5);
     const a = feature.points[5],
@@ -163,19 +163,43 @@ describe('rationalized paving', () => {
         middle[0] + normal[0] * 4,
         middle[1] + normal[1] * 4,
       ]),
+    ).toBe(true);
+    expect(
+      contains(polygons, [
+        middle[0] + normal[0] * 8,
+        middle[1] + normal[1] * 8,
+      ]),
     ).toBe(false);
     expect(pathWidth(feature)).toBeLessThanOrEqual(5.2);
-    const old = pathRibbon(feature.points, 11.5, 0.055, (x, z) =>
-      featureElevation(feature, [x, z]),
-    );
-    expect(steepTriangles(old)).toBeGreaterThan(0);
-    old.dispose();
     for (const surface of pavingSurfaces([feature])) {
       const geometry = pavingGeometry(surface);
       expect(geometry.attributes.position.count).toBeGreaterThan(0);
       expect(steepTriangles(geometry)).toBe(0);
       geometry.dispose();
     }
+  });
+
+  it('keeps the uphill street-side path continuously gravel rather than cobbled fragments', () => {
+    const feature = way(26454854);
+    expect(pavingStyle(feature).kind).toBe('gravel');
+    const surfaces = pavingSurfaces([feature]);
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const meshes = surfaces.map(
+      (surface) => new THREE.Mesh(pavingGeometry(surface), material),
+    );
+    for (const point of samplePolyline(feature.points, 1).slice(1, -1)) {
+      const ray = new THREE.Raycaster(
+        new THREE.Vector3(point[0], 80, point[1]),
+        new THREE.Vector3(0, -1, 0),
+      );
+      const hit = ray.intersectObjects(meshes, false)[0];
+      expect(hit, `missing uphill path at ${point}`).toBeDefined();
+      expect(
+        Math.abs(hit.point.y - featureElevation(feature, point) - 0.055),
+      ).toBeLessThan(0.25);
+    }
+    meshes.forEach((mesh) => mesh.geometry.dispose());
+    material.dispose();
   });
 
   it('stops upper-level paving at the ramparts but keeps lower hillside routes and real stairs', () => {

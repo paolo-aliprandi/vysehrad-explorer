@@ -114,9 +114,11 @@ import {
   upperElevation,
   originalElevation,
   unretainedElevation,
-  retainedStreetCorridors,
   retainedStreetBanks,
   retainedStreetWalls,
+  retainedStreetAreas,
+  retainedStreetBankElevation,
+  retainedStreetSection,
   standingElevation,
   coverAt,
   lowerPassage,
@@ -890,13 +892,16 @@ export class World {
     const courtBanks = courtBankTerrain();
     const cliffs = cliffTerrain();
     const gardenBanks = gardenBankTerrain();
-    const streetPolygons = [
-      ...retainedStreetCorridors,
-      ...retainedStreetBanks,
-    ].map((area) => area.polygon);
-    const streetBeds = streetPolygons.map((polygon, index) =>
-      groundPolygon(polygon, 0, elevation, streetPolygons.slice(0, index)),
-    );
+    const streetPolygons = retainedStreetAreas.map((area) => area.polygon);
+    const streetBeds = retainedStreetAreas.map((area, index) => {
+      const bank = retainedStreetBanks.find((bank) => bank === area);
+      return groundPolygon(
+        area.polygon,
+        0,
+        bank ? (x, z) => retainedStreetBankElevation(bank, [x, z]) : elevation,
+        streetPolygons.slice(0, index),
+      );
+    });
     for (const surface of [
       terrain,
       ...detailed,
@@ -932,7 +937,11 @@ export class World {
       const material = this.surfaceMaterials.get('grass', '#ffffff').clone();
       material.vertexColors = true;
       const mesh = new THREE.Mesh(surface, material);
-      const { rock } = splitRockySlopes(surface);
+      mesh.name = 'Terrain';
+      // Constructed soil banks are not exposed rock faces.
+      const { rock } = streetBeds.includes(surface)
+        ? { rock: null }
+        : splitRockySlopes(surface);
       if (rock) {
         worldUVs(rock, 'rock');
         const rocky = new THREE.Mesh(
@@ -940,6 +949,7 @@ export class World {
           this.surfaceMaterials.get('rock', '#a29a87'),
         );
         rocky.receiveShadow = true;
+        rocky.name = 'Terrain rock';
         this.scene.add(rocky);
         this.blockers.push(rocky);
       }
@@ -981,8 +991,7 @@ export class World {
           tags.landuse === 'cemetery' ? '#73805a' : '#7b8959',
           groundPolygon(points, 0.025, elevation, [
             ...feature.holes,
-            ...retainedStreetCorridors.map((corridor) => corridor.polygon),
-            ...retainedStreetBanks.map((bank) => bank.polygon),
+            ...retainedStreetAreas.map((area) => area.polygon),
             ...exposedRocks.map((rock) => rock.points),
             ...riversideGallery.approaches.map((approach) => approach.polygon),
           ]),
@@ -993,8 +1002,7 @@ export class World {
           groundPolygon(points, 0.04, elevation, [
             ...feature.holes,
             summerTheatre.enclosure.points,
-            ...retainedStreetCorridors.map((corridor) => corridor.polygon),
-            ...retainedStreetBanks.map((bank) => bank.polygon),
+            ...retainedStreetAreas.map((area) => area.polygon),
             ...riversideGallery.approaches.map((approach) => approach.polygon),
           ]),
           'rock',
@@ -1503,6 +1511,7 @@ export class World {
               !patch.feature.holes.some((hole) => inside(point, hole)),
           ) ||
           excluded.some((area) => contains(point, area)) ||
+          retainedStreetSection(point) ||
           exposedRocks.some((rock) => inside(point, rock.points)) ||
           routes.some(
             (route) =>

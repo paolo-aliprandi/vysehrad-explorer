@@ -21,6 +21,8 @@ import {
   unretainedElevation,
   retainedStreetCorridors,
   retainedStreetWalls,
+  retainedStreetBanks,
+  retainedStreetBankElevation,
   riverElevation,
   cemeteries,
   gravePlots,
@@ -108,8 +110,11 @@ describe('screenshot geometry repairs', () => {
       const point = wall.points[Math.floor(wall.points.length / 2)];
       const normal = projectRoute(point, wall.points).normal;
       const profile = wallProfile(wall, point, normal);
-      expect(profile.top).toBeGreaterThanOrEqual(
-        unretainedElevation(...point) + 0.18 - 0.001,
+      const bank = retainedStreetBanks.find((bank) => bank.wall === wall);
+      if (!bank) throw new Error('Missing reconstructed street bank.');
+      expect(profile.top).toBeCloseTo(
+        retainedStreetBankElevation(bank, point) + 0.18,
+        5,
       );
       expect(profile.top - profile.bottom).toBeGreaterThan(0.55);
       expect(blocked(point, profile.bottom + 0.35)).toBe(true);

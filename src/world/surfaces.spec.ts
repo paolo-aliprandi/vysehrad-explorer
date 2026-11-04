@@ -4,6 +4,8 @@ import {
   unretainedElevation,
   retainedStreetCorridors,
   retainedStreetWalls,
+  retainedStreetBanks,
+  retainedStreetBankElevation,
   walls,
   wallProfile,
   wallThickness,
@@ -34,6 +36,57 @@ import {
 import { makeCemeteryArcade } from './architecture';
 
 describe('connected world surfaces', () => {
+  it('uses the graded street height, not the old court-bank height, across every rendered road vertex', () => {
+    for (const corridor of retainedStreetCorridors) {
+      const floor = drapedPolygon(corridor.polygon, 0, elevation);
+      const positions = floor.attributes.position;
+      let maximumError = 0;
+      for (let i = 0; i < positions.count; i++)
+        maximumError = Math.max(
+          maximumError,
+          Math.abs(
+            positions.getY(i) - elevation(positions.getX(i), positions.getZ(i)),
+          ),
+        );
+      expect(maximumError).toBeLessThan(0.002);
+      floor.dispose();
+    }
+  });
+
+  it('keeps the upper bank behind the masonry crest instead of draping it down through the road-side wall edge', () => {
+    const bank = retainedStreetBanks.find(
+      (bank) => bank.wall.points.length > 30,
+    );
+    if (!bank) throw new Error('Missing long street bank fixture.');
+    const floor = drapedPolygon(bank.polygon, 0, (x, z) =>
+      retainedStreetBankElevation(bank, [x, z]),
+    );
+    const positions = floor.attributes.position;
+    let maximumError = 0;
+    for (let i = 0; i < positions.count; i++)
+      maximumError = Math.max(
+        maximumError,
+        Math.abs(
+          positions.getY(i) -
+            retainedStreetBankElevation(bank, [
+              positions.getX(i),
+              positions.getZ(i),
+            ]),
+        ),
+      );
+    expect(maximumError).toBeLessThan(0.002);
+    const point = bank.wall.points[Math.floor(bank.wall.points.length / 2)];
+    expect(retainedStreetBankElevation(bank, point)).toBeCloseTo(
+      wallProfile(
+        bank.wall,
+        point,
+        projectRoute(point, bank.wall.points).normal,
+      ).top - 0.18,
+      5,
+    );
+    floor.dispose();
+  });
+
   it('excavates the old street bank mesh and replaces it with a cross-level floor and a raycastable retaining face', () => {
     const junction = new THREE.PlaneGeometry(10, 10, 2, 2)
       .rotateX(-Math.PI / 2)
@@ -61,7 +114,7 @@ describe('connected world surfaces', () => {
       );
     const oldBank = new THREE.Mesh(ground, material);
     const down = new THREE.Raycaster(
-      new THREE.Vector3(-46, 80, -26),
+      new THREE.Vector3(-62, 80, -23),
       new THREE.Vector3(0, -1, 0),
     );
     const outsideBefore = down.intersectObject(oldBank)[0].point.y;

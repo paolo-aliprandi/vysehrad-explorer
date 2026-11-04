@@ -16,6 +16,7 @@ import {
   upperPromenade,
   stairFlights,
   stairwellFootprint,
+  retainedStreetCorridors,
   type Feature,
   type Point,
 } from './geo';
@@ -57,7 +58,7 @@ export function pavingStyle(feature: Feature): PavingSurface['style'] {
     [
       370193790, 494921186, 255297801, 163474148, 163474150, 784512319,
       784512324, 255297764, 255297771, 698001342, 1303802775, 33879791,
-      542561031, 542561044, 255297803, 542561034,
+      542561031, 542561044, 255297803, 542561034, 26454854,
     ].includes(feature.id) ||
     (['footway', 'path'].includes(feature.tags.highway ?? '') &&
       feature.tags.area !== 'yes' &&
@@ -159,6 +160,10 @@ function boundedEdge(
 
 export function pavingFootprint(feature: Feature): MultiPolygon {
   if (feature.points.length < 2) return [];
+  const corridor = retainedStreetCorridors.find(
+    (corridor) => corridor.feature.id === feature.id,
+  );
+  if (corridor) return [[corridor.polygon.map(([x, z]) => [x, z])]];
   if (feature.tags.area === 'yes') {
     return [
       [
@@ -356,7 +361,11 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
     );
   for (const feature of ordered) {
     let full = pavingFootprint(feature);
-    const sidewalks = additions.get(feature.id);
+    const sidewalks = retainedStreetCorridors.some(
+      (corridor) => corridor.feature.id === feature.id,
+    )
+      ? undefined
+      : additions.get(feature.id);
     if (sidewalks?.length) full = polygonBoolean('union', full, sidewalks);
     if (cutouts.has(feature.id))
       full = polygonBoolean('difference', full, [

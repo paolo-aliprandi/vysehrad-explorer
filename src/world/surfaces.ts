@@ -26,11 +26,21 @@ import {
   casemateDoor,
   casemateRecess,
   casemateUphillExit,
-  retainedStreetCorridors,
-  retainedStreetBanks,
+  retainedStreetAreas,
+  retainedStreetAccess,
+  onRetainedStreetSurface,
   segmentDistance,
   type Point,
 } from './geo';
+
+const streetDrapeBounds = retainedStreetAreas.map(({ polygon }) => ({
+  minX: Math.min(...polygon.map((point) => point[0])),
+  maxX: Math.max(...polygon.map((point) => point[0])),
+  minZ: Math.min(...polygon.map((point) => point[1])),
+  maxZ: Math.max(...polygon.map((point) => point[1])),
+}));
+const streetAccessDrapeBounds =
+  streetDrapeBounds[retainedStreetAreas.indexOf(retainedStreetAccess)];
 
 export function clipTerrainAtArcades(
   source: THREE.BufferGeometry,
@@ -59,14 +69,12 @@ export function clipTerrainAtArcades(
   ].map((area) => ({ ...area, seal: true }));
   if (streetCuts)
     outlines.push(
-      ...[...retainedStreetCorridors, ...retainedStreetBanks].map(
-        (corridor) => ({
-          points: corridor.polygon,
-          floorBottom: 0,
-          ceiling: Infinity,
-          seal: false,
-        }),
-      ),
+      ...retainedStreetAreas.map((corridor) => ({
+        points: corridor.polygon,
+        floorBottom: 0,
+        ceiling: Infinity,
+        seal: false,
+      })),
     );
   const areas = outlines.map((area) => ({
     ...area,
@@ -315,13 +323,15 @@ function emitCourtBankPolygon(
       sample &&
       sample !== elevation &&
       riversideGallerySupport([point.x, -point.y]);
-    const height = gallery
-      ? sample(point.x, -point.y) + offset
-      : ground([point.x, -point.y], interior) +
-        offset +
-        (sample && sample !== elevation
-          ? sample(point.x, -point.y) - elevation(point.x, -point.y)
-          : 0);
+    const street = sample && onRetainedStreetSurface([point.x, -point.y]);
+    const height =
+      gallery || street
+        ? sample(point.x, -point.y) + offset
+        : ground([point.x, -point.y], interior) +
+          offset +
+          (sample && sample !== elevation
+            ? sample(point.x, -point.y) - elevation(point.x, -point.y)
+            : 0);
     heightCache?.set(key, height);
     return height;
   });
@@ -514,20 +524,35 @@ function drapeTriangles(
       for (let col = left; col <= right; col++) {
         const originX = terrainField.minX + col * coarseWidth,
           originZ = terrainField.minZ + row * coarseDepth;
-        const detailed = [
-          approachTerrainField,
-          courtBankBounds,
-          gardenBankBounds,
-          taborTerrainField,
-        ].some(
+        const streetDetail = streetDrapeBounds.some(
           (field) =>
             originX < field.maxX &&
             originX + coarseWidth > field.minX &&
             originZ < field.maxZ &&
             originZ + coarseDepth > field.minZ,
         );
-        const cellWidth = detailed ? 1 : coarseWidth,
-          cellDepth = detailed ? 1 : coarseDepth;
+        const detailed =
+          streetDetail ||
+          [
+            approachTerrainField,
+            courtBankBounds,
+            gardenBankBounds,
+            taborTerrainField,
+          ].some(
+            (field) =>
+              originX < field.maxX &&
+              originX + coarseWidth > field.minX &&
+              originZ < field.maxZ &&
+              originZ + coarseDepth > field.minZ,
+          );
+        const access =
+          streetDetail &&
+          originX < streetAccessDrapeBounds.maxX &&
+          originX + coarseWidth > streetAccessDrapeBounds.minX &&
+          originZ < streetAccessDrapeBounds.maxZ &&
+          originZ + coarseDepth > streetAccessDrapeBounds.minZ;
+        const cellWidth = access ? 0.5 : detailed ? 1 : coarseWidth,
+          cellDepth = access ? 0.5 : detailed ? 1 : coarseDepth;
         if (detailed) {
           const corners: Point[] = [
             [originX, originZ],

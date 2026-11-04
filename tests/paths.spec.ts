@@ -104,6 +104,24 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     w.raycaster.set(from,to.clone().sub(from).normalize());
     w.raycaster.far=from.distanceTo(to)+1;
     const retainingHits=w.raycaster.intersectObjects(w.blockers,false).length;
+    const terrain=w.blockers.filter(mesh=>mesh.name==='Terrain'||mesh.name==='Terrain rock');
+    const renderedStreets=g.retainedStreetCorridors.flatMap(corridor=>
+      s.samplePolyline(corridor.points,12).slice(1,-1).flatMap(point=>{
+        const normal=g.projectRoute(point,corridor.points).normal;
+        return [-4,0,4].map(offset=>{
+          const p=[point[0]+normal[0]*offset,point[1]+normal[1]*offset];
+          w.raycaster.set(w.position.clone().set(p[0]*1.5,200,p[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=400;
+          const earth=w.raycaster.intersectObjects(terrain,false)[0];
+          const paving=w.raycaster.intersectObjects(group.children,false)[0];
+          return {point:p,earth:earth?.point.y/1.5,paving:paving?.point.y/1.5,material:paving?.object.name};
+        });
+      }));
+    const uphill=s.samplePolyline(g.retainedStreetAccess.points,2).slice(2,-1).map(p=>{
+      w.raycaster.set(w.position.clone().set(p[0]*1.5,200,p[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=400;
+      const earth=w.raycaster.intersectObjects(terrain,false)[0];
+      const paving=w.raycaster.intersectObjects(group.children,false)[0];
+      return {point:p,earth:earth?.point.y/1.5,paving:paving?.point.y/1.5,material:paving?.object.name};
+    });
     const exterior=[];
     for(const id of [351280742,1303802776,26694438,26694442]) {
       const feature=g.paths.find(p=>p.id===id),old=s.pathRibbon(feature.points,g.pathWidth(feature),.055,(x,z)=>g.featureElevation(feature,[x,z]));
@@ -124,7 +142,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       const point=points[Math.floor(points.length/2)];
       return {id,hits:rayHits([point[0]+.013,point[1]+.019])};
     });
-    return {streetSections,retainingHits,exterior,park};
+    return {streetSections,retainingHits,renderedStreets,uphill,exterior,park};
   `);
   for (const section of probes.streetSections) {
     for (const sample of section) {
@@ -133,6 +151,19 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     }
   }
   expect(probes.retainingHits).toBeGreaterThan(0);
+  for (const sample of [...probes.renderedStreets, ...probes.uphill]) {
+    expect(sample.paving, JSON.stringify(sample)).toBeDefined();
+    expect(sample.earth, JSON.stringify(sample)).toBeDefined();
+    expect(
+      sample.paving - sample.earth,
+      JSON.stringify(sample),
+    ).toBeGreaterThan(0.01);
+    expect(sample.paving - sample.earth, JSON.stringify(sample)).toBeLessThan(
+      0.15,
+    );
+  }
+  for (const sample of probes.uphill)
+    expect(sample.material, JSON.stringify(sample)).toBe('Paving: gravel');
   for (const point of [
     [-46.11, -39.77],
     [-49.87, 44.96],
