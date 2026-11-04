@@ -4718,11 +4718,13 @@ export function treePositions(): Point[] {
         add(point);
       }
   }
-  // Replant the tree displaced by the pump recess in the adjacent garden.
-  add([156, 220]);
   return trees.filter(
     ([x, z]) =>
-      !((x === 149 && z === 210) || (x === 153 && z === 216)) &&
+      !(
+        (x === 149 && z === 210) ||
+        (x === 153 && z === 216) ||
+        (x === 156 && z === 220)
+      ) &&
       !panoramaSites.some((site) => {
         const dx = x - site.point[0],
           dz = z - site.point[1];

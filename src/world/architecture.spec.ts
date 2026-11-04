@@ -125,6 +125,7 @@ it('opens real panorama windows above solid retaining masonry and covers the Seb
     expect(across(site.width / 6, 1.3).length).toBeGreaterThan(0);
     expect(across(0, 0.4).length).toBeGreaterThan(0);
     if (site.sheltered) {
+      expect(across(0, 4).length).toBeGreaterThan(0);
       const point = site.at(0, 2.4);
       const roof = new THREE.Raycaster(
         new THREE.Vector3(point[0], site.floor + 6, point[1]),
@@ -1311,9 +1312,20 @@ it('mounts Saint Sebastian and his shallow niche against the rampart instead of 
 it('gives the summer theatre a continuous walkable stage and grounded rows of seating', () => {
   const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
   const meshes: THREE.Mesh[] = [];
-  makeSummerTheatre((_color, geometry) =>
-    meshes.push(new THREE.Mesh(geometry, material)),
-  );
+  const lawns: THREE.Mesh[] = [];
+  makeSummerTheatre((_color, geometry, kind) => {
+    const mesh = new THREE.Mesh(geometry, material);
+    meshes.push(mesh);
+    if (kind === 'grass') lawns.push(mesh);
+  });
+  for (const v of [3, 8, 15]) {
+    const point = summerTheatre.at(0, v);
+    const hit = new THREE.Raycaster(
+      new THREE.Vector3(point[0], elevation(...point) + 1, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    ).intersectObjects(lawns)[0];
+    expect(hit?.point.y).toBeCloseTo(elevation(...point) + 0.025, 3);
+  }
   const stage = summerTheatre.stage;
   const floor = (stage.ground ?? elevation(...stage.point)) + stage.height;
   for (const u of [-3.5, 0, 3.5])

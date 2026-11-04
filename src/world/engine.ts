@@ -146,6 +146,7 @@ import {
   cemeteryArcades,
   cemeteryArcadeWallIds,
   streetFurniture,
+  summerTheatre,
   sculptureFootprintContains,
   riversideGallery,
   riversideGallerySupport,
@@ -942,6 +943,7 @@ export class World {
           '#807c74',
           groundPolygon(points, 0.04, elevation, [
             ...feature.holes,
+            summerTheatre.enclosure.points,
             ...riversideGallery.approaches.map((approach) => approach.polygon),
           ]),
           'rock',

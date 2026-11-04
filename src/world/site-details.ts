@@ -582,6 +582,11 @@ function makeHedges(add: AddGeometry) {
 }
 
 export function makeSummerTheatre(add: AddGeometry) {
+  add(
+    '#7b8959',
+    drapedPolygon(summerTheatre.enclosure.points, 0.025, elevation),
+    'grass',
+  );
   const place = (
     geometry: THREE.BufferGeometry,
     prop: SiteProp,

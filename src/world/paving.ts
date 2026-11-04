@@ -107,8 +107,9 @@ export function pavingStyle(feature: Feature): PavingSurface['style'] {
   if (isSidewalk(feature)) return { kind: 'cobble', color: '#b2b5ae' };
   if (
     [
-      587280816, 5016653, 255297801, 163474150, 784512319, 784512324, 255297764,
-      255297771, 698001342, 1303802775,
+      370193790, 494921186, 255297801, 163474148, 163474150, 784512319,
+      784512324, 255297764, 255297771, 698001342, 1303802775, 33879791,
+      542561031, 542561044, 255297803, 542561034,
     ].includes(feature.id) ||
     (['footway', 'path'].includes(feature.tags.highway ?? '') &&
       feature.tags.area !== 'yes' &&

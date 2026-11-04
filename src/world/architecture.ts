@@ -2087,7 +2087,7 @@ export function makePanoramaLookouts(add: AddGeometry) {
       ),
       'brick',
     );
-    const top = site.sheltered ? 3.05 : profile.top - site.floor;
+    const top = profile.top - site.floor;
     const panel = new THREE.Shape();
     panel.moveTo(-site.width / 2, 0.65);
     panel.lineTo(site.width / 2, 0.65);

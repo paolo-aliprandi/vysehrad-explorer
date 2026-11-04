@@ -70,19 +70,28 @@ function steepTriangles(geometry: THREE.BufferGeometry) {
 }
 
 describe('rationalized paving', () => {
-  it('uses gravel on the rotunda routes but lets the cobbled main street own their shared junction', () => {
-    const roads = [4646722, 5016653, 587280816].map(way);
+  it('keeps the main Leopold and cathedral streets cobbled and only the separate rotunda branch gravel', () => {
+    const roads = [
+      4646722, 5016653, 587280816, 494921190, 494921191, 370193790, 494921186,
+      163474148, 542561044,
+    ].map(way);
     const surfaces = pavingSurfaces(roads);
-    for (const road of roads.slice(1)) {
+    for (const road of roads) {
       expect(
         surfaces
           .filter((s) => s.feature.id === road.id)
-          .every((s) => s.style.kind === 'gravel'),
+          .every(
+            (s) =>
+              s.style.kind ===
+              ([370193790, 494921186, 163474148, 542561044].includes(road.id)
+                ? 'gravel'
+                : 'cobble'),
+          ),
       ).toBe(true);
       expect(surfaces.some((s) => s.feature.id === road.id)).toBe(true);
     }
     const atCrossing = surfaces.filter((s) =>
-      contains(s.polygons, [67.06, 69.93]),
+      contains(s.polygons, [67.76, 121.12]),
     );
     expect(atCrossing).toHaveLength(1);
     expect(atCrossing[0].style.kind).toBe('cobble');

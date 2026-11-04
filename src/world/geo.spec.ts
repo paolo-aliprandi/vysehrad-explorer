@@ -297,13 +297,14 @@ describe('screenshot geometry repairs', () => {
     const opening: Point = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
     expect(blocked(opening, standingElevation(opening))).toBe(false);
     const trees = treePositions();
-    for (const [index, zone] of requestedPlantingZones.entries())
+    for (const zone of requestedPlantingZones.slice(1))
       expect(
         trees.filter((point) => inside(point, zone)).length,
-      ).toBeGreaterThan(index === 0 ? 1 : 3);
+      ).toBeGreaterThan(3);
     for (const point of [
       [149, 210],
       [153, 216],
+      [156, 220],
     ])
       expect(trees).not.toContainEqual(point);
   });

@@ -42,6 +42,28 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   expect(
     await inspect('return w.scene.getObjectByName("Paving").children.length;'),
   ).toBe(2);
+  const streetMaterials = await inspect(`
+    const group=w.scene.getObjectByName('Paving');
+    w.scene.updateMatrixWorld(true);
+    return [
+      [63.333,107.199],
+      [4.733,57.589],
+      [90.898,106.034],
+      [106.383,79.129],
+      [15.328,-86.241],
+    ].map(point=>{
+      w.raycaster.set(w.position.clone().set(point[0]*1.5,300,point[1]*1.5),w.position.clone().set(0,-1,0));
+      w.raycaster.far=600;
+      return [...new Set(w.raycaster.intersectObjects(group.children,false).map(hit=>hit.object.name))];
+    });
+  `);
+  expect(streetMaterials).toEqual([
+    ['Paving: cobble'],
+    ['Paving: cobble'],
+    ['Paving: gravel'],
+    ['Paving: gravel'],
+    ['Paving: gravel'],
+  ]);
   expect(
     await inspect(`
     const g=await import('/src/world/geo.ts'),group=w.scene.getObjectByName('Paving');
