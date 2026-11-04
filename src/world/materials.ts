@@ -4,6 +4,8 @@ export type MaterialKind =
   | 'plaster'
   | 'stone'
   | 'rock'
+  | 'rubble'
+  | 'terracotta'
   | 'brick'
   | 'cobble'
   | 'mosaic'
@@ -192,6 +194,27 @@ export class Materials {
           context.lineWidth = 1;
           context.stroke();
         }
+    } else if (kind === 'rubble') {
+      for (let row = 0; row < 10; row++) {
+        let x = -70 + (row % 2) * 35;
+        while (x < 512) {
+          const width = 38 + random() * 62,
+            y = row * 52;
+          const shade = Math.round(160 + random() * 85);
+          const brick = random() < 0.1;
+          context.fillStyle = `rgb(${shade},${shade - (brick ? 34 : 3)},${shade - (brick ? 47 : 10)})`;
+          context.beginPath();
+          context.moveTo(x + 5, y + 4 + random() * 7);
+          context.lineTo(x + width * 0.5, y + 3);
+          context.lineTo(x + width - 3, y + 8);
+          context.lineTo(x + width - 5, y + 42 + random() * 5);
+          context.lineTo(x + width * 0.45, y + 49);
+          context.lineTo(x + 3, y + 43);
+          context.closePath();
+          context.fill();
+          x += width;
+        }
+      }
     } else if (kind === 'mosaic') {
       for (let row = 0; row < 32; row++)
         for (let col = 0; col < 32; col++) {
@@ -307,23 +330,25 @@ export function worldUVs(geometry: THREE.BufferGeometry, kind: MaterialKind) {
     normals = geometry.attributes.normal;
   const uv = new Float32Array(positions.count * 2);
   const scale =
-    kind === 'rock'
-      ? 8
-      : kind === 'grass'
-        ? 12
-        : kind === 'mosaic'
-          ? 2
-          : kind === 'gravel'
-            ? 3
-            : kind === 'slate'
-              ? 1.7
-              : kind === 'cobble'
+    kind === 'rubble'
+      ? 2
+      : kind === 'rock'
+        ? 8
+        : kind === 'grass'
+          ? 12
+          : kind === 'mosaic'
+            ? 2
+            : kind === 'gravel'
+              ? 3
+              : kind === 'slate'
                 ? 1.7
-                : kind === 'brick'
-                  ? 1.4
-                  : kind === 'stone'
-                    ? 3
-                    : 4.5;
+                : kind === 'cobble'
+                  ? 1.7
+                  : kind === 'brick'
+                    ? 1.4
+                    : kind === 'stone'
+                      ? 3
+                      : 4.5;
   for (let i = 0; i < positions.count; i++) {
     const x = positions.getX(i),
       y = positions.getY(i),

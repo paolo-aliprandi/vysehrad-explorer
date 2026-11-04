@@ -11,6 +11,19 @@ import {
 } from './lighting';
 import { idleController, type ControllerInput } from './gamepad';
 import {
+  chapelSites,
+  chapelBlocked,
+  makeChapelInterior,
+  makeLawrenceExterior,
+  type ChapelKind,
+} from './chapels';
+import {
+  advanceArrow,
+  launchArrow,
+  type ArrowFlight,
+  type ArrowImpact,
+} from './arrow-physics';
+import {
   Adventure,
   makeAdventureModels,
   makeDistressMarker,
@@ -24,6 +37,7 @@ import {
   type AdventureSnapshot,
   type GameMode,
   type Weapon,
+  type LandedArrow,
 } from './adventure';
 import {
   explorationPaths as paths,
@@ -165,7 +179,7 @@ export type Snapshot = {
   interaction: ActivityPrompt | null;
   seated: boolean;
   indoors: boolean;
-  interior: 'cathedral' | 'casemates' | null;
+  interior: 'cathedral' | 'casemates' | ChapelKind | null;
   wood: number;
   hour: number;
   controller: string | null;
@@ -458,9 +472,10 @@ export class World {
   }[] = [];
   private interior: ReturnType<typeof makeCathedralInterior>;
   private casemates: ReturnType<typeof makeCasemateInterior>;
+  private chapels: Record<ChapelKind, ReturnType<typeof makeChapelInterior>>;
   private foundCasemateNotes = new Set<string>();
   private indoorReturn: {
-    kind: 'cathedral' | 'casemates';
+    kind: 'cathedral' | 'casemates' | ChapelKind;
     position: THREE.Vector3;
     yaw: number;
     zoom: number;
@@ -504,11 +519,10 @@ export class World {
       opacity: 0.8,
     }),
   );
-  private arrows: {
+  private arrows: (ArrowFlight & {
     model: THREE.Group;
-    velocity: THREE.Vector3;
-    age: number;
-  }[] = [];
+  })[] = [];
+  private landedArrowModels = new Map<string, THREE.Group>();
   private fireSeat: { point: Point; angle: number };
   private raycaster = new THREE.Raycaster();
   private movementRay = new THREE.Raycaster();
@@ -620,11 +634,30 @@ export class World {
     });
     this.interior = makeCathedralInterior(this.surfaceMaterials);
     this.casemates = makeCasemateInterior(this.surfaceMaterials);
-    this.scene.add(this.npc, this.interior.group, this.casemates.group);
+    this.chapels = {
+      rotunda: makeChapelInterior('rotunda', this.surfaceMaterials),
+      lawrence: makeChapelInterior('lawrence', this.surfaceMaterials),
+    };
+    this.scene.add(
+      this.npc,
+      this.interior.group,
+      this.casemates.group,
+      this.chapels.rotunda.group,
+      this.chapels.lawrence.group,
+    );
     this.outdoorActivities = [
       ...benches,
       groundskeeper,
       cathedral,
+      ...(['rotunda', 'lawrence'] as const).map((kind) => ({
+        id: kind,
+        kind,
+        point: chapelSites[kind].approach,
+        label:
+          kind === 'rotunda'
+            ? 'Enter St. Martin’s Rotunda'
+            : 'Explore St. Lawrence’s ruins',
+      })),
       casemates,
       uphillCasemates,
       {
@@ -1142,6 +1175,10 @@ export class World {
     const tags = { ...parent?.tags, ...feature.tags };
     feature = { ...feature, tags };
     const ground = foundation(feature);
+    if (feature.id === chapelSites.lawrence.feature.id) {
+      makeLawrenceExterior(this.batch.bind(this));
+      return;
+    }
     if (feature.id === 560209917) {
       makeRotunda(feature, ground, this.batch.bind(this));
       return;
@@ -1616,7 +1653,7 @@ export class World {
       for (const kind of ['stick', 'sword', 'bow'] as const) {
         const weapon = makeWeapon(kind, this.surfaceMaterials);
         weapon.position.set(0, -0.6, 0.1);
-        weapon.rotation.x = kind === 'bow' ? 0 : Math.PI / 2;
+        weapon.rotation.x = Math.PI / 2;
         weapon.visible = false;
         hand.pivot.add(weapon);
         this.heldWeapons[kind] = weapon;
@@ -1726,7 +1763,19 @@ export class World {
     this.mode = mode;
     this.arrows.forEach((arrow) => this.removeArrow(arrow.model));
     this.arrows = [];
+    this.landedArrowModels.forEach((model) => this.removeArrow(model));
+    this.landedArrowModels.clear();
     this.adventure = new Adventure(progress);
+    for (const arrow of this.adventure.landedArrows.values()) {
+      const model = makeArrow(this.surfaceMaterials);
+      this.placeArrow(
+        model,
+        new THREE.Vector3(...arrow.position),
+        new THREE.Vector3(...arrow.direction),
+      );
+      this.adventureModels.group.add(model);
+      this.landedArrowModels.set(arrow.id, model);
+    }
     for (const weapon of Object.values(this.heldWeapons))
       weapon.visible = false;
     if (this.heldFood) this.heldFood.visible = false;
@@ -1914,10 +1963,67 @@ export class World {
       )
     );
   }
-  private activity() {
+  private activity():
+    | Activity
+    | (ActivityPrompt & { kind: 'adventure' | 'stand' })
+    | undefined {
     if (!this.active || this.paused || this.flying) return undefined;
-    if (this.seat) return { id: 'stand', label: 'Stand up' };
+    if (this.seat) return { id: 'stand', label: 'Stand up', kind: 'stand' };
     const point: Point = [this.position.x, this.position.z];
+    if (this.mode === 'adventure' && !this.indoorReturn) {
+      const arrow = [...this.adventure.landedArrows.values()]
+        .filter((arrow) => {
+          const target: Point = [arrow.position[0], arrow.position[2]];
+          if (
+            Math.hypot(target[0] - point[0], target[1] - point[1]) >=
+              1.8 / environmentScale ||
+            Math.abs(arrow.position[1] - this.position.y) >=
+              1.8 / environmentScale
+          )
+            return false;
+          const from = this.position
+            .clone()
+            .add(new THREE.Vector3(0, 1 / environmentScale, 0));
+          const to = new THREE.Vector3(...arrow.position).sub(from);
+          this.raycaster.set(
+            from.multiplyScalar(environmentScale),
+            to.clone().normalize(),
+          );
+          this.raycaster.far = Math.max(
+            0,
+            to.length() * environmentScale - 0.12,
+          );
+          return (
+            this.raycaster.intersectObjects(this.blockers, false).length === 0
+          );
+        })
+        .sort(
+          (a, b) =>
+            this.position.distanceToSquared(new THREE.Vector3(...a.position)) -
+            this.position.distanceToSquared(new THREE.Vector3(...b.position)),
+        )[0];
+      if (arrow)
+        return {
+          id: arrow.id,
+          label: 'Recover arrow',
+          kind: 'adventure' as const,
+        };
+    }
+    if (!this.indoorReturn) {
+      const church = nearbyActivity(
+        this.outdoorActivities.filter(
+          (activity) =>
+            activity.kind === 'rotunda' || activity.kind === 'lawrence',
+        ),
+        point,
+        this.position.y,
+      );
+      if (
+        church &&
+        Math.hypot(church.point[0] - point[0], church.point[1] - point[1]) < 2.1
+      )
+        return church;
+    }
     if (this.mode === 'adventure' && !this.indoorReturn) {
       const activity = this.adventure.nearby(
         point,
@@ -1949,7 +2055,17 @@ export class World {
                 label: `${this.foundCasemateNotes.has(note.id) ? 'Re-read' : 'Record'}: ${note.title}`,
               })),
             ]
-          : cathedralExits
+          : this.indoorReturn.kind === 'rotunda' ||
+              this.indoorReturn.kind === 'lawrence'
+            ? [
+                {
+                  id: 'chapel-exit',
+                  kind: 'exit' as const,
+                  point: chapelSites[this.indoorReturn.kind].exit,
+                  label: 'Return to Vyšehrad',
+                },
+              ]
+            : cathedralExits
         : this.outdoorActivities.filter(
             (item) => item.kind !== 'tree' || !this.felled.has(item.index),
           ),
@@ -2007,8 +2123,16 @@ export class World {
           : 'Walk closer to a bench, tree, fireplace, or the groundskeeper.',
       };
     switch (activity.kind) {
+      case 'stand':
+        this.stand();
+        return { kind: 'message', text: 'Back on your feet.' };
       case 'adventure': {
         const text = this.adventure.interact(activity.id);
+        const arrow = this.landedArrowModels.get(activity.id);
+        if (arrow) {
+          this.removeArrow(arrow);
+          this.landedArrowModels.delete(activity.id);
+        }
         if (activity.id.startsWith('checkpoint-')) {
           const id = activity.id.slice('checkpoint-'.length);
           if (!this.discovered.has(id)) {
@@ -2047,6 +2171,16 @@ export class World {
         return {
           kind: 'message',
           text: 'Inside Saints Peter & Paul. An illustrative nave, not a surveyed interior. F at the doors to leave.',
+        };
+      case 'rotunda':
+      case 'lawrence':
+        this.enterInterior(activity.kind);
+        return {
+          kind: 'message',
+          text:
+            activity.kind === 'rotunda'
+              ? 'Inside St. Martin’s Rotunda. An illustrative Romanesque interior; F at the door to leave.'
+              : 'St. Lawrence’s archaeological remains. Low foundations and interpretive Romanesque floor tiles, not a reconstruction of a standing basilica. F at the entrance to leave.',
         };
       case 'casemates':
         this.enterInterior('casemates', activity.id === 'casemates-uphill');
@@ -2175,17 +2309,26 @@ export class World {
   private get activeInterior() {
     return this.indoorReturn?.kind === 'casemates'
       ? this.casemates
-      : this.interior;
+      : this.indoorReturn?.kind === 'rotunda' ||
+          this.indoorReturn?.kind === 'lawrence'
+        ? this.chapels[this.indoorReturn.kind]
+        : this.interior;
   }
   private interiorBlocked(point: Point) {
     return this.indoorReturn?.kind === 'casemates'
       ? casemateBlocked(point)
-      : indoorBlocked(point);
+      : this.indoorReturn?.kind === 'rotunda' ||
+          this.indoorReturn?.kind === 'lawrence'
+        ? chapelBlocked(this.indoorReturn.kind, point)
+        : indoorBlocked(point);
   }
   private indoorFloor(point: Point) {
     return this.indoorReturn?.kind === 'casemates' ? casemateFloor(point) : 0;
   }
-  private enterInterior(kind: 'cathedral' | 'casemates', uphill = false) {
+  private enterInterior(
+    kind: 'cathedral' | 'casemates' | ChapelKind,
+    uphill = false,
+  ) {
     this.indoorReturn = {
       kind,
       position: this.position.clone(),
@@ -2204,11 +2347,18 @@ export class World {
         child.visible = false;
       }
     this.activeInterior.group.visible = true;
+    if (kind === 'lawrence') this.sky.visible = true;
     this.applyDaylight();
     this.position.set(
       uphill ? 38 : 0,
       uphill ? casemateFloor([38, -34.5]) : 0,
-      uphill ? -34.5 : kind === 'casemates' ? 2 : 13,
+      uphill
+        ? -34.5
+        : kind === 'casemates'
+          ? 2
+          : kind === 'rotunda' || kind === 'lawrence'
+            ? chapelSites[kind].spawn[1]
+            : 13,
     );
     this.yaw = uphill ? -Math.PI / 2 : 0;
     this.zoom = 5;
@@ -2432,7 +2582,7 @@ export class World {
     )
       return 'Stand outdoors to use your weapon.';
     if (this.adventure.weapon === 'bow') return this.shoot();
-    this.avatar.rotation.y = this.yaw + Math.PI;
+    this.avatar.rotation.y = Math.PI - this.yaw;
     return this.adventure.attack(
       [this.position.x, this.position.z],
       this.position.y,
@@ -2468,6 +2618,8 @@ export class World {
       (this.controller.aim || this.keys.has('KeyZ'));
     const result = this.adventure.looseArrow();
     if (result !== 'Arrow released.') return result;
+    this.avatar.rotation.y = Math.PI - this.yaw;
+    this.avatar.updateWorldMatrix(true, true);
     this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     this.raycaster.far = 100;
     const hit = this.raycaster.intersectObjects(this.blockers, false)[0];
@@ -2488,21 +2640,43 @@ export class World {
         target = impact;
       }
     }
-    const origin = this.position
-      .clone()
-      .add(new THREE.Vector3(0, 1.3 / environmentScale, 0));
-    const velocity = target
-      .clone()
-      .sub(origin)
-      .normalize()
-      .multiplyScalar(45 / environmentScale);
+    const bow = this.heldWeapons.bow;
+    if (!bow) throw new Error('Missing equipped bow model.');
+    const origin = bow
+      .localToWorld(new THREE.Vector3(0, 0.5, 0))
+      .divideScalar(environmentScale);
+    if (
+      target.clone().sub(origin).dot(aimRay.direction) <
+      0.25 / environmentScale
+    )
+      target = origin
+        .clone()
+        .addScaledVector(aimRay.direction, 100 / environmentScale);
+    const flight = launchArrow(
+      origin,
+      target,
+      60 / environmentScale,
+      9.8 / environmentScale,
+    );
     const model = makeArrow(this.surfaceMaterials);
-    model.scale.setScalar(1 / environmentScale);
-    model.position.copy(origin);
-    model.lookAt(origin.clone().add(velocity));
+    model.name = 'Flying arrow';
+    this.placeArrow(model, flight.position, flight.velocity);
     this.adventureModels.group.add(model);
-    this.arrows.push({ model, velocity, age: 0 });
+    this.arrows.push({ model, ...flight });
     return result;
+  }
+
+  private placeArrow(
+    model: THREE.Group,
+    tip: THREE.Vector3,
+    velocity: THREE.Vector3,
+  ) {
+    const direction = velocity.clone().normalize();
+    model.scale.setScalar(1 / environmentScale);
+    model.position
+      .copy(tip)
+      .addScaledVector(direction, -0.595 / environmentScale);
+    model.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), direction);
   }
 
   private removeArrow(model: THREE.Group) {
@@ -2525,46 +2699,59 @@ export class World {
 
   private updateArrows(delta: number) {
     this.arrows = this.arrows.filter((arrow) => {
-      arrow.age += delta;
-      const from = arrow.model.position.clone();
-      arrow.velocity.y -= (9.8 * delta) / environmentScale;
-      const next = from.clone().addScaledVector(arrow.velocity, delta);
-      const distance = from.distanceTo(next);
-      const direction = next.clone().sub(from).normalize();
-      this.raycaster.set(
-        from.clone().multiplyScalar(environmentScale),
-        direction,
+      const impact = advanceArrow(
+        arrow,
+        delta,
+        9.8 / environmentScale,
+        (from, next) => {
+          const distance = from.distanceTo(next);
+          if (distance < 1e-8) return null;
+          const direction = next.clone().sub(from).normalize();
+          this.raycaster.set(
+            from.clone().multiplyScalar(environmentScale),
+            direction,
+          );
+          this.raycaster.far = distance * environmentScale;
+          const wall = this.raycaster.intersectObjects(this.blockers, false)[0];
+          let nearest = wall ? wall.distance / environmentScale : distance + 1;
+          let hit: ArrowImpact | null = wall
+            ? { point: wall.point.clone().divideScalar(environmentScale) }
+            : null;
+          const ray = new THREE.Ray(from, direction);
+          for (const enemy of this.adventure.enemies) {
+            if (this.adventure.defeated.has(enemy.id)) continue;
+            const point = ray.intersectSphere(
+              this.enemyHitSphere(enemy.point),
+              new THREE.Vector3(),
+            );
+            const hitDistance = point ? from.distanceTo(point) : Infinity;
+            if (point && hitDistance <= distance && hitDistance < nearest) {
+              nearest = hitDistance;
+              hit = { point, enemy: enemy.id };
+            }
+          }
+          return hit;
+        },
       );
-      this.raycaster.far = distance * environmentScale;
-      const wall = this.raycaster.intersectObjects(this.blockers, false)[0];
-      let nearest = wall ? wall.distance / environmentScale : distance + 1;
-      let victim: string | null = null;
-      const ray = new THREE.Ray(from, direction);
-      for (const enemy of this.adventure.enemies) {
-        if (this.adventure.defeated.has(enemy.id)) continue;
-        const impact = ray.intersectSphere(
-          this.enemyHitSphere(enemy.point),
-          new THREE.Vector3(),
-        );
-        const hitDistance = impact ? from.distanceTo(impact) : Infinity;
-        if (hitDistance <= distance && hitDistance < nearest) {
-          nearest = hitDistance;
-          victim = enemy.id;
-        }
-      }
-      if (victim)
-        this.adventure.hitEnemy(victim, 3, [direction.x, direction.z]);
-      if (
-        victim ||
-        wall ||
-        arrow.age > 3 ||
-        next.y < standingElevation([next.x, next.z]) - 0.1
-      ) {
+      if (impact?.enemy) {
+        const direction = arrow.velocity.clone().normalize();
+        this.adventure.hitEnemy(impact.enemy, 3, [direction.x, direction.z]);
         this.removeArrow(arrow.model);
         return false;
       }
-      arrow.model.position.copy(next);
-      arrow.model.lookAt(next.clone().add(arrow.velocity));
+      this.placeArrow(arrow.model, arrow.position, arrow.velocity);
+      if (impact) {
+        const direction = arrow.velocity.clone().normalize();
+        const landed: LandedArrow = {
+          id: `landed-arrow-${crypto.randomUUID()}`,
+          position: arrow.position.toArray(),
+          direction: direction.toArray(),
+        };
+        arrow.model.name = 'Recoverable arrow';
+        this.adventure.landedArrows.set(landed.id, landed);
+        this.landedArrowModels.set(landed.id, arrow.model);
+        return false;
+      }
       return true;
     });
   }
@@ -3020,7 +3207,12 @@ export class World {
         environmentScale;
       this.avatar.position.x += this.adventure.hurtDirection[0] * recoil;
       this.avatar.position.z += this.adventure.hurtDirection[1] * recoil;
-      if (this.adventure.aiming) this.avatar.rotation.y = this.yaw + Math.PI;
+      if (
+        this.adventure.aiming ||
+        this.adventure.attackTime > 0 ||
+        this.adventure.shotTime > 0
+      )
+        this.avatar.rotation.y = Math.PI - this.yaw;
     }
     this.avatar.position.y += this.seat
       ? 0.45 - (0.73 * avatarScale) / environmentScale

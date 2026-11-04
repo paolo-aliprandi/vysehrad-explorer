@@ -21,6 +21,8 @@ export type ActivityKind =
   | 'npc'
   | 'tree'
   | 'cathedral'
+  | 'rotunda'
+  | 'lawrence'
   | 'casemates'
   | 'casemate-note'
   | 'exit';
@@ -38,6 +40,8 @@ export type Activity = ActivityLocation &
           | 'fire'
           | 'npc'
           | 'cathedral'
+          | 'rotunda'
+          | 'lawrence'
           | 'casemates'
           | 'casemate-note'
           | 'exit';

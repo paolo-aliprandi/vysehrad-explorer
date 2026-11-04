@@ -17,6 +17,31 @@ import { visitorRouteClear } from './pedestrians';
 export type GameMode = 'chill' | 'adventure';
 export type Weapon = 'stick' | 'sword' | 'bow';
 export const enemyMaxHealth = 8;
+export type LandedArrow = {
+  id: string;
+  position: [number, number, number];
+  direction: [number, number, number];
+};
+function isLandedArrow(value: unknown): value is LandedArrow {
+  if (!value || typeof value !== 'object') return false;
+  const vector = (value: unknown): value is [number, number, number] =>
+    Array.isArray(value) &&
+    value.length === 3 &&
+    value.every(
+      (component) =>
+        typeof component === 'number' && Number.isFinite(component),
+    );
+  return (
+    'id' in value &&
+    typeof value.id === 'string' &&
+    value.id.startsWith('landed-arrow-') &&
+    'position' in value &&
+    vector(value.position) &&
+    'direction' in value &&
+    vector(value.direction) &&
+    Math.abs(Math.hypot(...value.direction) - 1) < 0.001
+  );
+}
 export type AdventureProgress = {
   explored: string[];
   weapon: Weapon | null;
@@ -27,6 +52,7 @@ export type AdventureProgress = {
   melee?: 'stick' | 'sword' | null;
   arrows?: number;
   collectedArrows?: string[];
+  landedArrows?: LandedArrow[];
 };
 export type AdventureSnapshot = AdventureProgress & {
   health: number;
@@ -202,10 +228,19 @@ export function readAdventure(
         value.arrows < 0)) ||
     ('collectedArrows' in value &&
       (!Array.isArray(value.collectedArrows) ||
-        value.collectedArrows.some((id) => typeof id !== 'string')))
+        value.collectedArrows.some((id) => typeof id !== 'string'))) ||
+    ('landedArrows' in value &&
+      (!Array.isArray(value.landedArrows) ||
+        !value.landedArrows.every(isLandedArrow) ||
+        new Set(value.landedArrows.map((arrow) => arrow.id)).size !==
+          value.landedArrows.length))
   )
     throw new Error('Saved adventure progress is invalid.');
   return {
+    landedArrows:
+      'landedArrows' in value && Array.isArray(value.landedArrows)
+        ? value.landedArrows.filter(isLandedArrow)
+        : [],
     explored: [
       ...new Set(
         value.explored.filter((id) =>
@@ -265,6 +300,7 @@ export class Adventure {
   melee: 'stick' | 'sword' | null;
   arrows: number;
   collectedArrows: Set<string>;
+  landedArrows: Map<string, LandedArrow>;
   aiming = false;
   shotTime = 0;
   lastCheckpoint: string | null;
@@ -304,6 +340,9 @@ export class Adventure {
         : null);
     this.arrows = progress.arrows ?? 0;
     this.collectedArrows = new Set(progress.collectedArrows ?? []);
+    this.landedArrows = new Map(
+      (progress.landedArrows ?? []).map((arrow) => [arrow.id, arrow]),
+    );
     this.explored = new Set(progress.explored);
     this.defeated = new Set(progress.defeated);
     this.lastCheckpoint = progress.explored.at(-1) ?? null;
@@ -324,6 +363,7 @@ export class Adventure {
       melee: this.melee,
       arrows: this.arrows,
       collectedArrows: [...this.collectedArrows],
+      landedArrows: [...this.landedArrows.values()],
       civiliansInDanger: [...this.civilians.values()].filter(
         (civilian) => civilian.frightened > 0 || civilian.recovering > 0,
       ).length,
@@ -384,6 +424,10 @@ export class Adventure {
   }
 
   interact(id: string) {
+    if (this.landedArrows.delete(id)) {
+      this.arrows++;
+      return 'Recovered 1 arrow.';
+    }
     const arrows = arrowPickups.find((item) => item.id === id);
     if (arrows) {
       if (this.collectedArrows.has(id))
@@ -729,6 +773,7 @@ export function makeWeapon(kind: Weapon, materials: Materials) {
     add(
       new THREE.TorusGeometry(0.48, 0.035, 6, 24, Math.PI)
         .rotateZ(-Math.PI / 2)
+        .rotateY(-Math.PI / 2)
         .translate(0, 0.5, 0),
       '#96744b',
     );
@@ -758,20 +803,34 @@ export function makeArrow(materials: Materials) {
   const arrow = new THREE.Group();
   arrow.add(
     new THREE.Mesh(
-      new THREE.CylinderGeometry(0.018, 0.018, 0.9, 5).rotateX(Math.PI / 2),
+      new THREE.CylinderGeometry(0.0075, 0.0075, 0.9, 6).rotateX(Math.PI / 2),
       materials.get('wood', '#c4aa78'),
     ),
     new THREE.Mesh(
-      new THREE.ConeGeometry(0.045, 0.15, 4)
+      new THREE.ConeGeometry(0.025, 0.145, 4)
         .rotateX(Math.PI / 2)
-        .translate(0, 0, 0.52),
+        .translate(0, 0, 0.5225),
       materials.get('metal', '#d2dadb'),
     ),
-    new THREE.Mesh(
-      new THREE.BoxGeometry(0.15, 0.015, 0.2).translate(0, 0, -0.3),
-      materials.get('plaster', '#e7dfc9'),
-    ),
   );
+  for (let fin = 0; fin < 3; fin++) {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        [0, 0, -0.43, 0.055, 0, -0.32, 0.055, 0, -0.22, 0, 0, -0.26],
+        3,
+      ),
+    );
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+    geometry.setAttribute(
+      'uv',
+      new THREE.Float32BufferAttribute([0, 0, 1, 0.3, 1, 1, 0, 1], 2),
+    );
+    geometry.computeVertexNormals();
+    geometry.rotateZ((fin * Math.PI * 2) / 3);
+    arrow.add(new THREE.Mesh(geometry, materials.get('plaster', '#e7dfc9')));
+  }
   return arrow;
 }
 

@@ -493,6 +493,7 @@ export function App() {
         melee: snapshot.adventure.melee,
         arrows: snapshot.adventure.arrows,
         collectedArrows: snapshot.adventure.collectedArrows,
+        landedArrows: snapshot.adventure.landedArrows,
       })
     : null;
   useEffect(() => {
@@ -1002,7 +1003,11 @@ export function App() {
             {snapshot.indoors
               ? snapshot.interior === 'casemates'
                 ? 'Vyšehrad casemates · underground interpretation'
-                : 'Saints Peter & Paul · interior sketch'
+                : snapshot.interior === 'rotunda'
+                  ? 'St. Martin’s Rotunda · interior interpretation'
+                  : snapshot.interior === 'lawrence'
+                    ? 'St. Lawrence · archaeological remains'
+                    : 'Saints Peter & Paul · interior sketch'
               : snapshot.seated
                 ? 'Taking a moment'
                 : near
@@ -1189,7 +1194,11 @@ export function App() {
                 <p className="interior-map-note">
                   {snapshot.interior === 'casemates'
                     ? 'Entrance → vaulted passages → Gorlice'
-                    : 'An illustrative cathedral nave.'}
+                    : snapshot.interior === 'rotunda'
+                      ? 'Romanesque nave, domed ceiling and altar apse. An illustrative interior.'
+                      : snapshot.interior === 'lawrence'
+                        ? 'Open-air foundations and interpretive hexagonal floor tiles; not a standing church.'
+                        : 'An illustrative cathedral nave.'}
                   <br />
                   {snapshot.interior === 'casemates'
                     ? 'Green doors: return entrance, or uphill branch toward Na Hradbách. F to leave.'

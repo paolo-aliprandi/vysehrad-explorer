@@ -185,6 +185,37 @@ test('keeps hidden-UI jumps hidden, buys meals, aims finite arrows and renders t
   await expect.poll(() => inspect('return w.adventure.arrows;')).toBe(7);
   await expect.poll(() => inspect('return w.arrows.length;')).toBe(0);
   expect(await inspect('return w.adventure.enemies[0].health;')).toBe(8);
+  await expect
+    .poll(() => inspect('return w.adventure.landedArrows.size;'))
+    .toBe(1);
+  const landed = await inspect(`
+    const arrow=[...w.adventure.landedArrows.values()][0];
+    const model=w.landedArrowModels.get(arrow.id);
+    w.scene.updateMatrixWorld(true);
+    const direction=w.position.clone().set(0,0,1).transformDirection(model.matrixWorld);
+    return { ...arrow, alignment: direction.dot(w.position.clone().fromArray(arrow.direction)) };
+  `);
+  expect(landed.alignment).toBeGreaterThan(0.999);
+  await expect
+    .poll(() =>
+      inspect(
+        `return JSON.parse(localStorage.getItem('vysehrad-adventure-v1')).landedArrows?.length;`,
+      ),
+    )
+    .toBe(1);
+  await inspect(`
+    const g=await import('/src/world/geo.ts'),p=${JSON.stringify(landed.position)};
+    const dx=w.position.x-p[0],dz=w.position.z-p[2],distance=Math.hypot(dx,dz);
+    const approach=[p[0]+dx/distance*.7,p[2]+dz/distance*.7];
+    w.position.set(approach[0],g.standingElevation(approach),approach[1]);w.jumpVelocity=0;
+  `);
+  await expect(
+    page.getByRole('button', { name: 'Recover arrow' }),
+  ).toBeVisible();
+  await tap(1);
+  await expect.poll(() => inspect('return w.adventure.arrows;')).toBe(8);
+  expect(await inspect('return w.adventure.landedArrows.size;')).toBe(0);
+  expect(await inspect('return w.landedArrowModels.size;')).toBe(0);
   await inspect(`
     const {standingElevation}=await import('/src/world/geo.ts');
     const {enemySpawns}=await import('/src/world/adventure.ts');
@@ -204,6 +235,12 @@ test('keeps hidden-UI jumps hidden, buys meals, aims finite arrows and renders t
   await alignAim();
   await expect(page.locator('.bow-crosshair')).toBeVisible();
   expect(
+    await inspect(`
+    return w.position.clone().set(0,0,1).applyQuaternion(w.avatar.quaternion)
+      .dot(w.position.clone().set(Math.sin(w.yaw),0,-Math.cos(w.yaw)));
+  `),
+  ).toBeGreaterThan(0.999);
+  expect(
     await inspect(
       'return w.adventurePathClear([w.position.x,w.position.z],w.adventure.enemies[0].point);',
     ),
@@ -212,6 +249,7 @@ test('keeps hidden-UI jumps hidden, buys meals, aims finite arrows and renders t
   await expect
     .poll(() => inspect('return w.adventure.enemies[0].health;'))
     .toBe(5);
+  expect(await inspect('return w.adventure.landedArrows.size;')).toBe(0);
   await expect
     .poll(() =>
       inspect('return w.adventureModels.enemyEffects[0].health.visible;'),
@@ -236,7 +274,7 @@ test('keeps hidden-UI jumps hidden, buys meals, aims finite arrows and renders t
   await expect
     .poll(() => inspect('return w.adventureModels.enemies[0].visible;'))
     .toBe(false);
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     await page.waitForTimeout(670);
     await tap(7);
   }
@@ -270,6 +308,13 @@ test('keeps hidden-UI jumps hidden, buys meals, aims finite arrows and renders t
       hit.point.y/1.5>g.elevation(...p)+.5);
   `),
   ).toBe(true);
+  expect(
+    await inspect(`
+    w.adventure.melee='sword';w.switchWeapon();w.yaw=-.8;w.attack();
+    return w.position.clone().set(0,0,1).applyQuaternion(w.avatar.quaternion)
+      .dot(w.position.clone().set(Math.sin(w.yaw),0,-Math.cos(w.yaw)));
+  `),
+  ).toBeGreaterThan(0.999);
   await inspect(`
     const g=await import('/src/world/geo.ts');
     w.position.set(-110,g.standingElevation([-110,-35]),-35);

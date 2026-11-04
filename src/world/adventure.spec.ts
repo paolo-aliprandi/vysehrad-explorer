@@ -14,6 +14,48 @@ import { landmarks, standingElevation, type Point } from './geo';
 import { visitorRouteClear } from './pedestrians';
 
 describe('knight adventure', () => {
+  it('saves missed arrows at their impact pose and recovers each arrow only once', () => {
+    const adventure = new Adventure({
+      explored: [],
+      weapon: 'bow',
+      defeated: [],
+      hasBow: true,
+      arrows: 2,
+    });
+    adventure.landedArrows.set('landed-arrow-test', {
+      id: 'landed-arrow-test',
+      position: [80, 31, 112],
+      direction: [0, -0.6, -0.8],
+    });
+    const restored = new Adventure(
+      readAdventure({ getItem: () => JSON.stringify(adventure.snapshot()) }),
+    );
+    expect(restored.landedArrows.get('landed-arrow-test')).toEqual(
+      adventure.landedArrows.get('landed-arrow-test'),
+    );
+    expect(restored.interact('landed-arrow-test')).toBe('Recovered 1 arrow.');
+    expect(restored.arrows).toBe(3);
+    expect(restored.landedArrows.size).toBe(0);
+    expect(() => restored.interact('landed-arrow-test')).toThrow(
+      'Unknown adventure checkpoint',
+    );
+    expect(restored.arrows).toBe(3);
+    expect(() =>
+      readAdventure({
+        getItem: () =>
+          JSON.stringify({
+            ...adventure.snapshot(),
+            landedArrows: [
+              {
+                id: 'landed-arrow-bad',
+                position: [0, 1, 2],
+                direction: [0, 0, 0],
+              },
+            ],
+          }),
+      }),
+    ).toThrow('invalid');
+  });
   it('restarts cleared raids without erasing equipment, coins, arrows or the explored chart', () => {
     const adventure = new Adventure({
       explored: ['rotunda'],
