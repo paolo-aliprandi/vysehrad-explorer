@@ -824,7 +824,7 @@ export function continuousWall(
     );
     if (!leftIsInward) normal = [-normal[0], -normal[1]];
     const thickness = typeof width === 'number' ? width : width(point);
-    const { inset, footing, batter } = retainedWallOffsets(
+    const { inset, outer, footing, batter } = retainedWallOffsets(
       point,
       thickness,
       heights[i],
@@ -835,8 +835,8 @@ export function continuousWall(
     ];
     return {
       top: leftIsInward
-        ? { left: at(inset + thickness), right: at(inset) }
-        : { left: at(inset), right: at(inset + thickness) },
+        ? { left: at(inset + thickness), right: at(outer) }
+        : { left: at(outer), right: at(inset + thickness) },
       bottom: leftIsInward
         ? { left: at(footing), right: at(-batter) }
         : { left: at(-batter), right: at(footing) },

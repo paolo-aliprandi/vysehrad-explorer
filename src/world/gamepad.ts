@@ -9,7 +9,9 @@ export type ControllerAction =
   | 'previous'
   | 'next'
   | 'shoot'
-  | 'equip';
+  | 'equip'
+  | 'read'
+  | 'readScroll';
 // Triggers remain analog for aiming and zoom; firing is edge-triggered.
 
 export type ControllerInput = {
@@ -55,6 +57,8 @@ const buttons: readonly (readonly [number, ControllerAction])[] = [
   [11, 'flight'],
   [7, 'shoot'],
   [4, 'equip'],
+  [12, 'read'],
+  [13, 'readScroll'],
 ];
 
 export class ControllerReader {

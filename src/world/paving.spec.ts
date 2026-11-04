@@ -70,6 +70,23 @@ function steepTriangles(geometry: THREE.BufferGeometry) {
 }
 
 describe('rationalized paving', () => {
+  it('uses gravel on the rotunda routes but lets the cobbled main street own their shared junction', () => {
+    const roads = [4646722, 5016653, 587280816].map(way);
+    const surfaces = pavingSurfaces(roads);
+    for (const road of roads.slice(1)) {
+      expect(
+        surfaces
+          .filter((s) => s.feature.id === road.id)
+          .every((s) => s.style.kind === 'gravel'),
+      ).toBe(true);
+      expect(surfaces.some((s) => s.feature.id === road.id)).toBe(true);
+    }
+    const atCrossing = surfaces.filter((s) =>
+      contains(s.polygons, [67.06, 69.93]),
+    );
+    expect(atCrossing).toHaveLength(1);
+    expect(atCrossing[0].style.kind).toBe('cobble');
+  });
   it('fills the Charles IV plaza once instead of drawing a road around its perimeter over the crossing paths', () => {
     const statue: Point = [576.67, -496.15];
     const nearby = paths.filter(

@@ -31,7 +31,7 @@ import {
   onHillDetail,
   splitRockySlopes,
 } from './landscape';
-import { pavingSurfaces, pavingGeometry } from './paving';
+import { pavingSurfaces, pavingGeometry, upperPromenadePaving } from './paving';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   Materials,
@@ -58,6 +58,7 @@ import {
   makeFence,
   makeRotunda,
   makeEnclosureDetails,
+  makePanoramaLookouts,
 } from './architecture';
 import { makeMonuments } from './monuments';
 import { makeNuselskyBridge } from './bridge';
@@ -138,6 +139,9 @@ import {
   onCourtBankTerrain,
   courtBankBoundary,
   onCliffTerrain,
+  onExposedRampartBank,
+  panoramaSites,
+  panoramaOpening,
   exposedRocks,
   cemeteryArcades,
   cemeteryArcadeWallIds,
@@ -915,6 +919,7 @@ export class World {
   private makeFeatures() {
     makePassages(this.batch.bind(this));
     makeApproach(this.batch.bind(this));
+    makePanoramaLookouts(this.batch.bind(this));
     for (const feature of features) {
       const { tags, points } = feature;
       if (points.length < 4) continue;
@@ -1000,6 +1005,20 @@ export class World {
       if (cemeteryArcadeWallIds.has(feature.id)) continue;
       for (const points of rampartWallRuns(feature)) {
         const samples = samplePolyline(points, 0.9);
+        if (feature.id === 1532977610) {
+          samples.push(
+            ...panoramaSites
+              .flatMap((site) => [
+                site.at(-site.width / 2),
+                site.at(site.width / 2),
+              ])
+              .filter((point) => projectRoute(point, points).distance < 0.01),
+          );
+          samples.sort(
+            (a, b) =>
+              projectRoute(a, points).along - projectRoute(b, points).along,
+          );
+        }
         let run: Point[] = [];
         const fence = feature.tags.barrier === 'fence';
         let suspended = false;
@@ -1057,6 +1076,8 @@ export class World {
             if (previous) run.push(previous);
           }
           if (
+            (feature.id === 1532977610 && panoramaOpening(point)) ||
+            (fence && onExposedRampartBank(point)) ||
             (cover?.id === 51700613 &&
               !fence &&
               projectRoute(point, upperPromenade).distance < 1.8) ||
@@ -1080,7 +1101,7 @@ export class World {
         geometries: THREE.BufferGeometry[];
       }
     >();
-    for (const surface of pavingSurfaces(paths)) {
+    for (const surface of pavingSurfaces([...paths, upperPromenadePaving])) {
       const geometry = pavingGeometry(surface);
       if (!geometry.attributes.position.count) {
         geometry.dispose();

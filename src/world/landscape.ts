@@ -4,6 +4,7 @@ import {
   inside,
   courtBankBoundary,
   featureElevation,
+  onExposedRampartBank,
   type Feature,
   type Point,
 } from './geo';
@@ -99,7 +100,12 @@ export function splitRockySlopes(source: THREE.BufferGeometry) {
       [(a.x + b.x + c.x) / 3, (a.z + b.z + c.z) / 3],
       courtBankBoundary,
     );
-    (slope > (exterior ? 0.55 : 0.9) ? stone : grass).push(...triangle);
+    const exposed =
+      exterior &&
+      onExposedRampartBank([(a.x + b.x + c.x) / 3, (a.z + b.z + c.z) / 3]);
+    (exposed || slope > (exterior ? 0.55 : 0.9) ? stone : grass).push(
+      ...triangle,
+    );
   }
   if (!stone.length) return { ground: source, rock: null };
   const rocky = source.clone();

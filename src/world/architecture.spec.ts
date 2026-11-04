@@ -7,6 +7,7 @@ import {
   makeSlavin,
   makeCemeteryArcade,
   makeEnclosureDetails,
+  makePanoramaLookouts,
   makeCemeteryGate,
   makeCathedralForecourt,
   cathedralEntrance,
@@ -77,6 +78,7 @@ import {
   aveMariaFrontage,
   gardenExitAccess,
   summerTheatre,
+  panoramaSites,
 } from './geo';
 import {
   pathRibbon,
@@ -89,6 +91,7 @@ import {
 import { makeMonuments } from './monuments';
 import { makePassages, makeApproach, makeRiversideDoorways } from './passages';
 import { roof } from './engine';
+import { pavingGeometry, pavingSurfaces, upperPromenadePaving } from './paving';
 import {
   makeStreetFrontage,
   pevnostiHedgePoints,
@@ -100,6 +103,39 @@ import {
 } from './site-details';
 import { makeNuselskyBridge, nuselskyBridge } from './bridge';
 import { makeRiversideGallery } from './gallery';
+
+it('opens real panorama windows above solid retaining masonry and covers the Sebastian lookout with a timber roof', () => {
+  const geometries: THREE.BufferGeometry[] = [];
+  makePanoramaLookouts((_color, geometry) => geometries.push(geometry));
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const meshes = geometries.map(
+    (geometry) => new THREE.Mesh(geometry, material),
+  );
+  for (const site of panoramaSites) {
+    const across = (u: number, height: number) => {
+      const point = site.at(u, 8);
+      return new THREE.Raycaster(
+        new THREE.Vector3(point[0], site.floor + height, point[1]),
+        new THREE.Vector3(-site.inward[0], 0, -site.inward[1]),
+        0,
+        10,
+      ).intersectObjects(meshes);
+    };
+    expect(across(0, 1.3)).toHaveLength(0);
+    expect(across(site.width / 6, 1.3).length).toBeGreaterThan(0);
+    expect(across(0, 0.4).length).toBeGreaterThan(0);
+    if (site.sheltered) {
+      const point = site.at(0, 2.4);
+      const roof = new THREE.Raycaster(
+        new THREE.Vector3(point[0], site.floor + 6, point[1]),
+        new THREE.Vector3(0, -1, 0),
+      ).intersectObjects(meshes)[0];
+      expect(roof.point.y).toBeGreaterThan(site.floor + 2.8);
+    }
+  }
+  geometries.forEach((geometry) => geometry.dispose());
+  material.dispose();
+});
 
 describe('screenshot geometry repairs', () => {
   it('supports the tower-side cemetery roof corner and its return with grounded solid columns', () => {
@@ -1989,8 +2025,13 @@ it('renders a solid upper promenade and genuinely open lower galleries, not eart
     0,
     0.8,
   );
-  expect(down.intersectObjects(meshes)[0]?.point.y).toBeCloseTo(
-    upper + 0.06,
+  const paving = pavingSurfaces([upperPromenadePaving]).map((surface) => {
+    const geometry = pavingGeometry(surface);
+    geometries.push(geometry);
+    return new THREE.Mesh(geometry, material);
+  });
+  expect(down.intersectObjects([...meshes, ...paving])[0]?.point.y).toBeCloseTo(
+    upper + 0.055,
     3,
   );
   const frame = gateFrame(gate);

@@ -15,6 +15,8 @@ import {
   pathWidth,
   projectRoute,
   rampartTerrace,
+  onExposedRampartBank,
+  upperPromenade,
   stairFlights,
   stairwellFootprint,
   type Feature,
@@ -27,6 +29,12 @@ export type PavingSurface = {
   feature: Feature;
   polygons: MultiPolygon;
   style: { kind: PavingKind; color: string };
+};
+export const upperPromenadePaving: Feature = {
+  id: -51700613,
+  points: upperPromenade,
+  holes: [],
+  tags: { highway: 'footway', surface: 'compacted', bridge: 'yes', width: '3' },
 };
 
 function polygonBoolean(
@@ -78,11 +86,14 @@ function polygonBoolean(
   );
 }
 
-const parks = features.filter((feature) =>
-  ['park', 'garden'].includes(feature.tags.leisure ?? ''),
+const parks = features.filter(
+  (feature) =>
+    ['park', 'garden'].includes(feature.tags.leisure ?? '') ||
+    feature.tags.landuse === 'grass',
 );
 const isSidewalk = (feature: Feature) =>
-  feature.tags.footway === 'sidewalk' || feature.id === 494921219;
+  feature.tags.footway === 'sidewalk' ||
+  [494921210, 494921219, 542667857].includes(feature.id);
 const streetKinds = new Set([
   'pedestrian',
   'tertiary',
@@ -95,9 +106,14 @@ const streetKinds = new Set([
 export function pavingStyle(feature: Feature): PavingSurface['style'] {
   if (isSidewalk(feature)) return { kind: 'cobble', color: '#b2b5ae' };
   if (
+    [
+      587280816, 5016653, 255297801, 163474150, 784512319, 784512324, 255297764,
+      255297771, 698001342, 1303802775,
+    ].includes(feature.id) ||
     (['footway', 'path'].includes(feature.tags.highway ?? '') &&
       feature.tags.area !== 'yes' &&
-      parks.some((park) => inside(center(feature.points), park.points))) ||
+      (feature.points.some((point) => inside(point, courtBankBoundary)) ||
+        parks.some((park) => inside(center(feature.points), park.points)))) ||
     [
       'unpaved',
       'compacted',
@@ -125,8 +141,16 @@ function clearance(
 ) {
   if (feature.tags.highway === 'steps' || feature.tags.area === 'yes')
     return Infinity;
+  if (
+    ['footway', 'path', 'track'].includes(feature.tags.highway ?? '') &&
+    !isSidewalk(feature) &&
+    !feature.tags.tunnel &&
+    !feature.tags.bridge &&
+    onExposedRampartBank(point)
+  )
+    return -Infinity;
   const height = featureElevation(feature, point);
-  const crossfall = streetKinds.has(feature.tags.highway ?? '') ? 0.32 : 0.12;
+  const crossfall = streetKinds.has(feature.tags.highway ?? '') ? 0.08 : 0.3;
   let margin =
     0.16 +
     Math.hypot(point[0] - center[0], point[1] - center[1]) * crossfall -
@@ -137,7 +161,7 @@ function clearance(
       const boundary = projectRoute(point, courtBankBoundary).distance;
       margin = Math.min(
         margin,
-        inside(point, courtBankBoundary) ? boundary : -boundary,
+        inside(point, courtBankBoundary) ? boundary - 1.3 : -boundary - 1.3,
       );
     }
   }
@@ -281,7 +305,8 @@ function cells(polygons: MultiPolygon) {
 function priority(feature: Feature) {
   return feature.tags.area === 'yes'
     ? 90
-    : ['footway', 'path', 'steps', 'track', 'cycleway'].includes(
+    : pavingStyle(feature).kind === 'gravel' ||
+        ['footway', 'path', 'steps', 'track', 'cycleway'].includes(
           feature.tags.highway ?? '',
         )
       ? 10

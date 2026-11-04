@@ -505,7 +505,15 @@ export const walls = features
       : // This survey line duplicates the house facade; only its garden extension is a wall.
         wall.id === 55987209
         ? { ...wall, points: wall.points.slice(5) }
-        : wall,
+        : wall.id === 1532977610
+          ? {
+              ...wall,
+              // Remove the short doubled-back tip, not the bastion's retaining edge.
+              points: wall.points.filter(
+                ([x, z]) => !(x > 99 && x < 101 && z < -100),
+              ),
+            }
+          : wall,
   );
 export const aveMariaFrontage = (() => {
   const stairs = features.find((feature) => feature.id === 255297754);
@@ -820,21 +828,27 @@ const rampartOutline = walls.find((wall) => wall.id === rampartWallId);
 if (!rampartOutline)
   throw new Error('The main Vyšehrad rampart outline is missing.');
 const rampartBoundary = rampartOutline.points;
+const surveyedRampart = features.find(
+  (feature) => feature.id === rampartWallId,
+);
+if (!surveyedRampart) throw new Error('The surveyed rampart is missing.');
+const surveyedRampartPoints = surveyedRampart.points;
+// Local wall repairs must not shift the terrain sampling around the entire ring.
 const rampartLengths = [0];
-for (let i = 1; i < rampartOutline.points.length; i++)
+for (let i = 1; i < surveyedRampartPoints.length; i++)
   rampartLengths.push(
     rampartLengths[i - 1] +
       Math.hypot(
-        rampartOutline.points[i][0] - rampartOutline.points[i - 1][0],
-        rampartOutline.points[i][1] - rampartOutline.points[i - 1][1],
+        surveyedRampartPoints[i][0] - surveyedRampartPoints[i - 1][0],
+        surveyedRampartPoints[i][1] - surveyedRampartPoints[i - 1][1],
       ),
   );
 const rampartLength = rampartLengths[rampartLengths.length - 1];
 function rampartPoint(distance: number): Point {
   const along = ((distance % rampartLength) + rampartLength) % rampartLength;
   const index = rampartLengths.findIndex((length) => length > along);
-  const a = rampartBoundary[index - 1],
-    b = rampartBoundary[index];
+  const a = surveyedRampartPoints[index - 1],
+    b = surveyedRampartPoints[index];
   const t =
     (along - rampartLengths[index - 1]) /
     (rampartLengths[index] - rampartLengths[index - 1]);
@@ -928,8 +942,10 @@ const smoothRockSeats = rockSeats.map((_, index) => {
   }
   return total / weight;
 });
-const rampartCorners = rampartBoundary.map((point, index) => {
-  const station = (rampartLengths[index] / rampartLength) * rampartCount;
+const rampartCorners = rampartBoundary.map((point) => {
+  const station =
+    (projectRoute(point, surveyedRampartPoints).along / rampartLength) *
+    rampartCount;
   const start = Math.floor(station);
   const a = rampartStations[start % rampartCount],
     b = rampartStations[(start + 1) % rampartCount];
@@ -1093,6 +1109,13 @@ const taborLevel = [-1, 1].reduce((total, side) => {
 const pevnostiIds = [
   5016653, 494921191, 494921190, 370193785, 93524713, 93524749,
 ];
+const northPevnosti = paths.find((feature) => feature.id === 4646722);
+if (!northPevnosti)
+  throw new Error('The northern V Pevnosti street is missing.');
+const northPevnostiPoints = northPevnosti.points;
+const northPevnostiLevels = northPevnostiPoints.map((point) =>
+  rawElevation(...point),
+);
 export const pevnostiRoad: Point[] = pevnostiIds.flatMap((id, index) => {
   const feature = features.find((feature) => feature.id === id);
   if (!feature) throw new Error(`Missing V Pevnosti segment ${id}.`);
@@ -1402,10 +1425,12 @@ export const courtBankBounds = {
     Math.ceil(
       (Math.max(...easternCourtPoints.map((point) => point[0])) + 20) / 5,
     ) * 5,
-  minZ:
+  minZ: Math.min(
+    -115,
     Math.floor(
       (Math.min(...easternCourtPoints.map((point) => point[1])) - 20) / 5,
     ) * 5,
+  ),
   maxZ:
     Math.ceil(
       (Math.max(...easternCourtPoints.map((point) => point[1])) + 20) / 5,
@@ -1427,6 +1452,17 @@ export function onCliffTerrain(x: number, z: number) {
     x <= cliffTerrainBounds.maxX &&
     z >= cliffTerrainBounds.minZ &&
     z <= cliffTerrainBounds.maxZ
+  );
+}
+export function onExposedRampartBank(point: Point) {
+  if (
+    !onCliffTerrain(...point) &&
+    !(point[0] > -285 && point[0] < -130 && point[1] > -250 && point[1] < -100)
+  )
+    return false;
+  return (
+    !inside(point, rampartBoundary) &&
+    projectRoute(point, rampartBoundary).distance < 45
   );
 }
 function restoreCliff(
@@ -1470,15 +1506,24 @@ export function onCourtBankTerrain(x: number, z: number) {
 }
 function restoreCourtBank(point: Point, height: number, interior?: boolean) {
   if (!onCourtBankTerrain(...point)) return height;
+  if (!(interior ?? inside(point, rampartBoundary))) {
+    const distance = projectRoute(point, rampartBoundary).distance;
+    return (
+      height +
+      (gradedElevation(...point, false, true, false) - height) *
+        (1 - smooth((distance - 8) / 3))
+    );
+  }
   const padDistance = Math.min(
     ...easternCourtPads.map(
       (pad) => projectRoute(point, pad.feature.points).distance,
     ),
   );
-  if (padDistance >= 14) return height;
-  const influence = 1 - smooth((padDistance - 10) / 4);
-  if (!(interior ?? inside(point, rampartBoundary)))
-    return height + (gradedElevation(...point, false) - height) * influence;
+  const influence = Math.max(
+    smooth((-45 - point[1]) / 20),
+    1 - smooth((padDistance - 10) / 4),
+  );
+  if (influence === 0) return height;
   const terrace = rampartTerrace(point);
   return terrace
     ? height + Math.max(0, terrace.level - height) * terrace.weight * influence
@@ -1731,6 +1776,15 @@ function gradedElevation(
   }
   const gate = leopoldGrade([x, z]);
   result += (gate.level - result) * gate.weight;
+  if (x > -110 && x < 80 && z > -80 && z < 85) {
+    const road = projectRoute([x, z], northPevnostiPoints);
+    const level =
+      northPevnostiLevels[road.segment] +
+      (northPevnostiLevels[road.segment + 1] -
+        northPevnostiLevels[road.segment]) *
+        road.fraction;
+    result += (level - result) * (1 - smooth((road.distance - 5.5) / 4));
+  }
   if (x > 45 && x < 315 && z > 100 && z < 345) {
     const road = pevnostiGrade([x, z]);
     result += (road.level - result) * road.weight;
@@ -2833,6 +2887,7 @@ export function retainedWallOffsets(
 ) {
   return {
     inset: Math.min(0.35, thickness / 2),
+    outer: Math.min(0.02, thickness / 20),
     footing: Math.max(2.4, thickness + (profile.top - profile.bottom) * 0.14),
     batter: exposedRockAt(point, 1)
       ? Math.min(2, (profile.top - profile.bottom) * 0.12)
@@ -4348,6 +4403,8 @@ export function blocked(
   )
     return true;
   return (wallIndex.get(lineCell(point)) ?? []).some(({ a, b, feature }) => {
+    if (feature.tags.barrier === 'fence' && onExposedRampartBank(point))
+      return false;
     const distance = segmentDistance(point, a, b);
     const halfWidth = wallThickness(feature, point) / 2;
     const clearance = Math.max(
@@ -4381,6 +4438,18 @@ for (const detail of siteDetails) {
   const bench = detail.tags.amenity === 'bench',
     lamp = detail.tags.highway === 'street_lamp';
   if (!bench && !lamp) continue;
+  if (
+    onExposedRampartBank(detail.point) &&
+    !paths.some(
+      (path) =>
+        ['tertiary', 'residential', 'cycleway'].includes(
+          path.tags.highway ?? '',
+        ) &&
+        projectRoute(detail.point, path.points).distance <
+          pathWidth(path) / 2 + 2,
+    )
+  )
+    continue;
   const nearest = paths
     .filter((path) => !path.tags.tunnel)
     .map((path) => ({ path, ...projectRoute(detail.point, path.points) }))
@@ -4651,7 +4720,60 @@ export function treePositions(): Point[] {
   }
   // Replant the tree displaced by the pump recess in the adjacent garden.
   add([156, 220]);
-  return trees;
+  return trees.filter(
+    ([x, z]) =>
+      !((x === 149 && z === 210) || (x === 153 && z === 216)) &&
+      !panoramaSites.some((site) => {
+        const dx = x - site.point[0],
+          dz = z - site.point[1];
+        const u = dx * site.axis[0] + dz * site.axis[1];
+        const v = dx * site.inward[0] + dz * site.inward[1];
+        return (
+          site.sheltered && Math.abs(u) < site.width / 2 + 0.8 && v > 0 && v < 5
+        );
+      }),
+  );
+}
+
+export const panoramaSites = [
+  { point: [-268, -34] as Point, width: 8.4, sheltered: true },
+  { point: [-269.77, -92.08] as Point, width: 6.6, sheltered: false },
+].map((site) => {
+  const projection = projectRoute(site.point, mainRampart.points);
+  const axis: Point = [projection.normal[1], -projection.normal[0]];
+  const inward: Point = inside(
+    [
+      projection.point[0] + projection.normal[0],
+      projection.point[1] + projection.normal[1],
+    ],
+    rampartBoundary,
+  )
+    ? projection.normal
+    : [-projection.normal[0], -projection.normal[1]];
+  const at = (u: number, v = 0): Point => [
+    projection.point[0] + axis[0] * u + inward[0] * v,
+    projection.point[1] + axis[1] * u + inward[1] * v,
+  ];
+  return {
+    ...site,
+    point: projection.point,
+    axis,
+    inward,
+    at,
+    floor: upperElevation(...at(0, 4)),
+    wall: mainRampart,
+  };
+});
+
+export function panoramaOpening(point: Point) {
+  return panoramaSites.find((site) => {
+    const dx = point[0] - site.point[0],
+      dz = point[1] - site.point[1];
+    return (
+      Math.abs(dx * site.axis[0] + dz * site.axis[1]) < site.width / 2 - 1e-5 &&
+      Math.abs(dx * site.inward[0] + dz * site.inward[1]) < 0.1
+    );
+  });
 }
 
 export function safePosition(target: Point): Point {

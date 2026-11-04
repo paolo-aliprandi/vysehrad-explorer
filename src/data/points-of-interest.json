@@ -1,0 +1,518 @@
+[
+  {
+    "name": "Tábor Gate (Táborská brána)",
+    "historical description": "The outer southern entrance to the Vyšehrad fortress, built in the mid-17th century as part of its Baroque fortification system. Its position is best understood as part of a sequence of controlled entrances: visitors and troops passed through successive barriers rather than a single open doorway. The surviving structure therefore helps explain how the fortress regulated movement as well as defended itself."
+  },
+  {
+    "name": "Špička Gate (Špička)",
+    "historical description": "A medieval Gothic gate associated with the former royal precinct. Only fragments and archaeological traces survive. Its position is best understood as part of a sequence of controlled entrances: visitors and troops passed through successive barriers rather than a single open doorway. The surviving structure therefore helps explain how the fortress regulated movement as well as defended itself."
+  },
+  {
+    "name": "Gothic wall fragments near Špička",
+    "historical description": "Remains of Vyšehrad’s medieval defensive masonry, incorporated into or exposed beside later fortifications. The masonry is evidence of successive defensive phases: older medieval structures were often absorbed, altered, or hidden by the later fortress. Looking closely at changes in stonework can reveal that the site was rebuilt rather than created in one moment."
+  },
+  {
+    "name": "Leopold Gate (Leopoldova brána)",
+    "historical description": "A monumental Baroque fortress gate built in the late 17th century and named for Emperor Leopold I. Its position is best understood as part of a sequence of controlled entrances: visitors and troops passed through successive barriers rather than a single open doorway. The surviving structure therefore helps explain how the fortress regulated movement as well as defended itself."
+  },
+  {
+    "name": "Brick Gate (Cihelná brána)",
+    "historical description": "An Empire-style gate dating from 1841. It later became an important entrance to the fortress’s casemate system. Its position is best understood as part of a sequence of controlled entrances: visitors and troops passed through successive barriers rather than a single open doorway. The surviving structure therefore helps explain how the fortress regulated movement as well as defended itself."
+  },
+  {
+    "name": "Former moat near Leopold Gate",
+    "historical description": "A defensive ditch forming part of the fortress’s layered approach and gate protection. Its position is best understood as part of a sequence of controlled entrances: visitors and troops passed through successive barriers rather than a single open doorway. The surviving structure therefore helps explain how the fortress regulated movement as well as defended itself."
+  },
+  {
+    "name": "Vyšehrad fortress walls",
+    "historical description": "The extensive walls that transformed Vyšehrad into a Baroque military fortress, largely during the 17th and 18th centuries. The masonry is evidence of successive defensive phases: older medieval structures were often absorbed, altered, or hidden by the later fortress. Looking closely at changes in stonework can reveal that the site was rebuilt rather than created in one moment."
+  },
+  {
+    "name": "Baroque bastions",
+    "historical description": "Angular defensive platforms built to protect the fortress from artillery attack. Bastions were designed for the age of artillery, allowing defenders to cover the faces of neighbouring walls and reduce blind spots. Their geometry is a key clue to reading Vyšehrad as an engineered fortress rather than simply a medieval castle."
+  },
+  {
+    "name": "Redan",
+    "historical description": "An advanced defensive work within the fortress, now associated with the open-air theatre area. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Redan defensive position",
+    "historical description": "The remains and layout of an advanced military position designed to cover approaches to the fortress. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Fortress passages",
+    "historical description": "Passages through the defensive structures used for movement between different parts of the fortress. The masonry is evidence of successive defensive phases: older medieval structures were often absorbed, altered, or hidden by the later fortress. Looking closely at changes in stonework can reveal that the site was rebuilt rather than created in one moment."
+  },
+  {
+    "name": "Casemate embrasures",
+    "historical description": "Openings in the fortress’s defensive structures designed for observation and, historically, artillery or firearms. These underground spaces reveal the practical side of fortress life: protected circulation, storage, and movement of soldiers and supplies behind exposed walls. They are a reminder that the park above was once a military landscape."
+  },
+  {
+    "name": "Podolí casemate passage",
+    "historical description": "A section of the underground military passage network associated with the fortress’s southern and western defenses. These underground spaces reveal the practical side of fortress life: protected circulation, storage, and movement of soldiers and supplies behind exposed walls. They are a reminder that the park above was once a military landscape."
+  },
+  {
+    "name": "Martinské casemates",
+    "historical description": "Underground passages near the Rotunda of St. Martin, forming part of Vyšehrad’s military infrastructure. These underground spaces reveal the practical side of fortress life: protected circulation, storage, and movement of soldiers and supplies behind exposed walls. They are a reminder that the park above was once a military landscape."
+  },
+  {
+    "name": "Casemates toward the Redan",
+    "historical description": "Underground corridors linking defensive areas within the fortress. These underground spaces reveal the practical side of fortress life: protected circulation, storage, and movement of soldiers and supplies behind exposed walls. They are a reminder that the park above was once a military landscape."
+  },
+  {
+    "name": "Gorlice Hall",
+    "historical description": "A large underground casemate hall used as a storage space during the fortress period. It now displays original Baroque statues from Prague’s Charles Bridge. These underground spaces reveal the practical side of fortress life: protected circulation, storage, and movement of soldiers and supplies behind exposed walls. They are a reminder that the park above was once a military landscape."
+  },
+  {
+    "name": "Bastion of St. Leopold",
+    "historical description": "A fortress bastion named for St. Leopold and incorporated into Vyšehrad’s Baroque defensive system. Bastions were designed for the age of artillery, allowing defenders to cover the faces of neighbouring walls and reduce blind spots. Their geometry is a key clue to reading Vyšehrad as an engineered fortress rather than simply a medieval castle."
+  },
+  {
+    "name": "Bastion of St. Ludmila",
+    "historical description": "A named bastion within the fortress’s defensive perimeter. Bastions were designed for the age of artillery, allowing defenders to cover the faces of neighbouring walls and reduce blind spots. Their geometry is a key clue to reading Vyšehrad as an engineered fortress rather than simply a medieval castle."
+  },
+  {
+    "name": "Bastion of St. Roch",
+    "historical description": "A named defensive bastion associated with the Baroque fortifications. Bastions were designed for the age of artillery, allowing defenders to cover the faces of neighbouring walls and reduce blind spots. Their geometry is a key clue to reading Vyšehrad as an engineered fortress rather than simply a medieval castle."
+  },
+  {
+    "name": "Bastion of St. Agnes",
+    "historical description": "A named bastion within the fortress complex. Bastions were designed for the age of artillery, allowing defenders to cover the faces of neighbouring walls and reduce blind spots. Their geometry is a key clue to reading Vyšehrad as an engineered fortress rather than simply a medieval castle."
+  },
+  {
+    "name": "Bastion of St. Paul",
+    "historical description": "A named bastion forming part of the fortress’s military perimeter. Bastions were designed for the age of artillery, allowing defenders to cover the faces of neighbouring walls and reduce blind spots. Their geometry is a key clue to reading Vyšehrad as an engineered fortress rather than simply a medieval castle."
+  },
+  {
+    "name": "Unfinished sixth bastion",
+    "historical description": "An incomplete or altered defensive work associated with the fortress’s bastion system; its precise designation should be checked against the current official map. Bastions were designed for the age of artillery, allowing defenders to cover the faces of neighbouring walls and reduce blind spots. Their geometry is a key clue to reading Vyšehrad as an engineered fortress rather than simply a medieval castle."
+  },
+  {
+    "name": "Gothic Cellar (Gotický sklep)",
+    "historical description": "A surviving medieval cellar associated with Vyšehrad’s former royal and residential buildings. Even fragmentary remains matter because they preserve the footprint and scale of the medieval settlement, which is otherwise obscured by later military construction. The absence of the original building is itself part of Vyšehrad’s history."
+  },
+  {
+    "name": "Gothic palace remains",
+    "historical description": "Archaeological and architectural traces of the medieval palace complex that once occupied Vyšehrad. Even fragmentary remains matter because they preserve the footprint and scale of the medieval settlement, which is otherwise obscured by later military construction. The absence of the original building is itself part of Vyšehrad’s history."
+  },
+  {
+    "name": "Royal Palace (Královský palác)",
+    "historical description": "The medieval royal residence associated with Vyšehrad’s importance under Přemyslid rulers and later Charles IV. This feature belongs to the period when Vyšehrad was a royal and ecclesiastical centre, not merely a fortress. It helps reconstruct the settlement that preceded the Baroque military enclosure."
+  },
+  {
+    "name": "Royal courtyard",
+    "historical description": "The area of the former medieval royal precinct, now largely altered by later construction and fortification. This feature belongs to the period when Vyšehrad was a royal and ecclesiastical centre, not merely a fortress. It helps reconstruct the settlement that preceded the Baroque military enclosure."
+  },
+  {
+    "name": "Church of the Decollation of St. John the Baptist",
+    "historical description": "A medieval church that was destroyed during the construction and restructuring of the Baroque fortress. The building or remains reflect Vyšehrad’s role as a religious centre as well as a strategic stronghold. Its history should be read alongside the nearby chapter buildings and the changing patronage of Bohemian rulers and clergy."
+  },
+  {
+    "name": "Memorial to the lost Church of St. John the Baptist",
+    "historical description": "A commemorative marker recalling the medieval church that once stood in the Vyšehrad precinct. The building or remains reflect Vyšehrad’s role as a religious centre as well as a strategic stronghold. Its history should be read alongside the nearby chapter buildings and the changing patronage of Bohemian rulers and clergy."
+  },
+  {
+    "name": "Chapel of Our Lady of the Ramparts",
+    "historical description": "A small chapel associated with the later religious landscape of the fortress and the area of earlier medieval structures. The chapel illustrates how devotional life continued within a precinct repeatedly reshaped by military needs. Its location is as important as its architecture, since religious buildings were woven into the fortress’s everyday landscape."
+  },
+  {
+    "name": "Romanesque Basilica of St. Lawrence remains",
+    "historical description": "Archaeological remains of an early Romanesque church, evidence of Vyšehrad’s religious importance before the Gothic period. This feature belongs to the period when Vyšehrad was a royal and ecclesiastical centre, not merely a fortress. It helps reconstruct the settlement that preceded the Baroque military enclosure."
+  },
+  {
+    "name": "Early church foundations",
+    "historical description": "Archaeological foundations showing that Vyšehrad’s religious history reaches back to the early medieval period. The building or remains reflect Vyšehrad’s role as a religious centre as well as a strategic stronghold. Its history should be read alongside the nearby chapter buildings and the changing patronage of Bohemian rulers and clergy."
+  },
+  {
+    "name": "Romanesque bridge remains",
+    "historical description": "Archaeological traces of a bridge in the former medieval royal precinct, associated with the historic layout of Vyšehrad. This feature belongs to the period when Vyšehrad was a royal and ecclesiastical centre, not merely a fortress. It helps reconstruct the settlement that preceded the Baroque military enclosure."
+  },
+  {
+    "name": "Medieval defensive wall",
+    "historical description": "Surviving sections of Vyšehrad’s earlier medieval fortifications, predating the Baroque fortress. The masonry is evidence of successive defensive phases: older medieval structures were often absorbed, altered, or hidden by the later fortress. Looking closely at changes in stonework can reveal that the site was rebuilt rather than created in one moment."
+  },
+  {
+    "name": "Libuše’s Bath (Libušina lázeň)",
+    "historical description": "A medieval tower ruin on the Vyšehrad rock. Its name is rooted in legend; it was a defensive structure, not a bath. The work translates historical or legendary narratives into public art. Its placement in Vyšehrad is significant because the fortress became a powerful setting for stories about the origins and destiny of the Czech nation."
+  },
+  {
+    "name": "Špička medieval gate remains",
+    "historical description": "Fragments associated with the medieval Špička gate and the former entrance to the royal precinct. Its position is best understood as part of a sequence of controlled entrances: visitors and troops passed through successive barriers rather than a single open doorway. The surviving structure therefore helps explain how the fortress regulated movement as well as defended itself."
+  },
+  {
+    "name": "Basilica of Sts. Peter and Paul",
+    "historical description": "The principal church of Vyšehrad, founded in the 11th century and extensively rebuilt; its present Neo-Gothic appearance dates mainly from the late 19th and early 20th centuries. The building or remains reflect Vyšehrad’s role as a religious centre as well as a strategic stronghold. Its history should be read alongside the nearby chapter buildings and the changing patronage of Bohemian rulers and clergy."
+  },
+  {
+    "name": "Rotunda of St. Martin",
+    "historical description": "A Romanesque rotunda, generally dated to the 11th century, and one of Prague’s oldest surviving church buildings. Rotundas are characteristic of early medieval Central European church architecture. Its survival makes it a rare architectural witness to Prague before the city’s later Gothic and Baroque transformations."
+  },
+  {
+    "name": "Basilica of St. Lawrence",
+    "historical description": "The remains of an early Romanesque basilica that once formed part of Vyšehrad’s important medieval religious centre. The building or remains reflect Vyšehrad’s role as a religious centre as well as a strategic stronghold. Its history should be read alongside the nearby chapter buildings and the changing patronage of Bohemian rulers and clergy."
+  },
+  {
+    "name": "Chapel of Our Lady of the Ramparts",
+    "historical description": "A chapel within the fortress precinct, associated with the later devotional history of Vyšehrad. The chapel illustrates how devotional life continued within a precinct repeatedly reshaped by military needs. Its location is as important as its architecture, since religious buildings were woven into the fortress’s everyday landscape."
+  },
+  {
+    "name": "Chapel of the Decollation of St. John",
+    "historical description": "A chapel or commemorative designation connected with the lost medieval Church of St. John the Baptist; historical naming and location should be verified on site. The chapel illustrates how devotional life continued within a precinct repeatedly reshaped by military needs. Its location is as important as its architecture, since religious buildings were woven into the fortress’s everyday landscape."
+  },
+  {
+    "name": "St. Clement’s Chapel",
+    "historical description": "A small chapel associated with the ecclesiastical buildings of the Vyšehrad chapter. The chapel illustrates how devotional life continued within a precinct repeatedly reshaped by military needs. Its location is as important as its architecture, since religious buildings were woven into the fortress’s everyday landscape."
+  },
+  {
+    "name": "New Provost’s Residence",
+    "historical description": "A residence of the Vyšehrad chapter’s provost, part of the ecclesiastical complex near the basilica. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Old Provost’s Residence",
+    "historical description": "A historic residence associated with the provost of the Vyšehrad chapter. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Old Deanery",
+    "historical description": "A historic chapter building associated with the clergy and administration of Vyšehrad. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "New Deanery",
+    "historical description": "A later chapter residence within Vyšehrad’s ecclesiastical precinct. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Devil’s Column (Čertův sloup)",
+    "historical description": "Three large stone fragments traditionally linked to a legend about the Devil and a priest. Their original function and provenance remain debated. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Plague Column",
+    "historical description": "A religious commemorative column associated with the historical practice of marking plague or epidemic events; verify the exact monument designation locally. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Cannonball in St. Martin’s Rotunda",
+    "historical description": "A cannonball embedded in the rotunda’s exterior, traditionally associated with the bombardment of Prague in 1757. Rotundas are characteristic of early medieval Central European church architecture. Its survival makes it a rare architectural witness to Prague before the city’s later Gothic and Baroque transformations."
+  },
+  {
+    "name": "Špička landmark area",
+    "historical description": "The area around the medieval gate and its surviving masonry, marking the historic entrance to Vyšehrad’s royal precinct. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Old Czech Legends playground",
+    "historical description": "A modern playground inspired by Czech national legends traditionally associated with Vyšehrad; not a historical structure. The green space occupies ground shaped by military, religious, and residential uses. Its present peaceful appearance can conceal how radically the area was transformed when the fortress was built and later opened to the public."
+  },
+  {
+    "name": "Libuše and Přemysl sculpture group",
+    "historical description": "A sculpture group by Josef Václav Myslbek depicting figures from Czech foundation legends. The work translates historical or legendary narratives into public art. Its placement in Vyšehrad is significant because the fortress became a powerful setting for stories about the origins and destiny of the Czech nation."
+  },
+  {
+    "name": "Šárka sculpture",
+    "historical description": "A sculpture depicting Šárka, a heroine of the Czech legend of the Maidens’ War. The work translates historical or legendary narratives into public art. Its placement in Vyšehrad is significant because the fortress became a powerful setting for stories about the origins and destiny of the Czech nation."
+  },
+  {
+    "name": "Ctirad and Šárka sculpture group",
+    "historical description": "A Myslbek sculpture group illustrating the legendary conflict between Ctirad and Šárka. The work translates historical or legendary narratives into public art. Its placement in Vyšehrad is significant because the fortress became a powerful setting for stories about the origins and destiny of the Czech nation."
+  },
+  {
+    "name": "Záboj and Slavoj sculpture group",
+    "historical description": "A sculpture group depicting legendary figures from Czech national mythology. The work translates historical or legendary narratives into public art. Its placement in Vyšehrad is significant because the fortress became a powerful setting for stories about the origins and destiny of the Czech nation."
+  },
+  {
+    "name": "Lumír and the Song sculpture group",
+    "historical description": "A Myslbek sculpture group inspired by the legendary bard Lumír and the power of song. The work translates historical or legendary narratives into public art. Its placement in Vyšehrad is significant because the fortress became a powerful setting for stories about the origins and destiny of the Czech nation."
+  },
+  {
+    "name": "Statue of St. Ludmila",
+    "historical description": "A religious sculpture depicting St. Ludmila, an early Bohemian Christian ruler and grandmother of St. Wenceslas. The figure connects the site’s physical landscape with Czech religious, literary, or national memory. Such sculptures often served not only as decoration but also as public statements about identity and historical continuity."
+  },
+  {
+    "name": "Statue of St. Sebastian",
+    "historical description": "A Christian statue depicting St. Sebastian, traditionally invoked against plague. The figure connects the site’s physical landscape with Czech religious, literary, or national memory. Such sculptures often served not only as decoration but also as public statements about identity and historical continuity."
+  },
+  {
+    "name": "Statue of St. John of Nepomuk",
+    "historical description": "A statue of the Bohemian saint associated with the Vltava and the legend of his martyrdom. The figure connects the site’s physical landscape with Czech religious, literary, or national memory. Such sculptures often served not only as decoration but also as public statements about identity and historical continuity."
+  },
+  {
+    "name": "Statue of St. Adalbert (Vojtěch)",
+    "historical description": "A statue depicting St. Adalbert, the 10th-century bishop of Prague and missionary. The figure connects the site’s physical landscape with Czech religious, literary, or national memory. Such sculptures often served not only as decoration but also as public statements about identity and historical continuity."
+  },
+  {
+    "name": "Statue of St. Wenceslas",
+    "historical description": "A statue of St. Wenceslas, the patron saint of Bohemia. The figure connects the site’s physical landscape with Czech religious, literary, or national memory. Such sculptures often served not only as decoration but also as public statements about identity and historical continuity."
+  },
+  {
+    "name": "Monument to Provost Mikuláš Karlach",
+    "historical description": "A memorial to Mikuláš Karlach, a key figure in the revival and development of Vyšehrad in the 19th century. The memorial preserves a layer of memory that may not be visible in the architecture itself. It helps connect the site’s physical remains with the people, events, and institutions later generations chose to commemorate."
+  },
+  {
+    "name": "Monument to Provost Václav Štulc",
+    "historical description": "A memorial to Václav Štulc, a priest and cultural figure involved in Vyšehrad’s religious and national revival. The memorial preserves a layer of memory that may not be visible in the architecture itself. It helps connect the site’s physical remains with the people, events, and institutions later generations chose to commemorate."
+  },
+  {
+    "name": "Memorial to Professor Krejčí",
+    "historical description": "A commemorative marker associated with geologist and educator Jan Krejčí; verify the precise monument and placement. The memorial preserves a layer of memory that may not be visible in the architecture itself. It helps connect the site’s physical remains with the people, events, and institutions later generations chose to commemorate."
+  },
+  {
+    "name": "Memorial plaques",
+    "historical description": "Various plaques commemorating people, events, and buildings in Vyšehrad’s historical precinct. The memorial preserves a layer of memory that may not be visible in the architecture itself. It helps connect the site’s physical remains with the people, events, and institutions later generations chose to commemorate."
+  },
+  {
+    "name": "Vyšehrad Cemetery",
+    "historical description": "A major Czech national cemetery established in the 19th century, containing prominent artists, writers, musicians, and public figures. Vyšehrad Cemetery developed as a national memorial landscape, where burial, sculpture, and public commemoration were deliberately combined. It is therefore both a place of mourning and a statement about Czech cultural identity."
+  },
+  {
+    "name": "Slavín National Pantheon",
+    "historical description": "A monumental tomb and national pantheon created to honour distinguished Czech cultural and public figures. Vyšehrad Cemetery developed as a national memorial landscape, where burial, sculpture, and public commemoration were deliberately combined. It is therefore both a place of mourning and a statement about Czech cultural identity."
+  },
+  {
+    "name": "Slavín tomb",
+    "historical description": "The central monumental burial structure of the cemetery, designed as a collective memorial to prominent Czech figures. Vyšehrad Cemetery developed as a national memorial landscape, where burial, sculpture, and public commemoration were deliberately combined. It is therefore both a place of mourning and a statement about Czech cultural identity."
+  },
+  {
+    "name": "Cemetery entrance portal",
+    "historical description": "The monumental entrance to Vyšehrad Cemetery, marking its formal and ceremonial character. Vyšehrad Cemetery developed as a national memorial landscape, where burial, sculpture, and public commemoration were deliberately combined. It is therefore both a place of mourning and a statement about Czech cultural identity."
+  },
+  {
+    "name": "Cemetery arcades",
+    "historical description": "Covered architectural arcades along the cemetery, lined with elaborate tombs and sculptural memorials. Vyšehrad Cemetery developed as a national memorial landscape, where burial, sculpture, and public commemoration were deliberately combined. It is therefore both a place of mourning and a statement about Czech cultural identity."
+  },
+  {
+    "name": "Cemetery chapels and memorials",
+    "historical description": "Small religious and commemorative structures within the cemetery, reflecting its 19th- and 20th-century history. The chapel illustrates how devotional life continued within a precinct repeatedly reshaped by military needs. Its location is as important as its architecture, since religious buildings were woven into the fortress’s everyday landscape."
+  },
+  {
+    "name": "Antonín Dvořák’s grave",
+    "historical description": "The burial place of the Czech composer Antonín Dvořák, one of the most celebrated figures in Czech music. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Bedřich Smetana’s grave",
+    "historical description": "The burial place of Bedřich Smetana, a foundational composer of Czech national music. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Alfons Mucha’s grave",
+    "historical description": "The burial place of Alfons Mucha, the internationally renowned Czech Art Nouveau artist. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Karel Čapek’s grave",
+    "historical description": "The burial place of Karel Čapek, Czech writer and playwright known for his novels, plays, and essays. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Jan Neruda’s grave",
+    "historical description": "The burial place of Jan Neruda, a major Czech poet, journalist, and writer. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Božena Němcová’s grave",
+    "historical description": "The burial place of Božena Němcová, a foundational Czech prose writer. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Mikoláš Aleš’s grave",
+    "historical description": "The burial place of Mikoláš Aleš, a major Czech painter and illustrator. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Ema Destinnová’s grave",
+    "historical description": "The burial place of Ema Destinnová, an internationally celebrated Czech opera soprano. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Waldemar Matuška’s grave",
+    "historical description": "The burial place of Waldemar Matuška, a popular Czech singer and actor. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Zdeněk Fibich’s grave",
+    "historical description": "The burial place of Zdeněk Fibich, a Czech composer. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Josef Václav Myslbek’s grave",
+    "historical description": "The burial place of Josef Václav Myslbek, the sculptor responsible for several iconic Czech mythological works. The work translates historical or legendary narratives into public art. Its placement in Vyšehrad is significant because the fortress became a powerful setting for stories about the origins and destiny of the Czech nation."
+  },
+  {
+    "name": "Old Burgrave’s Residence",
+    "historical description": "A historic building associated with the fortress’s burgrave, the official responsible for its administration. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Chamber Hall",
+    "historical description": "A hall within the Old Burgrave’s Residence used for cultural events and performances. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Gunpowder House",
+    "historical description": "A historic military building associated with storing gunpowder and other fortress supplies. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Vyšehrad Gallery",
+    "historical description": "An exhibition space within the historic Vyšehrad complex. This is a modern visitor amenity within a historic setting. Its significance is primarily in the reuse of fortress or chapter buildings for public life after their military and ecclesiastical functions changed."
+  },
+  {
+    "name": "Popelka Biliánová’s House",
+    "historical description": "A small house associated with Popelka Biliánová, a Czech writer known for folklore and Vyšehrad legends. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Jedlička Institute",
+    "historical description": "An institution founded in 1913 to provide education and care for children and young people with physical disabilities. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "New Provost’s Residence",
+    "historical description": "The chapter provost’s residence, part of the ecclesiastical centre of Vyšehrad. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Old Provost’s Residence",
+    "historical description": "The older residence of the Vyšehrad chapter’s provost. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Old Deanery",
+    "historical description": "A historic building associated with the administration of the Vyšehrad ecclesiastical chapter. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "New Deanery",
+    "historical description": "A chapter building forming part of Vyšehrad’s religious precinct. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Vyšehrad Information Centre",
+    "historical description": "Visitor information facility in the historic fortress area; a modern service rather than a historic monument. The centre represents Vyšehrad’s modern role as a public heritage site, where the former fortress is interpreted and made accessible to visitors."
+  },
+  {
+    "name": "Vyšehrad Gardens",
+    "historical description": "Public gardens within the fortress, laid out over areas shaped by the former royal precinct and later military use. The green space occupies ground shaped by military, religious, and residential uses. Its present peaceful appearance can conceal how radically the area was transformed when the fortress was built and later opened to the public."
+  },
+  {
+    "name": "Karlach Gardens",
+    "historical description": "Gardens named after Provost Mikuláš Karlach, who played an important role in Vyšehrad’s 19th-century revival. The green space occupies ground shaped by military, religious, and residential uses. Its present peaceful appearance can conceal how radically the area was transformed when the fortress was built and later opened to the public."
+  },
+  {
+    "name": "Vyšehrad Park",
+    "historical description": "Green spaces within the fortress, combining landscaped paths with historic remains and views. The green space occupies ground shaped by military, religious, and residential uses. Its present peaceful appearance can conceal how radically the area was transformed when the fortress was built and later opened to the public."
+  },
+  {
+    "name": "Summer Theatre",
+    "historical description": "An outdoor performance venue in the fortress, located in the area of the Redan. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Old Czech Legends playground",
+    "historical description": "A contemporary playground inspired by Czech mythology and the Vyšehrad legends. The green space occupies ground shaped by military, religious, and residential uses. Its present peaceful appearance can conceal how radically the area was transformed when the fortress was built and later opened to the public."
+  },
+  {
+    "name": "Playground near Gorlice",
+    "historical description": "A modern recreational area near the casemate complex. These underground spaces reveal the practical side of fortress life: protected circulation, storage, and movement of soldiers and supplies behind exposed walls. They are a reminder that the park above was once a military landscape."
+  },
+  {
+    "name": "Fortress lawns",
+    "historical description": "Open green spaces within the former military enclosure. The masonry is evidence of successive defensive phases: older medieval structures were often absorbed, altered, or hidden by the later fortress. Looking closely at changes in stonework can reveal that the site was rebuilt rather than created in one moment."
+  },
+  {
+    "name": "Historic tree-lined paths",
+    "historical description": "Paths through the fortress gardens, shaped by later landscaping and park development. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Rampart promenade",
+    "historical description": "A walk along the fortress walls offering views over Prague and the Vltava valley. The edge of the fortress offers a direct reading of Vyšehrad’s strategic geography. The height, slope, and sightlines were defensive assets long before the area became a public promenade."
+  },
+  {
+    "name": "Outer rampart paths",
+    "historical description": "Paths running along the exterior edges of the fortifications. The edge of the fortress offers a direct reading of Vyšehrad’s strategic geography. The height, slope, and sightlines were defensive assets long before the area became a public promenade."
+  },
+  {
+    "name": "Former military grounds",
+    "historical description": "Open areas once used for military purposes and later incorporated into the public park. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Western ramparts viewpoint",
+    "historical description": "A viewpoint from the western fortifications overlooking the Vltava and Prague’s historic skyline. The panorama explains why Vyšehrad was strategically valuable: its high rocky position commands the river corridor and surrounding approaches. The view also shows how the natural landscape and the man-made fortress work together."
+  },
+  {
+    "name": "Northern ramparts viewpoint",
+    "historical description": "A viewpoint from the northern walls toward central Prague and the river. The panorama explains why Vyšehrad was strategically valuable: its high rocky position commands the river corridor and surrounding approaches. The view also shows how the natural landscape and the man-made fortress work together."
+  },
+  {
+    "name": "Eastern ramparts viewpoint",
+    "historical description": "A viewpoint over Nusle Valley and the Nusle Bridge. The panorama explains why Vyšehrad was strategically valuable: its high rocky position commands the river corridor and surrounding approaches. The view also shows how the natural landscape and the man-made fortress work together."
+  },
+  {
+    "name": "Southern ramparts viewpoint",
+    "historical description": "A viewpoint toward Podolí and the southern Vltava valley. The panorama explains why Vyšehrad was strategically valuable: its high rocky position commands the river corridor and surrounding approaches. The view also shows how the natural landscape and the man-made fortress work together."
+  },
+  {
+    "name": "Prague Castle viewpoint",
+    "historical description": "A view from Vyšehrad toward Prague Castle and the city skyline. The panorama explains why Vyšehrad was strategically valuable: its high rocky position commands the river corridor and surrounding approaches. The view also shows how the natural landscape and the man-made fortress work together."
+  },
+  {
+    "name": "Vltava bridges viewpoint",
+    "historical description": "A panorama of the Vltava and its bridges from the fortress walls. The panorama explains why Vyšehrad was strategically valuable: its high rocky position commands the river corridor and surrounding approaches. The view also shows how the natural landscape and the man-made fortress work together."
+  },
+  {
+    "name": "Nusle Bridge viewpoint",
+    "historical description": "A view toward the Nusle Bridge and the valley beneath Vyšehrad. The panorama explains why Vyšehrad was strategically valuable: its high rocky position commands the river corridor and surrounding approaches. The view also shows how the natural landscape and the man-made fortress work together."
+  },
+  {
+    "name": "Vyšehrad rocky promontory",
+    "historical description": "The steep natural rock outcrop that made Vyšehrad a strategically important fortified site. The edge of the fortress offers a direct reading of Vyšehrad’s strategic geography. The height, slope, and sightlines were defensive assets long before the area became a public promenade."
+  },
+  {
+    "name": "Podolí cliff viewpoint",
+    "historical description": "A view over the Vltava and Podolí from the southern or western edge of the fortress. The panorama explains why Vyšehrad was strategically valuable: its high rocky position commands the river corridor and surrounding approaches. The view also shows how the natural landscape and the man-made fortress work together."
+  },
+  {
+    "name": "Vyšehrad Railway Bridge",
+    "historical description": "A historic railway bridge crossing the Vltava below Vyšehrad, part of Prague’s railway infrastructure. The bridge is part of the wider transport and river history of Vyšehrad. It illustrates how the fortress’s once-isolated position became integrated into Prague’s modern circulation network."
+  },
+  {
+    "name": "Vyšehrad Tunnel",
+    "historical description": "A tunnel through the Vyšehrad rock opened in the early 20th century to connect nearby districts. The tunnel demonstrates the later transition from a fortified landmark to an urban district crossed by modern transport. Cutting through the rock changed how people and goods moved around Vyšehrad."
+  },
+  {
+    "name": "Vyšehrad rock face",
+    "historical description": "The steep rock face rising above the Vltava, central to Vyšehrad’s defensive geography. The edge of the fortress offers a direct reading of Vyšehrad’s strategic geography. The height, slope, and sightlines were defensive assets long before the area became a public promenade."
+  },
+  {
+    "name": "Vltava waterfront below Vyšehrad",
+    "historical description": "The riverbank beneath the fortress, offering views of the rock, walls, and railway bridge. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Podolí waterfront",
+    "historical description": "The riverside area below the southern side of Vyšehrad, historically connected to the district’s river traffic and infrastructure. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Café Citadela",
+    "historical description": "A café associated with the Old Burgrave’s Residence; a contemporary visitor amenity. This is a modern visitor amenity within a historic setting. Its significance is primarily in the reuse of fortress or chapter buildings for public life after their military and ecclesiastical functions changed."
+  },
+  {
+    "name": "Refreshments at the Burgrave’s Residence",
+    "historical description": "Visitor refreshments in or near the historic Burgrave’s Residence. The grave turns the cemetery into a record of Czech cultural history, linking individual lives to the national pantheon. The monument’s artistic form can be as revealing as the identity of the person buried there."
+  },
+  {
+    "name": "Refreshments near the archdeaconry",
+    "historical description": "A visitor service noted in some maps; its current presence and exact name should be checked. This is a modern visitor amenity within a historic setting. Its significance is primarily in the reuse of fortress or chapter buildings for public life after their military and ecclesiastical functions changed."
+  },
+  {
+    "name": "Gunpowder House exhibition",
+    "historical description": "An exhibition or visitor use associated with the historic military building. This is a modern visitor amenity within a historic setting. Its significance is primarily in the reuse of fortress or chapter buildings for public life after their military and ecclesiastical functions changed."
+  },
+  {
+    "name": "Casemate tour entrance",
+    "historical description": "The entrance used for guided visits to Vyšehrad’s underground fortress passages. These underground spaces reveal the practical side of fortress life: protected circulation, storage, and movement of soldiers and supplies behind exposed walls. They are a reminder that the park above was once a military landscape."
+  },
+  {
+    "name": "Basilica ticket counter",
+    "historical description": "A modern visitor facility serving the Basilica of Sts. Peter and Paul. The building or remains reflect Vyšehrad’s role as a religious centre as well as a strategic stronghold. Its history should be read alongside the nearby chapter buildings and the changing patronage of Bohemian rulers and clergy."
+  },
+  {
+    "name": "Public toilets",
+    "historical description": "Modern visitor amenities within or near the fortress complex. This is a modern visitor amenity within a historic setting. Its significance is primarily in the reuse of fortress or chapter buildings for public life after their military and ecclesiastical functions changed."
+  },
+  {
+    "name": "Church of St. Michael the Archangel",
+    "historical description": "A historic church in the wider Vyšehrad–Podolí area, outside the core fortress enclosure. The building or remains reflect Vyšehrad’s role as a religious centre as well as a strategic stronghold. Its history should be read alongside the nearby chapter buildings and the changing patronage of Bohemian rulers and clergy."
+  },
+  {
+    "name": "Podolí Waterworks",
+    "historical description": "A major Prague water-supply facility below Vyšehrad, representing the area’s modern infrastructure history. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  },
+  {
+    "name": "Vyšehrad Railway Bridge (river view)",
+    "historical description": "The railway bridge seen from the riverbank, an important landmark in the Vltava corridor. The panorama explains why Vyšehrad was strategically valuable: its high rocky position commands the river corridor and surrounding approaches. The view also shows how the natural landscape and the man-made fortress work together."
+  },
+  {
+    "name": "Vyšehrad Tunnel (external entrance)",
+    "historical description": "The tunnel entrance in the wider Vyšehrad area, part of early 20th-century urban transport development. The tunnel demonstrates the later transition from a fortified landmark to an urban district crossed by modern transport. Cutting through the rock changed how people and goods moved around Vyšehrad."
+  },
+  {
+    "name": "Podolí riverfront",
+    "historical description": "The riverfront district beneath Vyšehrad, with views toward the fortress cliffs and bridges. Its importance lies in how it contributes to the layered history of Vyšehrad, where royal, religious, military, and later public uses overlap. It is worth viewing in relation to nearby structures rather than as an isolated object."
+  }
+]

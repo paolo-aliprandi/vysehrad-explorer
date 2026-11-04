@@ -1,4 +1,12 @@
-import { memo, useCallback, useEffect, useId, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   buildings,
   discoveredNear,
@@ -28,6 +36,7 @@ import {
   type GameMode,
 } from '../world/adventure';
 import './app.css';
+import { nearbyPointsOfInterest } from '../world/points-of-interest';
 
 const baseUrl = import.meta.env.BASE_URL;
 
@@ -341,6 +350,24 @@ export function App() {
   const [selected, setSelected] = useState(landmarks[0].id);
   const [photo, setPhoto] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
+  const [reading, setReading] = useState<string | null>(null);
+  const readingPanel = useRef<HTMLElement>(null);
+  const nearbyPOIs = useMemo(
+    () => (started && !flying ? nearbyPointsOfInterest(snapshot.position) : []),
+    [started, flying, snapshot.position],
+  );
+  const shownPOI = nearbyPOIs.find((poi) => poi.id === reading);
+  const readPOI = useCallback(() => {
+    setInfo(null);
+    setReading((current) => {
+      const index = nearbyPOIs.findIndex((poi) => poi.id === current);
+      return nearbyPOIs[(index + 1) % nearbyPOIs.length]?.id ?? null;
+    });
+    readingPanel.current?.scrollTo({ top: 0 });
+  }, [nearbyPOIs]);
+  useEffect(() => {
+    if (reading && !shownPOI) setReading(null);
+  }, [reading, shownPOI]);
   const progressLoaded = useRef(false);
   const controllerHandler = useRef<((input: ControllerInput) => void) | null>(
     null,
@@ -512,11 +539,16 @@ export function App() {
       if (event.code === 'Escape') {
         setPhoto(false);
         setInfo(null);
+        setReading(null);
         if (!modal) world.current?.stand();
       }
       if (!modal && !event.repeat && event.code === 'KeyF') {
         event.preventDefault();
         interact();
+      }
+      if (!modal && !photo && !event.repeat && event.code === 'KeyI') {
+        event.preventDefault();
+        readPOI();
       }
       if (!modal && !event.repeat && event.code === 'KeyR') {
         event.preventDefault();
@@ -534,7 +566,7 @@ export function App() {
     };
     window.addEventListener('keydown', listener);
     return () => window.removeEventListener('keydown', listener);
-  }, [started, modal, photo, interact, throwStone, mode]);
+  }, [started, modal, photo, interact, throwStone, mode, readPOI]);
 
   const start = () => {
     let progress;
@@ -637,7 +669,14 @@ export function App() {
         document.hasFocus() && document.visibilityState === 'visible';
       world.current?.setControllerInput(
         focused && started && !modal
-          ? input
+          ? shownPOI
+            ? {
+                ...input,
+                pressed: new Set(
+                  [...input.pressed].filter((action) => action !== 'jump'),
+                ),
+              }
+            : input
           : { ...idleController, name: input.name, supported: input.supported },
       );
       if (!focused || !input.supported) return;
@@ -686,6 +725,13 @@ export function App() {
         if (pressed.has('previous') || pressed.has('next'))
           setMode((current) => (current === 'chill' ? 'adventure' : 'chill'));
         if (pressed.has('interact') && ready) start();
+        return;
+      }
+      if (!photo && pressed.has('read')) readPOI();
+      if (shownPOI && pressed.has('readScroll'))
+        readingPanel.current?.scrollBy({ top: 120, behavior: 'smooth' });
+      if (shownPOI && pressed.has('jump')) {
+        setReading(null);
         return;
       }
       if (pressed.has('photo')) {
@@ -1219,7 +1265,52 @@ export function App() {
               </span>
             </button>
           )}
-          {shownLandmark && (
+          {!modal && !shownPOI && nearbyPOIs.length > 0 && (
+            <button className="poi-hint" onClick={readPOI}>
+              <kbd>{snapshot.controllerSupported ? 'D-pad ↑' : 'I'}</kbd>
+              <span>Read about {nearbyPOIs[0].name}</span>
+            </button>
+          )}
+          {!modal && shownPOI && (
+            <aside
+              className="poi-reading"
+              aria-labelledby="poi-title"
+              ref={readingPanel}
+            >
+              <button
+                className="icon-button dark"
+                aria-label="Close point of interest"
+                onClick={() => setReading(null)}
+              >
+                <Icon name="close" size={17} />
+              </button>
+              <span className="eyebrow">A little history · Nearby</span>
+              <h2 id="poi-title">{shownPOI.name}</h2>
+              <p>{shownPOI.description}</p>
+              {shownPOI.location.note && (
+                <small className="poi-location-note">
+                  {shownPOI.location.note}
+                </small>
+              )}
+              <div className="poi-reading-actions">
+                {nearbyPOIs.length > 1 && (
+                  <button onClick={readPOI}>
+                    Next nearby story
+                    <span>
+                      {nearbyPOIs.findIndex((poi) => poi.id === reading) + 1} /{' '}
+                      {nearbyPOIs.length}
+                    </span>
+                  </button>
+                )}
+                <small>
+                  {snapshot.controllerSupported
+                    ? '↑ Read / next · ↓ Scroll · B Close'
+                    : 'I Read / next · Esc Close'}
+                </small>
+              </div>
+            </aside>
+          )}
+          {shownLandmark && !shownPOI && (
             <div className="discovery-card">
               <button
                 className="icon-button dark"
@@ -1396,11 +1487,24 @@ export function App() {
                 bow in Adventure, hold ZL to aim and press ZR to fire; L swaps
                 your bow and melee weapon. − opens the map, + opens help. Use
                 D-pad and A in menus; B closes them. In Chill Exploration, click
-                right stick to fly, then R / L to rise / descend.
+                right stick to fly, then R / L to rise / descend. Near a point
+                of interest, press D-pad Up to read or switch nearby stories;
+                D-pad Down scrolls and B closes the panel without jumping.
               </p>
               <p>
                 Requires browser-standard mapping. Individual Joy-Con and
                 driver-specific raw layouts are not supported.
+              </p>
+            </div>
+            <div>
+              <kbd>I</kbd>
+              <h3>Stories on your doorstep</h3>
+              <p>
+                Approach a landmark and press I, or click its subtle prompt, to
+                read its history in a translucent side panel. Press I again for
+                another nearby story; Escape closes it. You can keep exploring
+                while reading. Approximate historical locations are labelled,
+                and the panel closes when you leave the area.
               </p>
             </div>
             <div>

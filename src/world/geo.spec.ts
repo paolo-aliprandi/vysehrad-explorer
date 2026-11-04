@@ -296,10 +296,16 @@ describe('screenshot geometry repairs', () => {
       right = cathedralGardenFence[1][0];
     const opening: Point = [(left[0] + right[0]) / 2, (left[1] + right[1]) / 2];
     expect(blocked(opening, standingElevation(opening))).toBe(false);
-    for (const zone of requestedPlantingZones)
+    const trees = treePositions();
+    for (const [index, zone] of requestedPlantingZones.entries())
       expect(
-        treePositions().filter((point) => inside(point, zone)).length,
-      ).toBeGreaterThan(3);
+        trees.filter((point) => inside(point, zone)).length,
+      ).toBeGreaterThan(index === 0 ? 1 : 3);
+    for (const point of [
+      [149, 210],
+      [153, 216],
+    ])
+      expect(trees).not.toContainEqual(point);
   });
 });
 
@@ -691,10 +697,13 @@ describe('OSM world and movement', () => {
     expect(
       Math.abs(elevation(...center(gate.points)) - foundation(gate)),
     ).toBeLessThan(0.2);
-    expect(elevation(99.5755, -102.3874)).toBeGreaterThan(44);
+    expect(elevation(91.5, -102.3874)).toBeGreaterThan(44);
     expect(
-      Math.abs(elevation(99.5755, -102.3874) - elevation(80, -105)),
+      Math.abs(elevation(91.5, -102.3874) - elevation(80, -102)),
     ).toBeLessThan(4);
+    expect(elevation(99.5755, -102.3874)).toBeLessThan(
+      elevation(91.5, -102.3874) - 5,
+    );
   });
   it('keeps mapped posterns open below solid upper terrain and retains their sidewalls', () => {
     for (const postern of posterns) {

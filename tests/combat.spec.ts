@@ -102,9 +102,15 @@ test('keeps hidden-UI jumps hidden, buys meals, aims finite arrows and renders t
   await expect
     .poll(() => inspect('return w.adventure.enemies[0].windup;'))
     .toBeGreaterThan(0);
-  await expect(page.locator('.damage-vignette')).toBeVisible();
-  expect(await inspect('return w.adventure.health;')).toBe(4);
-  expect(await inspect('return w.playerImpact.visible;')).toBe(true);
+  await expect
+    .poll(() =>
+      inspect(`return {
+        health: w.adventure.health,
+        impact: w.playerImpact.visible,
+        vignette: document.querySelector('.damage-vignette') !== null,
+      };`),
+    )
+    .toEqual({ health: 4, impact: true, vignette: true });
   await inspect(`
     w.adventure.enemies.forEach(e=>w.adventure.defeated.add(e.id));
     w.jumpVelocity=0; w.setTime('day');

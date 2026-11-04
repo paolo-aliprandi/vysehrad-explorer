@@ -5,7 +5,6 @@ import {
   originalElevation,
   upperCovers,
   coverElevation,
-  upperPromenade,
   posterns,
   posternFloor,
   posternVaultRoute,
@@ -120,11 +119,6 @@ export function makePassages(add: AddGeometry) {
     }
     emit();
   }
-  add(
-    '#b7ad97',
-    pathRibbon(upperPromenade, 3, 0.06, originalElevation),
-    'cobble',
-  );
   for (const postern of posterns) {
     const garden = postern.feature.id === 12461779632;
     const cover = upperCovers.find((cover) => cover.id === postern.feature.id);
@@ -263,7 +257,7 @@ export function makePassages(add: AddGeometry) {
         add('#c3b9a2', surround, 'stone');
       }
     }
-    add('#b7ad97', pathRibbon(route, postern.width, 0.07), 'cobble');
+    add('#b7ac93', pathRibbon(route, postern.width, 0.07), 'gravel');
   }
 }
 

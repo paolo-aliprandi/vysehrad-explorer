@@ -727,6 +727,92 @@ kbd {
   font-size: 10px;
   color: #747b67;
 }
+.poi-hint,
+.poi-reading {
+  position: absolute;
+  right: 28px;
+  top: 170px;
+  width: min(330px, 40vw);
+  border: 1px solid #fff9e963;
+  border-radius: 12px;
+  background: #203d34d9;
+  color: #fff9e9;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px #102e3220;
+  z-index: 4;
+}
+.poi-hint {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.poi-reading {
+  padding: 23px;
+  max-height: min(440px, 46dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.poi-reading > .icon-button {
+  float: right;
+  width: 27px;
+  height: 27px;
+  color: #fff9e9;
+}
+.poi-reading .eyebrow {
+  display: block;
+  margin-bottom: 14px;
+  color: #d3d9b8;
+  font-size: 9px;
+}
+.poi-reading h2 {
+  margin: 0 25px 14px 0;
+  font:
+    25px/1.2 Georgia,
+    serif;
+}
+.poi-reading p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.poi-location-note,
+.poi-reading-actions > small {
+  display: block;
+  margin-top: 16px;
+  font-size: 10px;
+  line-height: 1.6;
+  color: #d3d9b8;
+}
+.poi-reading-actions button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 18px;
+  padding: 10px 0;
+  border: 0;
+  border-top: 1px solid #fff9e940;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font-size: 12px;
+}
+@media (max-width: 600px) {
+  .poi-hint,
+  .poi-reading {
+    top: 135px;
+    right: 12px;
+    width: min(280px, 70vw);
+  }
+  .poi-reading {
+    padding: 17px;
+    max-height: 36dvh;
+  }
+}
 .activity-destinations,
 .conversation-options {
   display: grid;

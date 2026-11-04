@@ -19,6 +19,24 @@ function pad(axes = [0, 0, 0, 0], down: number[] = [], index = 0): Gamepad {
 }
 
 describe('Switch controller input', () => {
+  it('uses D-pad reading actions without changing A interactions or B jumps', () => {
+    const reader = new ControllerReader();
+    expect(reader.read([pad(undefined, [12])], 0).pressed.has('read')).toBe(
+      true,
+    );
+    expect(reader.read([pad(undefined, [12])], 10).pressed.has('read')).toBe(
+      false,
+    );
+    expect(
+      reader.read([pad(undefined, [13])], 20).pressed.has('readScroll'),
+    ).toBe(true);
+    expect(reader.read([pad(undefined, [1])], 30).pressed.has('interact')).toBe(
+      true,
+    );
+    expect(reader.read([pad(undefined, [0])], 40).pressed.has('jump')).toBe(
+      true,
+    );
+  });
   it('keeps B separate from photo mode and reads ZL aim with edge-triggered ZR shots', () => {
     const reader = new ControllerReader();
     expect([...reader.read([pad(undefined, [0])], 0).pressed]).toEqual([

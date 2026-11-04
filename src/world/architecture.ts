@@ -21,6 +21,8 @@ import {
   wallOpening,
   wallProfile,
   wallThickness,
+  retainedWallOffsets,
+  courtBankBoundary,
   rampartWallRuns,
   cemeterySolidWallIds,
   cemeteryArcades,
@@ -37,6 +39,7 @@ import {
   cathedralDoorLeaf,
   aveMariaFrontage,
   spickaGate,
+  panoramaSites,
   westFacade as buildingFront,
   type Feature,
   type Point,
@@ -2058,6 +2061,109 @@ export function makeEnclosureDetails(add: AddGeometry) {
         'stone',
       );
     }
+  }
+}
+
+export function makePanoramaLookouts(add: AddGeometry) {
+  for (const site of panoramaSites) {
+    const angle = -Math.atan2(site.axis[1], site.axis[0]);
+    const wallWidth = wallThickness(site.wall, site.point);
+    const profile = wallProfile(site.wall, site.point, site.inward);
+    const offsets = retainedWallOffsets(site.point, wallWidth, profile);
+    const thickness = wallWidth + offsets.inset - offsets.outer;
+    const offset = offsets.outer;
+    const ends = [site.at(-site.width / 2), site.at(site.width / 2)];
+    add(
+      '#a68b76',
+      continuousWall(
+        ends,
+        wallWidth,
+        (point, normal) => ({
+          ...wallProfile(site.wall, point, normal),
+          top: site.floor + 0.65,
+        }),
+        true,
+        courtBankBoundary,
+      ),
+      'brick',
+    );
+    const top = site.sheltered ? 3.05 : profile.top - site.floor;
+    const panel = new THREE.Shape();
+    panel.moveTo(-site.width / 2, 0.65);
+    panel.lineTo(site.width / 2, 0.65);
+    panel.lineTo(site.width / 2, top);
+    panel.lineTo(-site.width / 2, top);
+    panel.closePath();
+    const spacing = site.width / 3;
+    const radius = Math.min(0.9, spacing / 2 - 0.3);
+    for (const u of [-spacing, 0, spacing]) {
+      const window = new THREE.Path();
+      window.moveTo(u - radius, 0.72);
+      window.lineTo(u - radius, 1.65);
+      window.absarc(u, 1.65, radius, Math.PI, 0, true);
+      window.lineTo(u + radius, 0.72);
+      window.closePath();
+      panel.holes.push(window);
+    }
+    const masonry = new THREE.ExtrudeGeometry(panel, {
+      depth: thickness,
+      bevelEnabled: false,
+      curveSegments: 20,
+    });
+    masonry.translate(0, 0, -thickness / 2);
+    positioned(masonry, site.at(0, offset + thickness / 2), site.floor, angle);
+    add('#a68b76', masonry, 'brick');
+    if (!site.sheltered) continue;
+    const box = (
+      width: number,
+      height: number,
+      depth: number,
+      u: number,
+      y: number,
+      v: number,
+      color = '#5c4a36',
+    ) =>
+      add(
+        color,
+        positioned(
+          new THREE.BoxGeometry(width, height, depth),
+          site.at(u, v),
+          site.floor + y,
+          angle,
+        ),
+        'wood',
+      );
+    box(site.width + 0.3, 0.16, 3.1, 0, -0.08, 2.45, '#a18c69');
+    for (const u of [
+      -site.width / 2 + 0.15,
+      -site.width / 6,
+      site.width / 6,
+      site.width / 2 - 0.15,
+    ]) {
+      box(0.2, 2.8, 0.2, u, 1.45, 3.8);
+      box(0.18, 3, 0.18, u, 1.55, 1);
+    }
+    for (const v of [1, 3.8]) box(site.width + 0.45, 0.2, 0.2, 0, 2.8, v);
+    for (const u of [-site.width / 2, site.width / 2]) {
+      box(0.1, 0.12, 2.8, u, 0.95, 2.4);
+      for (let v = 1.3; v < 3.8; v += 0.35) box(0.07, 0.8, 0.07, u, 0.5, v);
+    }
+    const roof = new THREE.Shape();
+    roof.moveTo(-0.2, 2.95);
+    roof.lineTo(1.7, 3.55);
+    roof.lineTo(3.6, 2.95);
+    roof.lineTo(3.6, 2.77);
+    roof.lineTo(1.7, 3.37);
+    roof.lineTo(-0.2, 2.77);
+    roof.closePath();
+    const canopy = new THREE.ExtrudeGeometry(roof, {
+      depth: site.width + 0.9,
+      bevelEnabled: false,
+    });
+    canopy.rotateY(-Math.PI / 2);
+    canopy.translate((site.width + 0.9) / 2, 0, -4.1);
+    positioned(canopy, site.point, site.floor, angle);
+    add('#695745', canopy, 'wood');
   }
 }
 
