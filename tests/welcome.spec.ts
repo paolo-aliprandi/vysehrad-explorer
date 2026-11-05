@@ -86,4 +86,9 @@ test('keeps aerials visible while 3D loads, respects reduced motion, then enters
   await page.getByRole('button', { name: 'Enter Vyšehrad' }).click();
   await expect(page.getByRole('button', { name: 'Mute sounds' })).toBeVisible();
   await expect(page.locator('.welcome-aerials')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Dismiss field notes' }).click();
+  await expect(page.locator('.expedition-card')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Open exploration map' }),
+  ).toBeVisible();
 });

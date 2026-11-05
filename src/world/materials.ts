@@ -8,6 +8,7 @@ export type MaterialKind =
   | 'terracotta'
   | 'brick'
   | 'cobble'
+  | 'asphalt'
   | 'mosaic'
   | 'fresco'
   | 'gravel'
@@ -309,18 +310,23 @@ export class Materials {
       context.fillStyle = kind === 'grass' ? '#e4e9d3' : '#edece5';
       context.fillRect(0, 0, 512, 512);
     }
-    if (kind === 'gravel')
+    if (kind === 'gravel' || kind === 'asphalt')
       for (let i = 0; i < 14000; i++) {
-        const shade = Math.round(165 + random() * 80);
-        context.fillStyle = `rgb(${shade},${shade - 4},${shade - 12})`;
+        const shade = Math.round(
+          kind === 'asphalt' ? 175 + random() * 55 : 165 + random() * 80,
+        );
+        context.fillStyle =
+          kind === 'asphalt'
+            ? `rgb(${shade},${shade},${shade})`
+            : `rgb(${shade},${shade - 4},${shade - 12})`;
         context.fillRect(
           random() * 512,
           random() * 512,
-          1 + random() * 3,
-          1 + random() * 2,
+          1 + random() * (kind === 'asphalt' ? 1 : 3),
+          1 + random() * (kind === 'asphalt' ? 1 : 2),
         );
       }
-    if (!['mosaic', 'cobble', 'gravel'].includes(kind))
+    if (!['mosaic', 'cobble', 'gravel', 'asphalt'].includes(kind))
       brushWash(context, random, kind);
     if (kind === 'rock') {
       for (let i = 0; i < 38; i++) {

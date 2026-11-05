@@ -43,6 +43,46 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   expect(
     await inspect('return w.scene.getObjectByName("Paving").children.length;'),
   ).toBe(2);
+  const photoFixes = await inspect(`
+    const g=await import('/src/world/geo.ts'),site=g.gardenHeraldry,lab=g.cemeteryLabyrinth;
+    w.scene.updateMatrixWorld(true);
+    const meshes=[...w.scene.children.filter(mesh=>mesh.isMesh&&!mesh.isInstancedMesh),...w.scene.getObjectByName('Paving').children];
+    const cast=(point,direction,far=15)=>{
+      w.raycaster.set(w.position.clone().set(...point).multiplyScalar(1.5),w.position.clone().set(...direction));
+      w.raycaster.far=far*1.5;
+      const hit=w.raycaster.intersectObjects(meshes,false)[0];
+      return {color:hit?.object.material.color.getHexString(),height:hit?.point.y/1.5};
+    };
+    const down=point=>cast([point[0],g.elevation(...point)+5,point[1]],[0,-1,0]);
+    const street=g.paths.find(path=>path.id===494921190),point=street.points[1].map((p,i)=>(p+street.points[2][i])/2);
+    const {leopoldSidewalks}=await import('/src/world/reference-details.ts');
+    const curbPoints=leopoldSidewalks.runs.map(run=>run.curb[Math.floor(run.curb.length/2)]);
+    return {
+      colors:Object.fromEntries([['lion','#918b79'],['shield','#a5a18e'],['curb','#a7a89d']].map(([key,color])=>[key,w.surfaceMaterials.get('stone',color).color.getHexString()])),
+      asphalt:down(lab.point),labGround:g.elevation(...lab.point),labBlocked:g.blocked(lab.point,g.elevation(...lab.point)),
+      paint:down([lab.point[0],lab.point[1]+1.15]),
+      lions:site.faces.map(face=>cast([face.point[0]+face.normal[0]*2,site.crest-2.25,face.point[1]+face.normal[1]*2],[-face.normal[0],0,-face.normal[1]],3)),
+      shield:cast([site.shield.point[0]+Math.sin(site.shield.angle)*2,site.shield.height,site.shield.point[1]+Math.cos(site.shield.angle)*2],[-Math.sin(site.shield.angle),0,-Math.cos(site.shield.angle)],3),
+      curbs:curbPoints.map(point=>({hit:down(point),paving:g.featureElevation(street,point)+.055})),
+      road:down(point),roadBlocked:g.blocked(point,g.elevation(...point))
+    };
+  `);
+  expect(photoFixes.asphalt.color).toBe('555954');
+  expect(photoFixes.asphalt.height - photoFixes.labGround).toBeCloseTo(
+    0.075,
+    3,
+  );
+  expect(photoFixes.paint.color).toBe('e8e4ce');
+  expect(photoFixes.labBlocked).toBe(false);
+  for (const lion of photoFixes.lions)
+    expect(lion.color).toBe(photoFixes.colors.lion);
+  expect(photoFixes.shield.color).toBe(photoFixes.colors.shield);
+  for (const curb of photoFixes.curbs) {
+    expect(curb.hit.color).toBe(photoFixes.colors.curb);
+    expect(curb.hit.height - curb.paving).toBeCloseTo(0.02, 2);
+  }
+  expect(photoFixes.road.color).toBe('b2b5ae');
+  expect(photoFixes.roadBlocked).toBe(false);
   const brickGate = await inspect(`
     const g=await import('/src/world/geo.ts');
     const gate=g.features.find(feature=>feature.id===51700613),frame=g.gateFrame(gate),floor=g.foundation(gate);

@@ -99,6 +99,7 @@ import {
   makeProvostFrontage,
   makeCanonGables,
   makeInformationCentre,
+  leopoldSidewalks,
 } from './reference-details';
 import { makeNuselskyBridge } from './bridge';
 import { makeRiversideGallery } from './gallery';
@@ -149,6 +150,7 @@ import {
   upperElevation,
   informationCentre,
   citadela,
+  cemeteryLabyrinth,
   originalElevation,
   unretainedElevation,
   retainedStreetWalls,
@@ -938,7 +940,9 @@ export class World {
         );
         mesh.matrixAutoUpdate = false;
         this.scene.add(mesh);
-        mesh.castShadow = !['grass', 'cobble', 'glass'].includes(kind);
+        mesh.castShadow = !['grass', 'cobble', 'glass', 'asphalt'].includes(
+          kind,
+        );
         mesh.receiveShadow = true;
         if (
           [
@@ -1727,6 +1731,8 @@ export class World {
             citadela.courtyard,
             informationCentre.apron,
             informationCentre.sidewalk,
+            cemeteryLabyrinth.courtyard,
+            ...leopoldSidewalks.polygons,
           ].some((paving) => inside(point, paving)) ||
           panoramaDecks.some((deck) => inside(point, deck.points)) ||
           aveMariaCourtCuts.some((cut) => inside(point, cut)) ||

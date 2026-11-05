@@ -25,11 +25,11 @@
   },
   {
     "name": "Vyšehrad fortress walls",
-    "historical description": "The extensive walls that transformed Vyšehrad into a Baroque military fortress, largely during the 17th and 18th centuries. The masonry is evidence of successive defensive phases: older medieval structures were often absorbed, altered, or hidden by the later fortress. Looking closely at changes in stonework can reveal that the site was rebuilt rather than created in one moment."
+    "historical description": "Vyšehrad's rocky position commands the Vltava and the Botič valley. Charles IV incorporated it into medieval Prague's defences, but the present bastioned fortress followed a different plan: after the Swedish siege of Prague in 1648, Ferdinand III ordered new fortifications. Work began in 1653, displacing residents and replacing much of the medieval settlement with military buildings and reshaped earthworks. The on-site board calls this 'The Fortress That Never Fell': foreign armies occupied it following Prague's capitulation, rather than taking the fortress by direct assault."
   },
   {
     "name": "Baroque bastions",
-    "historical description": "Angular defensive platforms built to protect the fortress from artillery attack. Bastions were designed for the age of artillery, allowing defenders to cover the faces of neighbouring walls and reduce blind spots. Their geometry is a key clue to reading Vyšehrad as an engineered fortress rather than simply a medieval castle."
+    "historical description": "The angular bastions belong to the artillery-age fortress begun in 1653. Their projecting faces covered neighbouring walls and reduced blind spots, while extensive earthworks changed the shape of the hill. The original scheme was never fully completed, leaving differences between the surviving bastions. Look at their geometry as military engineering, rather than assuming every part belongs to a single medieval castle."
   },
   {
     "name": "Redan",
@@ -41,7 +41,7 @@
   },
   {
     "name": "Fortress passages",
-    "historical description": "Passages through the defensive structures used for movement between different parts of the fortress. The masonry is evidence of successive defensive phases: older medieval structures were often absorbed, altered, or hidden by the later fortress. Looking closely at changes in stonework can reveal that the site was rebuilt rather than created in one moment."
+    "historical description": "The Baroque fortress incorporated protected underground circulation as well as gates and open roads. According to the on-site information board, casemate passages occur in four separate sections around Vyšehrad and total more than 1,000 metres in length. These are not a single continuous visitor tunnel. The explorable passages in this model are a reconstruction, not a complete survey of that historic network."
   },
   {
     "name": "Casemate embrasures",

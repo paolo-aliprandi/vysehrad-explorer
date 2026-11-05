@@ -26,10 +26,21 @@
 .touch-controls {
   display: none;
 }
+.mobile-controls-toggle,
+.mobile-label {
+  display: none;
+}
+.secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
 @media (pointer: coarse) {
+  .entry-footnote > .desktop-controls,
   .controls-bar > .desktop-controls {
     display: none;
   }
+  .entry-footnote > .touch-controls,
   .controls-bar > .touch-controls {
     display: inline;
   }
@@ -666,10 +677,21 @@
   border-radius: 10px;
 }
 .expedition-heading {
+  padding-right: 28px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+}
+.expedition-dismiss {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+}
+.adventure-status {
+  padding-right: 28px;
 }
 .expedition-heading .eyebrow {
   font-size: 7px;
@@ -1266,10 +1288,6 @@ kbd {
   .top-actions {
     gap: 5px;
   }
-  .top-actions > .icon-button:nth-last-child(2),
-  .top-actions > .icon-button:nth-last-child(3) {
-    display: none;
-  }
   .welcome-content {
     bottom: 65px;
     flex-direction: column;
@@ -1388,5 +1406,226 @@ kbd {
   .about-stats {
     flex-wrap: wrap;
     gap: 25px;
+  }
+}
+@media (max-width: 800px), (max-width: 1000px) and (max-height: 500px) {
+  .app {
+    min-height: 0;
+  }
+  .app.welcome {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+  .welcome .topbar,
+  .welcome-content,
+  .welcome .attribution {
+    position: relative;
+    inset: auto;
+  }
+  .topbar {
+    z-index: 6;
+    padding: max(12px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right)) 12px
+      max(12px, env(safe-area-inset-left));
+    gap: 8px;
+  }
+  .brand {
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    gap: 7px;
+    flex-shrink: 0;
+  }
+  .brand small {
+    display: none;
+  }
+  .brand-symbol {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+  }
+  .top-actions {
+    gap: 4px;
+  }
+  .top-actions > .pill,
+  .icon-button {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+  .top-actions > .pill {
+    gap: 0;
+  }
+  .control-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .top-actions kbd {
+    display: none;
+  }
+  .mobile-controls-toggle {
+    display: inline-flex;
+  }
+  .playing .secondary-actions {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    right: max(12px, env(safe-area-inset-right));
+    gap: 5px;
+    padding: 8px;
+    border-radius: 12px;
+    background: #294a3df5;
+    box-shadow: 0 5px 25px #173b3d40;
+    z-index: 6;
+  }
+  .playing .secondary-actions.expanded {
+    display: flex;
+  }
+  .welcome-content {
+    pointer-events: auto;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    padding: 16px max(16px, env(safe-area-inset-right)) 20px
+      max(16px, env(safe-area-inset-left));
+    gap: 22px;
+  }
+  .hero-copy h1 {
+    font-size: 36px;
+    margin-bottom: 0;
+  }
+  .hero-copy > .eyebrow {
+    margin-bottom: 10px;
+  }
+  .entry-card {
+    width: 100%;
+    max-width: 480px;
+    align-self: center;
+    padding: 22px;
+  }
+  .entry-stats {
+    gap: 8px;
+  }
+  .entry-stats span {
+    white-space: normal;
+  }
+  .mode-picker button {
+    min-height: 70px;
+  }
+  .welcome .attribution {
+    padding: 8px 16px max(16px, env(safe-area-inset-bottom));
+  }
+  .playing .attribution {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    font-size: 6px;
+    line-height: 1.5;
+    pointer-events: none;
+  }
+  .playing .attribution a {
+    pointer-events: auto;
+  }
+  .location-pill {
+    top: calc(72px + env(safe-area-inset-top));
+    left: 12px;
+    right: 12px;
+    transform: none;
+    padding: 7px 10px;
+    gap: 7px;
+    pointer-events: none;
+  }
+  .location-name,
+  .location-time {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .location-name {
+    flex: 1;
+    min-width: 0;
+  }
+  .location-time {
+    max-width: 45%;
+  }
+  .expedition-card {
+    display: none;
+  }
+  .minimap-card {
+    bottom: calc(42px + env(safe-area-inset-bottom));
+    right: 12px;
+    width: auto;
+    z-index: 5;
+  }
+  .minimap-heading,
+  .minimap-button > .world-map,
+  .minimap-button > .interior-map-note,
+  .minimap-button kbd {
+    display: none;
+  }
+  .map-open {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 10px;
+  }
+  .controls-bar {
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    width: max-content;
+    max-width: calc(100% - 24px);
+    white-space: normal;
+    text-align: center;
+    justify-content: center;
+    pointer-events: none;
+    font-size: 8px;
+    line-height: 1.5;
+    padding: 6px 10px;
+  }
+  .report-button {
+    top: auto;
+    right: 12px;
+    bottom: calc(132px + env(safe-area-inset-bottom));
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 10px;
+  }
+  .report-button .full-label {
+    display: none;
+  }
+  .mobile-label {
+    display: inline;
+  }
+  .toast {
+    top: calc(110px + env(safe-area-inset-top));
+    bottom: auto;
+    max-width: calc(100% - 24px);
+    width: max-content;
+    padding: 10px 14px;
+    font-size: 10px;
+    line-height: 1.5;
+    pointer-events: none;
+  }
+  .discovery-card {
+    display: none;
+  }
+  .poi-hint,
+  .poi-reading {
+    top: auto;
+    bottom: calc(186px + env(safe-area-inset-bottom));
+  }
+  .interaction-prompt {
+    left: 12px;
+    right: auto;
+    bottom: calc(132px + env(safe-area-inset-bottom));
+    transform: none;
+    max-width: calc(100% - 130px);
+    padding: 10px;
+    min-height: 44px;
+  }
+  .interaction-prompt kbd,
+  .poi-hint kbd {
+    display: none;
+  }
+  .health-panel {
+    top: calc(108px + env(safe-area-inset-top));
   }
 }

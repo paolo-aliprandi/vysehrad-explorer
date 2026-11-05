@@ -4818,6 +4818,113 @@ for (const [index, point] of citadela.tables.entries())
       depth: 0.5,
       height: 1,
     });
+export const cemeteryLabyrinth = (() => {
+  const corner: Point = [-236.7, -86.8];
+  const border = Array.from({ length: 65 }, (_, i): Point => {
+    const t = i / 64,
+      s = 1 - t;
+    return [
+      s * s * -262.2 + 2 * s * t * -262.6 + t * t * corner[0],
+      s * s * corner[1] + 2 * s * t * -104.4 + t * t * -103.4,
+    ];
+  });
+  return {
+    point: [-245.6, -95.5] as Point,
+    radius: 6.7,
+    corner,
+    border,
+    courtyard: [corner, ...border],
+  };
+})();
+
+export const gardenHeraldry = (() => {
+  const gardenWall = walls.find((wall) => wall.id === 8888302);
+  const rampart = walls.find((wall) => wall.id === 1532977610);
+  if (!gardenWall || !rampart)
+    throw new Error('Missing heraldic garden corner walls.');
+  const meeting = gardenWall.points[gardenWall.points.length - 1];
+  const index = rampart.points.findIndex(
+    (point) => Math.hypot(point[0] - meeting[0], point[1] - meeting[1]) < 0.01,
+  );
+  const corner = rampart.points[index + 1];
+  if (index < 0 || !corner)
+    throw new Error('Missing rampart corner beyond the garden tunnel.');
+  const face = (next: Point) => {
+    if (!next) throw new Error('Missing heraldic wall return.');
+    const length = Math.hypot(next[0] - corner[0], next[1] - corner[1]);
+    const axis: Point = [
+      (next[0] - corner[0]) / length,
+      (next[1] - corner[1]) / length,
+    ];
+    let normal: Point = [axis[1], -axis[0]];
+    if (
+      inside(
+        [
+          (corner[0] + next[0]) / 2 + normal[0],
+          (corner[1] + next[1]) / 2 + normal[1],
+        ],
+        courtBankBoundary,
+      )
+    )
+      normal = [-normal[0], -normal[1]];
+    const offset = 0.055;
+    return {
+      axis,
+      normal,
+      offset,
+      angle: Math.atan2(normal[0], normal[1]),
+    };
+  };
+  const faces = [face(rampart.points[index]), face(rampart.points[index + 2])];
+  const [a, b] = faces;
+  const determinant = a.normal[0] * b.normal[1] - a.normal[1] * b.normal[0];
+  if (Math.abs(determinant) < 0.1)
+    throw new Error('The heraldic corner faces must not be parallel.');
+  const intersection = (offsetA: number, offsetB: number): Point => [
+    corner[0] + (offsetA * b.normal[1] - a.normal[1] * offsetB) / determinant,
+    corner[1] + (a.normal[0] * offsetB - offsetA * b.normal[0]) / determinant,
+  ];
+  const join = intersection(a.offset, b.offset);
+  const nx = a.normal[0] + b.normal[0],
+    nz = a.normal[1] + b.normal[1],
+    length = Math.hypot(nx, nz);
+  const profile = wallProfile(rampart, corner, a.normal);
+  const thickness = wallThickness(rampart, corner);
+  const { inset } = retainedWallOffsets(corner, thickness, profile);
+  const reverseOffset = inset + thickness + 0.035;
+  const innerJoin = intersection(-reverseOffset, -reverseOffset);
+  return {
+    corner,
+    crest: profile.top,
+    faces: faces.map((face) => ({
+      ...face,
+      point: [
+        join[0] + face.axis[0] * 1.15,
+        join[1] + face.axis[1] * 1.15,
+      ] as Point,
+      towardCorner: -Math.sign(
+        face.axis[0] * Math.cos(face.angle) -
+          face.axis[1] * Math.sin(face.angle),
+      ),
+    })),
+    eagle: {
+      point: [
+        join[0] + (nx / length) * 0.2,
+        join[1] + (nz / length) * 0.2,
+      ] as Point,
+      angle: Math.atan2(nx, nz),
+    },
+    shield: {
+      height: profile.top - 0.75,
+      point: [
+        innerJoin[0] + a.axis[0] * 1.05,
+        innerJoin[1] + a.axis[1] * 1.05,
+      ] as Point,
+      angle: Math.atan2(-a.normal[0], -a.normal[1]),
+    },
+  };
+})();
+
 export const referenceSites = {
   gardenWell: {
     point: [-30.19, 5.53] as Point,

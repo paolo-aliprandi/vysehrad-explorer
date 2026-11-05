@@ -62,6 +62,8 @@ type IconName =
   | 'camera'
   | 'sound'
   | 'muted'
+  | 'menu'
+  | 'stone'
   | 'expand';
 function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   const artwork: Record<IconName, string> = {
@@ -79,6 +81,8 @@ function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
     expand: 'M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5',
     sound: 'M3 9h4l5-4v14l-5-4H3V9Zm13-1a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14',
     muted: 'M3 9h4l5-4v14l-5-4H3V9Zm13 0 6 6m0-6-6 6',
+    menu: 'M4 6h16M4 12h16M4 18h16',
+    stone: 'm5 7 8-3 6 5 1 7-8 4-8-5 1-8Z',
   };
   return (
     <svg
@@ -367,6 +371,8 @@ export function App() {
   const [photo, setPhoto] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [reading, setReading] = useState<string | null>(null);
+  const [controlsExpanded, setControlsExpanded] = useState(false);
+  const [notesDismissed, setNotesDismissed] = useState(false);
   const readingPanel = useRef<HTMLElement>(null);
   const nearbyPOIs = useMemo(
     () =>
@@ -606,10 +612,17 @@ export function App() {
     world.current?.setActive(true);
     void world.current?.setSound(true).then(setSound);
     setStarted(true);
+    const touch =
+      window.matchMedia?.('(pointer: coarse)').matches &&
+      !snapshot.controllerSupported;
     setToast(
-      mode === 'adventure'
-        ? 'You are the knight of Vyšehrad. Pick up the glowing stick; raise banners to reveal your map. F / A interacts; R / Y attacks.'
-        : 'F / A to interact · R / Y to toss a stone · M / − for the map.',
+      touch
+        ? mode === 'adventure'
+          ? 'Drag to look. Double-tap and hold to walk. Tap nearby prompts to interact and Attack to fight.'
+          : 'Drag to look. Double-tap and hold to walk. Tap nearby prompts to interact.'
+        : mode === 'adventure'
+          ? 'You are the knight of Vyšehrad. Pick up the glowing stick; raise banners to reveal your map. F / A interacts; R / Y attacks.'
+          : 'F / A to interact · R / Y to toss a stone · M / − for the map.',
     );
     if (document.activeElement instanceof HTMLElement)
       document.activeElement.blur();
@@ -872,7 +885,9 @@ export function App() {
                     disabled={snapshot.indoors}
                   >
                     <Icon name={flying ? 'fly' : 'walk'} />
-                    {flying ? 'Flying' : 'Walking'}
+                    <span className="control-label">
+                      {flying ? 'Flying' : 'Walking'}
+                    </span>
                   </button>
                 )}
                 <button
@@ -888,61 +903,84 @@ export function App() {
                       : 'Toss a stone · R / Y'
                   }
                 >
-                  {mode === 'adventure' ? 'Attack' : 'Toss stone'}{' '}
+                  <Icon name="stone" />
+                  <span className="control-label">
+                    {mode === 'adventure' ? 'Attack' : 'Toss stone'}
+                  </span>{' '}
                   <kbd>{snapshot.controllerSupported ? 'Y' : 'R'}</kbd>
-                </button>
-                <button
-                  className="icon-button"
-                  onClick={() =>
-                    void world.current?.setSound(!sound).then(setSound)
-                  }
-                  aria-label={sound ? 'Mute sounds' : 'Enable sounds'}
-                  aria-pressed={sound}
-                  title="Quiet footsteps and nearby conversation"
-                >
-                  <Icon name={sound ? 'sound' : 'muted'} />
-                </button>
-                <button
-                  className="icon-button"
-                  onClick={changeTime}
-                  aria-label={`Change time of day, currently ${time}`}
-                  title="24-minute day–night cycle → fixed golden hour → daylight → night"
-                >
-                  <Icon
-                    name={
-                      time === 'night' ||
-                      (time === 'cycle' &&
-                        (snapshot.hour < 6 || snapshot.hour >= 20))
-                        ? 'moon'
-                        : 'sun'
-                    }
-                  />
-                </button>
-                <button
-                  className="icon-button"
-                  onClick={() => setPhoto(true)}
-                  aria-label="Photo mode"
-                  title="Photo mode · P"
-                >
-                  <Icon name="camera" />
-                </button>
-                <button
-                  className="icon-button"
-                  onClick={fullscreen}
-                  aria-label="Toggle fullscreen"
-                  title="Fullscreen"
-                >
-                  <Icon name="expand" />
                 </button>
               </>
             )}
-            <button
-              className="icon-button"
-              onClick={() => setModal('help')}
-              aria-label="Controls and help"
+            {started && (
+              <button
+                className="icon-button mobile-controls-toggle"
+                aria-label="More controls"
+                aria-expanded={controlsExpanded}
+                aria-controls="secondary-actions"
+                onClick={() => setControlsExpanded(!controlsExpanded)}
+              >
+                <Icon name={controlsExpanded ? 'close' : 'menu'} />
+              </button>
+            )}
+            <div
+              id="secondary-actions"
+              className={`secondary-actions${controlsExpanded ? ' expanded' : ''}`}
             >
-              <Icon name="help" />
-            </button>
+              {started && (
+                <>
+                  <button
+                    className="icon-button"
+                    onClick={() =>
+                      void world.current?.setSound(!sound).then(setSound)
+                    }
+                    aria-label={sound ? 'Mute sounds' : 'Enable sounds'}
+                    aria-pressed={sound}
+                    title="Quiet footsteps and nearby conversation"
+                  >
+                    <Icon name={sound ? 'sound' : 'muted'} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    onClick={changeTime}
+                    aria-label={`Change time of day, currently ${time}`}
+                    title="24-minute day–night cycle → fixed golden hour → daylight → night"
+                  >
+                    <Icon
+                      name={
+                        time === 'night' ||
+                        (time === 'cycle' &&
+                          (snapshot.hour < 6 || snapshot.hour >= 20))
+                          ? 'moon'
+                          : 'sun'
+                      }
+                    />
+                  </button>
+                  <button
+                    className="icon-button"
+                    onClick={() => setPhoto(true)}
+                    aria-label="Photo mode"
+                    title="Photo mode · P"
+                  >
+                    <Icon name="camera" />
+                  </button>
+                  <button
+                    className="icon-button"
+                    onClick={fullscreen}
+                    aria-label="Toggle fullscreen"
+                    title="Fullscreen"
+                  >
+                    <Icon name="expand" />
+                  </button>
+                </>
+              )}
+              <button
+                className="icon-button"
+                onClick={() => setModal('help')}
+                aria-label="Controls and help"
+              >
+                <Icon name="help" />
+              </button>
+            </div>
           </div>
         </header>
       )}
@@ -1028,9 +1066,14 @@ export function App() {
               <Icon name="arrow" />
             </button>
             <span className="entry-footnote">
-              {snapshot.controllerSupported
-                ? 'Controller connected · D-pad selects mode · A enters'
-                : 'Keyboard + mouse or Switch Pro controller · Press any controller button'}
+              <span className="touch-controls">
+                Touch to explore · Drag to look · Double-tap and hold to walk
+              </span>
+              <span className="desktop-controls">
+                {snapshot.controllerSupported
+                  ? 'Controller connected · D-pad selects mode · A enters'
+                  : 'Keyboard + mouse or Switch Pro controller · Press any controller button'}
+              </span>
             </span>
             <div className="honesty-note">
               <span className="small-dot" />
@@ -1047,190 +1090,210 @@ export function App() {
         <>
           <div className="location-pill">
             <span className="small-dot" />
-            {snapshot.indoors
-              ? snapshot.interior === 'casemates'
-                ? 'Vyšehrad casemates · underground interpretation'
-                : snapshot.interior === 'artillery'
-                  ? 'Artillery gallery · underground interpretation'
-                  : snapshot.interior === 'john'
-                    ? 'St. John the Baptist · hidden church interpretation'
-                    : snapshot.interior === 'rotunda'
-                      ? 'St. Martin’s Rotunda · interior interpretation'
-                      : snapshot.interior === 'lawrence'
-                        ? 'St. Lawrence · archaeological remains'
-                        : 'Saints Peter & Paul · interior sketch'
-              : snapshot.seated
-                ? 'Taking a moment'
-                : near
-                  ? near.short
-                  : flying
-                    ? 'Somewhere above Vyšehrad'
-                    : 'Vyšehrad fortress grounds'}
+            <span className="location-name">
+              {snapshot.indoors
+                ? snapshot.interior === 'casemates'
+                  ? 'Vyšehrad casemates · underground interpretation'
+                  : snapshot.interior === 'artillery'
+                    ? 'Artillery gallery · underground interpretation'
+                    : snapshot.interior === 'john'
+                      ? 'St. John the Baptist · hidden church interpretation'
+                      : snapshot.interior === 'rotunda'
+                        ? 'St. Martin’s Rotunda · interior interpretation'
+                        : snapshot.interior === 'lawrence'
+                          ? 'St. Lawrence · archaeological remains'
+                          : 'Saints Peter & Paul · interior sketch'
+                : snapshot.seated
+                  ? 'Taking a moment'
+                  : near
+                    ? near.short
+                    : flying
+                      ? 'Somewhere above Vyšehrad'
+                      : 'Vyšehrad fortress grounds'}
+            </span>
             <span className="location-divider" />
-            {time === 'cycle'
-              ? `${String(Math.floor(snapshot.hour)).padStart(2, '0')}:${String(Math.floor((snapshot.hour % 1) * 60)).padStart(2, '0')} · DAY–NIGHT CYCLE`
-              : time === 'golden'
-                ? 'GOLDEN HOUR'
-                : time === 'day'
-                  ? 'DAYLIGHT'
-                  : 'BLUE NIGHT'}
+            <span className="location-time">
+              {time === 'cycle'
+                ? `${String(Math.floor(snapshot.hour)).padStart(2, '0')}:${String(Math.floor((snapshot.hour % 1) * 60)).padStart(2, '0')} · DAY–NIGHT CYCLE`
+                : time === 'golden'
+                  ? 'GOLDEN HOUR'
+                  : time === 'day'
+                    ? 'DAYLIGHT'
+                    : 'BLUE NIGHT'}
+            </span>
           </div>
-          <aside
-            className={`expedition-card${mode === 'adventure' ? ' adventure-card' : ''}${shownLandmark ? ' with-discovery' : ''}`}
-          >
-            {mode === 'adventure' && (
-              <div
-                className="adventure-status"
-                role="status"
-                aria-label="Knight status"
+          {!notesDismissed && (
+            <aside
+              className={`expedition-card${mode === 'adventure' ? ' adventure-card' : ''}${shownLandmark ? ' with-discovery' : ''}`}
+            >
+              <button
+                className="icon-button dark expedition-dismiss"
+                aria-label="Dismiss field notes"
+                onClick={() => setNotesDismissed(true)}
               >
-                <span>Equipped: {snapshot.adventure?.weapon ?? 'unarmed'}</span>
-                <span>
-                  Arrows: {snapshot.adventure?.arrows ?? 0} · L / C switches
-                  weapons
-                </span>
-                <span>
-                  Moss sprites: {snapshot.adventure?.defeated.length ?? 0} /{' '}
-                  {enemySpawns.length}
-                  {' · '}
-                  {enemySpawns.length -
-                    (snapshot.adventure?.defeated.length ?? 0)}{' '}
-                  remaining
-                </span>
-                {snapshot.adventure?.defeated.length === enemySpawns.length && (
-                  <button
-                    className="raid-restart"
-                    onClick={() =>
-                      setToast(world.current?.restartRaids() ?? '')
-                    }
-                  >
-                    Start another raid
-                  </button>
-                )}
-                <span>
-                  House raids cleared: {snapshot.adventure?.housesDefended ?? 0}{' '}
-                  / {raidHouses.length}
-                </span>
-                <span>
-                  Civilians in danger:{' '}
-                  {snapshot.adventure?.civiliansInDanger ?? 0}
-                  {' · '}Houses under attack:{' '}
-                  {snapshot.adventure?.housesUnderAttack ?? 0}
-                </span>
-                {(snapshot.adventure?.breachedHouses ?? 0) > 0 && (
+                <Icon name="close" size={16} />
+              </button>
+              {mode === 'adventure' && (
+                <div
+                  className="adventure-status"
+                  role="status"
+                  aria-label="Knight status"
+                >
                   <span>
-                    Breached doors: {snapshot.adventure?.breachedHouses}
+                    Equipped: {snapshot.adventure?.weapon ?? 'unarmed'}
                   </span>
-                )}
-              </div>
-            )}
-            {snapshot.interior === 'casemates' ? (
-              <>
-                <div className="expedition-heading">
-                  <span className="eyebrow">BENEATH THE RAMPARTS</span>
-                  <span className="progress-count">
-                    {undergroundNotes.length} / {casemateNotes.length}
+                  <span>
+                    Arrows: {snapshot.adventure?.arrows ?? 0} · L / C switches
+                    weapons
                   </span>
-                </div>
-                <h2>
-                  {undergroundNotes.length === casemateNotes.length
-                    ? 'The underground, discovered.'
-                    : 'Follow the lanterns.'}
-                </h2>
-                <p>
-                  Find Gorlice and record three field notes with F. Take the
-                  uphill passage to Na Hradbách, or retrace your steps. Notes
-                  are saved on this browser.
-                </p>
-                <div className="landmark-list">
-                  {casemateNotes.map((note, i) => (
-                    <div
-                      key={note.id}
-                      className={
-                        undergroundNotes.includes(note.id) ? 'discovered' : ''
+                  <span>
+                    Moss sprites: {snapshot.adventure?.defeated.length ?? 0} /{' '}
+                    {enemySpawns.length}
+                    {' · '}
+                    {enemySpawns.length -
+                      (snapshot.adventure?.defeated.length ?? 0)}{' '}
+                    remaining
+                  </span>
+                  {snapshot.adventure?.defeated.length ===
+                    enemySpawns.length && (
+                    <button
+                      className="raid-restart"
+                      onClick={() =>
+                        setToast(world.current?.restartRaids() ?? '')
                       }
                     >
-                      <span className="stamp">
-                        {undergroundNotes.includes(note.id) ? '✓' : `0${i + 1}`}
-                      </span>{' '}
-                      {note.title}
-                    </div>
-                  ))}
-                </div>
-                <p>
-                  <small>
-                    Illustrative, shortened layout, not a surveyed plan. The
-                    real visitor entrance is at the Brick Gate.
-                  </small>
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="expedition-heading">
-                  <span className="eyebrow">
-                    {mode === 'adventure'
-                      ? 'THE KNIGHT’S CHART'
-                      : 'THE VYŠEHRAD FIELD NOTES'}
-                  </span>
-                  <span className="progress-count">{visited.length} / 4</span>
-                </div>
-                <h2>
-                  {mode === 'adventure'
-                    ? visited.length === 4 &&
-                      snapshot.adventure?.defeated.length === enemySpawns.length
-                      ? 'Vyšehrad reclaimed.'
-                      : 'Raise four banners.'
-                    : visited.length === 4
-                      ? 'A little world, discovered.'
-                      : 'Good things are found on foot.'}
-                </h2>
-                <p>
-                  {mode === 'adventure'
-                    ? 'Defend civilians and seven house entrances from raiding moss sprites. Find a stick, sword or bow; dodge their wind-ups and collect finite arrow bundles. Buy food at Na hradbách, Okénko or U Vratislava. Raise four banners to chart the map and restore health.'
-                    : visited.length === 4
-                      ? 'Your four discoveries are saved on this browser. Stay a while, or take to the sky.'
-                      : 'Visit the glowing markers. Collect a memory from each corner of the fortress.'}
-                </p>
-                <div className="landmark-list">
-                  {landmarks.map((l, i) => (
-                    <button
-                      key={l.id}
-                      onClick={() => {
-                        setSelected(l.id);
-                        setModal('map');
-                      }}
-                      className={visited.includes(l.id) ? 'discovered' : ''}
-                    >
-                      <span className="stamp">
-                        {visited.includes(l.id) ? (
-                          <Icon name="check" size={14} />
-                        ) : (
-                          `0${i + 1}`
-                        )}
-                      </span>
-                      <span>
-                        {mode === 'adventure' && !visited.includes(l.id)
-                          ? 'Uncharted region'
-                          : l.short}
-                      </span>
-                      <span className="landmark-state">
-                        {visited.includes(l.id) ? 'FOUND' : 'EXPLORE'}
-                        <Icon name="arrow" size={13} />
-                      </span>
+                      Start another raid
                     </button>
-                  ))}
-                </div>
-                <div className="expedition-footer">
-                  <span>{Math.round(snapshot.distance)} m wandered</span>
-                  {snapshot.wood > 0 && <span>Wood: {snapshot.wood}</span>}
+                  )}
                   <span>
-                    {snapshot.fps} FPS
-                    {flying ? ` · ${snapshot.altitude} m up` : ''}
+                    House raids cleared:{' '}
+                    {snapshot.adventure?.housesDefended ?? 0} /{' '}
+                    {raidHouses.length}
                   </span>
+                  <span>
+                    Civilians in danger:{' '}
+                    {snapshot.adventure?.civiliansInDanger ?? 0}
+                    {' · '}Houses under attack:{' '}
+                    {snapshot.adventure?.housesUnderAttack ?? 0}
+                  </span>
+                  {(snapshot.adventure?.breachedHouses ?? 0) > 0 && (
+                    <span>
+                      Breached doors: {snapshot.adventure?.breachedHouses}
+                    </span>
+                  )}
                 </div>
-              </>
-            )}
-          </aside>
+              )}
+              {snapshot.interior === 'casemates' ? (
+                <>
+                  <div className="expedition-heading">
+                    <span className="eyebrow">BENEATH THE RAMPARTS</span>
+                    <span className="progress-count">
+                      {undergroundNotes.length} / {casemateNotes.length}
+                    </span>
+                  </div>
+                  <h2>
+                    {undergroundNotes.length === casemateNotes.length
+                      ? 'The underground, discovered.'
+                      : 'Follow the lanterns.'}
+                  </h2>
+                  <p>
+                    Find Gorlice and record three field notes with F. Take the
+                    uphill passage to Na Hradbách, or retrace your steps. Notes
+                    are saved on this browser.
+                  </p>
+                  <div className="landmark-list">
+                    {casemateNotes.map((note, i) => (
+                      <div
+                        key={note.id}
+                        className={
+                          undergroundNotes.includes(note.id) ? 'discovered' : ''
+                        }
+                      >
+                        <span className="stamp">
+                          {undergroundNotes.includes(note.id)
+                            ? '✓'
+                            : `0${i + 1}`}
+                        </span>{' '}
+                        {note.title}
+                      </div>
+                    ))}
+                  </div>
+                  <p>
+                    <small>
+                      Illustrative, shortened layout, not a surveyed plan. The
+                      real visitor entrance is at the Brick Gate.
+                    </small>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="expedition-heading">
+                    <span className="eyebrow">
+                      {mode === 'adventure'
+                        ? 'THE KNIGHT’S CHART'
+                        : 'THE VYŠEHRAD FIELD NOTES'}
+                    </span>
+                    <span className="progress-count">{visited.length} / 4</span>
+                  </div>
+                  <h2>
+                    {mode === 'adventure'
+                      ? visited.length === 4 &&
+                        snapshot.adventure?.defeated.length ===
+                          enemySpawns.length
+                        ? 'Vyšehrad reclaimed.'
+                        : 'Raise four banners.'
+                      : visited.length === 4
+                        ? 'A little world, discovered.'
+                        : 'Good things are found on foot.'}
+                  </h2>
+                  <p>
+                    {mode === 'adventure'
+                      ? 'Defend civilians and seven house entrances from raiding moss sprites. Find a stick, sword or bow; dodge their wind-ups and collect finite arrow bundles. Buy food at Na hradbách, Okénko or U Vratislava. Raise four banners to chart the map and restore health.'
+                      : visited.length === 4
+                        ? 'Your four discoveries are saved on this browser. Stay a while, or take to the sky.'
+                        : 'Visit the glowing markers. Collect a memory from each corner of the fortress.'}
+                  </p>
+                  <div className="landmark-list">
+                    {landmarks.map((l, i) => (
+                      <button
+                        key={l.id}
+                        onClick={() => {
+                          setSelected(l.id);
+                          setModal('map');
+                        }}
+                        className={visited.includes(l.id) ? 'discovered' : ''}
+                      >
+                        <span className="stamp">
+                          {visited.includes(l.id) ? (
+                            <Icon name="check" size={14} />
+                          ) : (
+                            `0${i + 1}`
+                          )}
+                        </span>
+                        <span>
+                          {mode === 'adventure' && !visited.includes(l.id)
+                            ? 'Uncharted region'
+                            : l.short}
+                        </span>
+                        <span className="landmark-state">
+                          {visited.includes(l.id) ? 'FOUND' : 'EXPLORE'}
+                          <Icon name="arrow" size={13} />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="expedition-footer">
+                    <span>{Math.round(snapshot.distance)} m wandered</span>
+                    {snapshot.wood > 0 && <span>Wood: {snapshot.wood}</span>}
+                    <span>
+                      {snapshot.fps} FPS
+                      {flying ? ` · ${snapshot.altitude} m up` : ''}
+                    </span>
+                  </div>
+                </>
+              )}
+            </aside>
+          )}
           <aside className="minimap-card">
             <div className="minimap-heading">
               <span>YOUR LITTLE CORNER OF PRAGUE</span>
@@ -1456,6 +1519,7 @@ export function App() {
       {started && !photo && reportApi && reportSiteKey && (
         <button
           className="report-button pill"
+          aria-label="Report / contribute a photo"
           onClick={() => {
             const location = world.current?.reportLocation();
             if (!location) {
@@ -1467,7 +1531,8 @@ export function App() {
             setModal('report');
           }}
         >
-          Report / contribute a photo
+          <span className="full-label">Report / contribute a photo</span>
+          <span className="mobile-label">Report photo</span>
         </button>
       )}
       {modal === 'report' && reportLocation && (

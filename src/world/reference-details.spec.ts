@@ -9,6 +9,10 @@ import {
   makeArtilleryEntrance,
   makeInformationCentre,
   makeCitadela,
+  makeCemeteryLabyrinth,
+  makeGardenHeraldry,
+  makeLeopoldCurbs,
+  leopoldSidewalks,
 } from './reference-details';
 import {
   brickGateStairs,
@@ -49,6 +53,10 @@ import {
   retainedWallOffsets,
   informationCentre,
   citadela,
+  cemeteryLabyrinth,
+  gardenHeraldry,
+  featureElevation,
+  gateFrame,
   buildings,
   center,
   inside,
@@ -87,6 +95,182 @@ function geometryScene(
     },
   };
 }
+
+it('paints the cemetery labyrinth on asphalt north of the private garden fence without occupying either residence', () => {
+  const scene = geometryScene(makeCemeteryLabyrinth, THREE.DoubleSide);
+  try {
+    const residences = buildings.filter((building) =>
+      [49810594, 49810596].includes(building.id),
+    );
+    const asphalt = scene.meshes.find((mesh) =>
+      mesh.name.startsWith('asphalt:'),
+    );
+    const paint = scene.meshes.find((mesh) => mesh.name.startsWith('plaster:'));
+    if (!asphalt || !paint) throw new Error('Missing labyrinth surfaces.');
+    const positions = paint.geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+      const point: Point = [positions.getX(i), positions.getZ(i)];
+      expect(inside(point, cemeteryLabyrinth.courtyard)).toBe(true);
+      expect(point[1]).toBeLessThan(-86.81);
+      expect(
+        residences.some((building) => inside(point, building.points)),
+      ).toBe(false);
+      expect(positions.getY(i) - elevation(...point)).toBeCloseTo(0.097, 3);
+    }
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(
+        cemeteryLabyrinth.point[0],
+        80,
+        cemeteryLabyrinth.point[1],
+      ),
+      new THREE.Vector3(0, -1, 0),
+    );
+    expect(ray.intersectObject(asphalt).length).toBeGreaterThan(0);
+    expect(positions.count).toBeLessThan(40000);
+    const curb = scene.meshes.find((mesh) => mesh.name.startsWith('stone:'));
+    if (!curb) throw new Error('Missing curved labyrinth border.');
+    const edge = curb.geometry.attributes.position;
+    let highest = -Infinity;
+    for (let i = 0; i < edge.count; i++)
+      highest = Math.max(
+        highest,
+        edge.getY(i) - elevation(edge.getX(i), edge.getZ(i)),
+      );
+    expect(highest).toBeCloseTo(0.095, 2);
+    ray.ray.origin.set(-258, 80, -95);
+    expect(ray.intersectObject(asphalt).length).toBeGreaterThan(0);
+    ray.ray.origin.set(-260, 80, -102);
+    expect(ray.intersectObject(asphalt)).toHaveLength(0);
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('adds only two-centimetre kerbs to the photographed southern Leopold approach, leaving the gate and carriageway open', () => {
+  const scene = geometryScene(makeLeopoldCurbs, THREE.DoubleSide);
+  const street = paths.find((path) => path.id === 494921190);
+  const gate = buildings.find((building) => building.id === 51718887);
+  if (!street || !gate) throw new Error('Missing curb fixtures.');
+  const frame = gateFrame(gate);
+  try {
+    expect(
+      scene.meshes.filter((mesh) => mesh.name.startsWith('stone:')),
+    ).toHaveLength(2);
+    expect(
+      scene.meshes.filter((mesh) => mesh.name.startsWith('cobble:')),
+    ).toHaveLength(2);
+    for (const mesh of scene.meshes) {
+      const positions = mesh.geometry.attributes.position;
+      let highest = -Infinity;
+      for (let i = 0; i < positions.count; i++) {
+        const point: Point = [positions.getX(i), positions.getZ(i)];
+        const projection = projectRoute(point, street.points);
+        expect(projection.distance).toBeGreaterThan(4.2);
+        expect(projection.distance).toBeLessThan(9);
+        expect(
+          Math.hypot(point[0] - frame.center[0], point[1] - frame.center[1]),
+        ).toBeGreaterThan(4.7);
+        highest = Math.max(
+          highest,
+          positions.getY(i) - featureElevation(street, point) - 0.055,
+        );
+      }
+      expect(highest).toBeCloseTo(0.02, 2);
+    }
+    const point = street.points[1];
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(point[0], 80, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    );
+    expect(ray.intersectObjects(scene.meshes)).toHaveLength(0);
+    for (const run of leopoldSidewalks.runs) {
+      const midpoint = run.curb[Math.floor(run.curb.length / 2)];
+      const roadPoint = projectRoute(midpoint, street.points).point;
+      const dx = midpoint[0] - roadPoint[0],
+        dz = midpoint[1] - roadPoint[1];
+      const length = Math.hypot(dx, dz);
+      const point: Point = [
+        midpoint[0] + (dx / length) * 0.6,
+        midpoint[1] + (dz / length) * 0.6,
+      ];
+      ray.ray.origin.set(point[0], 80, point[1]);
+      expect(ray.intersectObjects(scene.meshes)[0]?.object.name).toMatch(
+        /^cobble:/,
+      );
+    }
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('mounts the two-headed eagle, both lion masks and the reverse shield at the mapped garden corner', () => {
+  const scene = geometryScene(makeGardenHeraldry, THREE.DoubleSide);
+  try {
+    const rampart = walls.find((wall) => wall.id === 1532977610);
+    const garden = walls.find((wall) => wall.id === 8888302);
+    if (!rampart || !garden) throw new Error('Missing heraldic wall fixtures.');
+    const meeting = garden.points[garden.points.length - 1];
+    const index = rampart.points.findIndex(
+      (point) => point[0] === meeting[0] && point[1] === meeting[1],
+    );
+    expect(gardenHeraldry.corner).toEqual(rampart.points[index + 1]);
+    expect(
+      Math.hypot(
+        gardenHeraldry.corner[0] - meeting[0],
+        gardenHeraldry.corner[1] - meeting[1],
+      ),
+    ).toBeGreaterThan(25);
+    for (const face of gardenHeraldry.faces) {
+      const ray = new THREE.Raycaster(
+        new THREE.Vector3(
+          face.point[0] + face.normal[0] * 2,
+          gardenHeraldry.crest - 2.25,
+          face.point[1] + face.normal[1] * 2,
+        ),
+        new THREE.Vector3(-face.normal[0], 0, -face.normal[1]),
+        0,
+        3,
+      );
+      expect(ray.intersectObjects(scene.meshes).length).toBeGreaterThan(0);
+    }
+    const { point, angle } = gardenHeraldry.shield;
+    const width = wallThickness(rampart, gardenHeraldry.corner);
+    for (const face of gardenHeraldry.faces) {
+      const profile = wallProfile(rampart, gardenHeraldry.corner, face.normal);
+      const { inset } = retainedWallOffsets(
+        gardenHeraldry.corner,
+        width,
+        profile,
+      );
+      expect(
+        (point[0] - gardenHeraldry.corner[0]) * face.normal[0] +
+          (point[1] - gardenHeraldry.corner[1]) * face.normal[1],
+      ).toBeLessThan(-inset - width);
+    }
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(
+        point[0] + Math.sin(angle) * 2,
+        gardenHeraldry.shield.height,
+        point[1] + Math.cos(angle) * 2,
+      ),
+      new THREE.Vector3(-Math.sin(angle), 0, -Math.cos(angle)),
+      0,
+      3,
+    );
+    expect(ray.intersectObjects(scene.meshes).length).toBeGreaterThan(0);
+    expect(
+      scene.meshes.every((mesh) => {
+        mesh.geometry.computeBoundingBox();
+        return (
+          (mesh.geometry.boundingBox?.max.y ?? Infinity) <
+          gardenHeraldry.crest + 0.1
+        );
+      }),
+    ).toBe(true);
+  } finally {
+    scene.dispose();
+  }
+});
 
 it('places the low brick information pavilion across the road from the preserved ivy-covered shed, with glazed entrance and slit windows', () => {
   const site = informationCentre;

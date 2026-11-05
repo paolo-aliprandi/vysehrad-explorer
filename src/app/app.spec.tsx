@@ -51,6 +51,15 @@ describe('exploration entry', () => {
     expect(
       screen.getByRole('button', { name: 'Open exploration map' }),
     ).toBeTruthy();
+    expect(screen.getByText('Good things are found on foot.')).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Dismiss field notes' }),
+    );
+    expect(screen.queryByText('Good things are found on foot.')).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open exploration map' }),
+    );
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
   it('starts Adventure with a gray map independently of Chill discoveries and disables flight', async () => {

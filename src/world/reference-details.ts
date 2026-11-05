@@ -29,11 +29,21 @@ import {
   artilleryEntrance,
   informationCentre,
   citadela,
+  cemeteryLabyrinth,
+  gardenHeraldry,
+  pathWidth,
+  gateFrame,
+  featureElevation,
   type Point,
   type Feature,
 } from './geo';
 import type { AddGeometry } from './architecture';
-import { continuousWall, drapedPolygon, samplePolyline } from './surfaces';
+import {
+  continuousWall,
+  drapedPolygon,
+  ribbonEdges,
+  samplePolyline,
+} from './surfaces';
 
 type Vertex = readonly [number, number, number];
 type Kind = Parameters<AddGeometry>[2];
@@ -81,6 +91,363 @@ function beam(a: Vertex, b: Vertex, radius: number) {
       ),
     )
     .translate(...from.add(to).multiplyScalar(0.5).toArray());
+}
+
+export const leopoldSidewalks = (() => {
+  const street = paths.find((path) => path.id === 494921190);
+  const gate = buildings.find((building) => building.id === 51718887);
+  if (!street || !gate)
+    throw new Error('Missing photographed Leopold approach.');
+  const frame = gateFrame(gate);
+  const route = samplePolyline(street.points, 0.8).filter(
+    (point) =>
+      Math.hypot(point[0] - frame.center[0], point[1] - frame.center[1]) > 5,
+  );
+  const runs = [
+    [494921198, 698001346],
+    [494921210, 698001345],
+  ].map(([id, wallId]) => {
+    const sidewalk = paths.find((path) => path.id === id);
+    const wall = walls.find((wall) => wall.id === wallId);
+    if (!sidewalk || !wall)
+      throw new Error('Missing Leopold approach sidewalk or boundary wall.');
+    const sections = route.map((point) => {
+      const projection = projectRoute(point, sidewalk.points);
+      let normal = projection.normal;
+      if (
+        (projection.point[0] - point[0]) * normal[0] +
+          (projection.point[1] - point[1]) * normal[1] <
+        0
+      )
+        normal = [-normal[0], -normal[1]];
+      const at = (offset: number): Point => [
+        projection.point[0] + normal[0] * offset,
+        projection.point[1] + normal[1] * offset,
+      ];
+      const boundary = projectRoute(point, wall.points);
+      const dx = point[0] - boundary.point[0],
+        dz = point[1] - boundary.point[1];
+      const distance = Math.hypot(dx, dz);
+      const inset = wallThickness(wall, boundary.point) / 2 + 0.025;
+      return {
+        curb: at(pathWidth(sidewalk) / 2),
+        outer: [
+          boundary.point[0] + (dx / distance) * inset,
+          boundary.point[1] + (dz / distance) * inset,
+        ] as Point,
+      };
+    });
+    const curb = sections.map((section) => section.curb);
+    return {
+      curb,
+      polygon: [...curb, ...sections.map((section) => section.outer).reverse()],
+    };
+  });
+  return { street, runs, polygons: runs.map((run) => run.polygon) };
+})();
+
+export function makeLeopoldCurbs(add: AddGeometry) {
+  const { street, runs } = leopoldSidewalks;
+  for (const run of runs) {
+    add(
+      '#b2b5ae',
+      drapedPolygon(run.polygon, 0.075, (x, z) =>
+        featureElevation(street, [x, z]),
+      ),
+      'cobble',
+    );
+    add(
+      '#a7a89d',
+      continuousWall(
+        run.curb,
+        0.18,
+        (point) => {
+          const paving = featureElevation(street, point) + 0.055;
+          return { bottom: paving - 0.025, top: paving + 0.02 };
+        },
+        false,
+      ),
+      'stone',
+    );
+  }
+}
+
+export function makeCemeteryLabyrinth(add: AddGeometry) {
+  const site = cemeteryLabyrinth;
+  add('#555954', drapedPolygon(site.courtyard, 0.075), 'asphalt');
+  add(
+    '#a7a89d',
+    continuousWall(
+      site.border,
+      0.16,
+      (point) => ({
+        bottom: elevation(...point) + 0.05,
+        top: elevation(...point) + 0.095,
+      }),
+      false,
+    ),
+    'stone',
+  );
+  const vertices: number[] = [];
+  const line = (route: Point[], width = 0.065) => {
+    const edges = ribbonEdges(route, width);
+    for (let i = 1; i < edges.length; i++) {
+      const a = edges[i - 1],
+        b = edges[i];
+      for (const p of [a.left, b.left, a.right, b.left, b.right, a.right])
+        vertices.push(p[0], elevation(...p) + 0.097, p[1]);
+    }
+  };
+  const at = (radius: number, angle: number): Point => [
+    site.point[0] + Math.sin(angle) * radius,
+    site.point[1] + Math.cos(angle) * radius,
+  ];
+  const arc = (radius: number, start: number, end: number) => {
+    const count = Math.ceil((Math.abs(end - start) * radius) / 0.24);
+    return Array.from({ length: count + 1 }, (_, i) =>
+      at(radius, start + ((end - start) * i) / count),
+    );
+  };
+  // Keep the eleven circuits open at their alternating turns, not closed rings.
+  for (let ring = 0; ring < 12; ring++) {
+    const radius = 1.15 + ring * 0.47;
+    const gap = 0.2 / radius;
+    const turn = ring % 2 ? Math.PI / 2 : -Math.PI / 2;
+    line(arc(radius, turn + gap, turn + Math.PI * 2 - gap));
+    if (ring < 11)
+      line([at(radius, turn + gap), at(radius + 0.47, turn + gap)]);
+  }
+  for (let petal = 0; petal < 6; petal++) {
+    const angle = (petal / 6) * Math.PI * 2;
+    const center = at(0.65, angle);
+    line(
+      Array.from({ length: 25 }, (_, i): Point => {
+        const t = (i / 24) * Math.PI * 2;
+        return [center[0] + Math.sin(t) * 0.32, center[1] + Math.cos(t) * 0.32];
+      }),
+    );
+  }
+  for (let i = 0; i < 84; i++) {
+    const angle = (i / 84) * Math.PI * 2;
+    const center = at(site.radius - 0.1, angle);
+    line(
+      Array.from({ length: 9 }, (_, j): Point => {
+        const t = (j / 8) * Math.PI;
+        return [
+          center[0] +
+            Math.cos(angle) * Math.cos(t) * 0.17 +
+            Math.sin(angle) * Math.sin(t) * 0.17,
+          center[1] -
+            Math.sin(angle) * Math.cos(t) * 0.17 +
+            Math.cos(angle) * Math.sin(t) * 0.17,
+        ];
+      }),
+      0.045,
+    );
+  }
+  const paint = new THREE.BufferGeometry();
+  paint.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  paint.computeVertexNormals();
+  add('#e8e4ce', paint, 'plaster');
+}
+
+export function makeGardenHeraldry(add: AddGeometry) {
+  const site = gardenHeraldry;
+  const stone = '#918b79';
+  const relief = (shape: THREE.Shape, depth = 0.09) =>
+    new THREE.ExtrudeGeometry(shape, {
+      depth,
+      bevelEnabled: false,
+      curveSegments: 10,
+    });
+  const shield = (scale: number) => {
+    const s = new THREE.Shape();
+    s.moveTo(-0.4 * scale, 0.45 * scale);
+    s.lineTo(0.4 * scale, 0.45 * scale);
+    s.lineTo(0.34 * scale, -0.15 * scale);
+    s.quadraticCurveTo(0.28 * scale, -0.4 * scale, 0, -0.56 * scale);
+    s.quadraticCurveTo(
+      -0.28 * scale,
+      -0.4 * scale,
+      -0.34 * scale,
+      -0.15 * scale,
+    );
+    s.closePath();
+    return relief(s);
+  };
+  const body = localEmitter(
+    site.eagle.point,
+    site.crest - 1.2,
+    site.eagle.angle,
+    add,
+  );
+  const oval = (
+    emit: ReturnType<typeof localEmitter>,
+    x: number,
+    y: number,
+    z: number,
+    sx: number,
+    sy: number,
+    sz: number,
+  ) =>
+    emit(
+      new THREE.SphereGeometry(1, 12, 8).scale(sx, sy, sz).translate(x, y, z),
+      stone,
+    );
+  const dressing = (emit: ReturnType<typeof localEmitter>, side: number) => {
+    for (let row = 0; row < 8; row++) {
+      const width = 2.3 + (row % 2) * 0.25;
+      emit(
+        new THREE.BoxGeometry(width, 0.44, 0.08).translate(
+          side * (1.15 - width / 2),
+          0.96 - row * 0.46,
+          0.005,
+        ),
+        row % 3 ? '#a29e8f' : '#aca694',
+      );
+    }
+    emit(
+      new THREE.BoxGeometry(2.6, 0.1, 0.2).translate(side * -0.15, 1.14, 0.035),
+      '#a39c87',
+    );
+  };
+  oval(body, 0, 0, 0, 0.29, 0.5, 0.28);
+  body(shield(0.75).translate(0, -0.03, 0.24), '#aaa18a');
+  for (const side of [-1, 1]) {
+    oval(body, side * 0.2, 0.55, 0, 0.13, 0.3, 0.14);
+    oval(body, side * 0.26, 0.77, 0.04, 0.18, 0.15, 0.15);
+    body(
+      new THREE.SphereGeometry(0.025, 8, 6).translate(side * 0.3, 0.81, 0.18),
+      '#5e6057',
+    );
+    body(
+      new THREE.ConeGeometry(0.085, 0.24, 6)
+        .rotateZ((-side * Math.PI) / 2)
+        .translate(side * 0.44, 0.76, 0.08),
+      stone,
+    );
+    body(
+      beam([side * 0.12, -0.4, 0.1], [side * 0.3, -0.68, 0.12], 0.045),
+      stone,
+    );
+  }
+  for (let i = -2; i <= 2; i++)
+    oval(body, i * 0.1, -0.63 - Math.abs(i) * 0.04, -0.02, 0.075, 0.32, 0.09);
+  for (const face of site.faces) {
+    const emit = localEmitter(face.point, site.crest - 1.2, face.angle, add);
+    dressing(emit, face.towardCorner);
+    for (let feather = 0; feather < 7; feather++) {
+      const shape = new THREE.Shape();
+      const x = face.towardCorner * 0.95;
+      const tipX = face.towardCorner * (0.7 - feather * 0.21);
+      const tipY = 0.95 - feather * 0.18;
+      const dx = tipX - x,
+        dy = tipY + 0.2,
+        length = Math.hypot(dx, dy),
+        nx = -dy / length,
+        ny = dx / length;
+      shape.moveTo(x - nx * 0.07, -0.2 - ny * 0.07);
+      shape.quadraticCurveTo(
+        (x + tipX) / 2 - nx * 0.15,
+        (-0.2 + tipY) / 2 - ny * 0.15,
+        tipX,
+        tipY,
+      );
+      shape.quadraticCurveTo(
+        (x + tipX) / 2 + nx * 0.15,
+        (-0.2 + tipY) / 2 + ny * 0.15,
+        x + nx * 0.07,
+        -0.2 + ny * 0.07,
+      );
+      shape.closePath();
+      emit(relief(shape).translate(0, 0, 0.065 + feather * 0.008), stone);
+    }
+    // Each lion and its hanging swag follow its own wall face around the corner.
+    oval(emit, 0, -1.03, 0.04, 0.33, 0.38, 0.13);
+    for (let tuft = 0; tuft < 10; tuft++) {
+      const a = (tuft / 10) * Math.PI * 2;
+      oval(
+        emit,
+        Math.cos(a) * 0.27,
+        -1.03 + Math.sin(a) * 0.3,
+        0.13,
+        0.105,
+        0.12,
+        0.09,
+      );
+    }
+    oval(emit, 0, -1.04, 0.2, 0.2, 0.23, 0.12);
+    oval(emit, 0, -1.13, 0.3, 0.13, 0.1, 0.07);
+    oval(emit, 0, -1.42, 0.1, 0.22, 0.3, 0.12);
+    for (const side of [-1, 1]) {
+      emit(
+        beam([side * 0.15, -1.22, 0.15], [side * 0.36, -1.57, 0.2], 0.065),
+        stone,
+      );
+      oval(emit, side * 0.36, -1.57, 0.23, 0.12, 0.065, 0.08);
+    }
+    for (const side of [-1, 1])
+      oval(emit, side * 0.08, -0.97, 0.3, 0.03, 0.035, 0.025);
+    for (let fold = 0; fold < 5; fold++)
+      emit(
+        beam(
+          [-0.42 + fold * 0.19, -1.43, 0.05],
+          [-0.5 + fold * 0.22, -1.95, 0.06],
+          0.05,
+        ),
+        stone,
+      );
+    const swag = Array.from({ length: 17 }, (_, j) => {
+      const x = -0.65 + (j / 16) * 1.3;
+      return new THREE.Vector3(x, -1.8 + x * x * 0.65, 0.1);
+    });
+    emit(
+      new THREE.TubeGeometry(
+        new THREE.CatmullRomCurve3(swag),
+        20,
+        0.055,
+        6,
+        false,
+      ),
+      stone,
+    );
+  }
+  dressing(
+    localEmitter(site.shield.point, site.crest - 1.2, site.shield.angle, add),
+    -1,
+  );
+  const reverse = localEmitter(
+    site.shield.point,
+    site.shield.height,
+    site.shield.angle,
+    add,
+  );
+  const inner: ReturnType<typeof localEmitter> = (geometry, color, kind) =>
+    reverse(geometry.scale(0.8, 0.8, 0.8), color, kind);
+  const cartouche = new THREE.Shape();
+  cartouche.moveTo(0, 0.6);
+  cartouche.bezierCurveTo(0.35, 0.65, 0.62, 0.4, 0.6, 0.1);
+  cartouche.bezierCurveTo(0.6, -0.35, 0.45, -0.6, 0, -0.72);
+  cartouche.bezierCurveTo(-0.45, -0.6, -0.6, -0.35, -0.6, 0.1);
+  cartouche.bezierCurveTo(-0.62, 0.4, -0.35, 0.65, 0, 0.6);
+  inner(relief(cartouche).translate(0, 0, 0.065), stone);
+  inner(shield(0.98).translate(0, -0.02, 0.17), '#a5a18e');
+  for (const side of [-1, 1]) {
+    const curve = new THREE.CatmullRomCurve3(
+      [
+        [0.35, 0.38],
+        [0.53, 0.52],
+        [0.62, 0.29],
+        [0.52, -0.12],
+        [0.42, -0.48],
+        [0.23, -0.61],
+        [0.18, -0.51],
+      ].map(([x, y]) => new THREE.Vector3(side * x, y, 0.2)),
+    );
+    inner(new THREE.TubeGeometry(curve, 28, 0.065, 6, false), stone);
+    oval(inner, side * 0.14, 0.63, 0.16, 0.16, 0.12, 0.09);
+  }
+  oval(inner, 0, 0.7, 0.2, 0.15, 0.13, 0.1);
 }
 
 export function makeInformationCentre(add: AddGeometry) {
@@ -1501,6 +1868,9 @@ export function makeCemeteryEntranceDetails(add: AddGeometry) {
 }
 
 export function makeReferenceDetails(add: AddGeometry) {
+  makeCemeteryLabyrinth(add);
+  makeGardenHeraldry(add);
+  makeLeopoldCurbs(add);
   makeCitadela(add);
   makeGardenReferences(add);
   makeGardenKiosk(add);

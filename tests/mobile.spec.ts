@@ -1,4 +1,91 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function checkWelcomeLayout(page: Page) {
+  for (const [width, height] of [
+    [390, 600],
+    [320, 568],
+    [844, 390],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.locator('.app').evaluate((app) => {
+      app.scrollTop = 0;
+    });
+    const header = await page.locator('.topbar').boundingBox();
+    const title = await page.locator('.hero-copy').boundingBox();
+    const card = await page.locator('.entry-card').boundingBox();
+    if (!header || !title || !card) throw new Error('Missing welcome layout.');
+    expect(title.y).toBeGreaterThanOrEqual(header.y + header.height);
+    expect(card.y).toBeGreaterThanOrEqual(title.y + title.height);
+    expect(card.x + card.width).toBeLessThanOrEqual(width);
+    const enter = page.getByRole('button', {
+      name: /Enter Vyšehrad|Assembling your little world/,
+    });
+    await enter.scrollIntoViewIfNeeded();
+    await expect(enter).toBeInViewport();
+    await page
+      .getByRole('button', { name: /About the model/ })
+      .scrollIntoViewIfNeeded();
+    await expect(
+      page.getByRole('button', { name: /About the model/ }),
+    ).toBeInViewport();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBe(width);
+  }
+  await page.setViewportSize({ width: 390, height: 600 });
+}
+
+async function checkExplorationLayout(page: Page) {
+  await expect(page.locator('.expedition-card')).not.toBeVisible();
+  await expect(page.locator('.minimap-heading')).not.toBeVisible();
+  await expect(page.locator('.minimap-button .world-map')).not.toBeVisible();
+  await expect(page.locator('.toast')).not.toContainText('F / A');
+  for (const [width, height] of [
+    [390, 600],
+    [320, 568],
+    [844, 390],
+  ]) {
+    await page.setViewportSize({ width, height });
+    for (const selector of [
+      '.brand',
+      '.top-actions',
+      '.location-pill',
+      '.minimap-card',
+      '.report-button',
+      '.controls-bar',
+    ]) {
+      const bounds = await page.locator(selector).boundingBox();
+      if (!bounds) throw new Error(`Missing mobile control: ${selector}`);
+      expect(bounds.x, selector).toBeGreaterThanOrEqual(0);
+      expect(bounds.y, selector).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width, selector).toBeLessThanOrEqual(width);
+      expect(bounds.y + bounds.height, selector).toBeLessThanOrEqual(height);
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 600 });
+  const clearFraction = await page.evaluate(() => {
+    let clear = 0,
+      total = 0;
+    for (let y = 180; y <= 420; y += 40)
+      for (let x = 25; x < 390; x += 50) {
+        total++;
+        if (document.elementFromPoint(x, y)?.closest('.scene')) clear++;
+      }
+    return clear / total;
+  });
+  expect(clearFraction).toBeGreaterThan(0.65);
+  const menu = page.getByRole('button', { name: 'More controls' });
+  await menu.tap();
+  await expect(menu).toHaveAttribute('aria-expanded', 'true');
+  await page.getByRole('button', { name: 'Mute sounds' }).tap();
+  await expect(
+    page.getByRole('button', { name: 'Enable sounds' }),
+  ).toBeVisible();
+  await menu.tap();
+  await page.getByRole('button', { name: 'Open exploration map' }).tap();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button', { name: 'Close dialog' }).tap();
+}
 
 test.use({
   viewport: { width: 390, height: 844 },
@@ -13,8 +100,11 @@ test('drags to look and walks on double-tap-and-hold, stopping on release, cance
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
+  await checkWelcomeLayout(page);
   await page.getByRole('button', { name: 'Enter Vyšehrad' }).tap();
-  await page.getByRole('button', { name: 'Mute sounds' }).waitFor();
+  await expect(page.locator('.app')).toHaveClass(/playing/);
+  await checkExplorationLayout(page);
+  await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByText(
       'Drag to look · Double-tap and hold to walk · Release to stop',
@@ -111,4 +201,50 @@ test('drags to look and walks on double-tap-and-hold, stopping on release, cance
   expect(await inspect('return w.touch.walking;')).toBe(false);
   await end();
   expect(errors).toEqual([]);
+});
+
+test('keeps the homepage and exploration controls usable in phone-layout WebKit', async ({
+  playwright,
+  baseURL,
+}, testInfo) => {
+  test.setTimeout(180000);
+  const browser = await playwright.webkit.launch();
+  const context = await browser.newContext({
+    baseURL,
+    viewport: { width: 390, height: 600 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  try {
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    let release!: () => void;
+    const layoutReady = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/src\/world\/engine\.ts(?:\?.*)?$/, async (route) => {
+      await layoutReady;
+      await route.continue();
+    });
+    await page.goto('/');
+    try {
+      await checkWelcomeLayout(page);
+    } finally {
+      release();
+    }
+    await page.locator('.app').evaluate((app) => {
+      app.scrollTop = 0;
+    });
+    await page.screenshot({ path: testInfo.outputPath('mobile-homepage.png') });
+    await page.getByRole('button', { name: 'Enter Vyšehrad' }).tap();
+    await checkExplorationLayout(page);
+    await page.screenshot({
+      path: testInfo.outputPath('mobile-exploration.png'),
+    });
+    expect(errors).toEqual([]);
+  } finally {
+    await context.close();
+    await browser.close();
+  }
 });
