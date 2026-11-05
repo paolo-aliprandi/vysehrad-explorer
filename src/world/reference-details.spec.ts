@@ -146,7 +146,7 @@ it('paints the cemetery labyrinth on asphalt north of the private garden fence w
   }
 });
 
-it('adds only two-centimetre kerbs to the photographed southern Leopold approach, leaving the gate and carriageway open', () => {
+it('raises patterned Leopold sidewalks two centimetres above the road, leaving the gate and carriageway open', () => {
   const scene = geometryScene(makeLeopoldCurbs, THREE.DoubleSide);
   const street = paths.find((path) => path.id === 494921190);
   const gate = buildings.find((building) => building.id === 51718887);
@@ -157,7 +157,7 @@ it('adds only two-centimetre kerbs to the photographed southern Leopold approach
       scene.meshes.filter((mesh) => mesh.name.startsWith('stone:')),
     ).toHaveLength(2);
     expect(
-      scene.meshes.filter((mesh) => mesh.name.startsWith('cobble:')),
+      scene.meshes.filter((mesh) => mesh.name.startsWith('mosaic:')),
     ).toHaveLength(2);
     for (const mesh of scene.meshes) {
       const positions = mesh.geometry.attributes.position;
@@ -174,6 +174,10 @@ it('adds only two-centimetre kerbs to the photographed southern Leopold approach
           highest,
           positions.getY(i) - featureElevation(street, point) - 0.055,
         );
+        if (mesh.name.startsWith('mosaic:'))
+          expect(
+            positions.getY(i) - featureElevation(street, point) - 0.055,
+          ).toBeCloseTo(0.02, 3);
       }
       expect(highest).toBeCloseTo(0.02, 2);
     }
@@ -194,8 +198,11 @@ it('adds only two-centimetre kerbs to the photographed southern Leopold approach
         midpoint[1] + (dz / length) * 0.6,
       ];
       ray.ray.origin.set(point[0], 80, point[1]);
-      expect(ray.intersectObjects(scene.meshes)[0]?.object.name).toMatch(
-        /^cobble:/,
+      const hit = ray.intersectObjects(scene.meshes)[0];
+      expect(hit?.object.name).toBe('mosaic:#d0ccbd');
+      expect(hit.point.y - featureElevation(street, point) - 0.055).toBeCloseTo(
+        0.02,
+        3,
       );
     }
   } finally {

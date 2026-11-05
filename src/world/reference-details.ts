@@ -150,11 +150,11 @@ export function makeLeopoldCurbs(add: AddGeometry) {
   const { street, runs } = leopoldSidewalks;
   for (const run of runs) {
     add(
-      '#b2b5ae',
+      '#d0ccbd',
       drapedPolygon(run.polygon, 0.075, (x, z) =>
         featureElevation(street, [x, z]),
       ),
-      'cobble',
+      'mosaic',
     );
     add(
       '#a7a89d',

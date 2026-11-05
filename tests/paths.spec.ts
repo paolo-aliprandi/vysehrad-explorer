@@ -57,6 +57,11 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     const street=g.paths.find(path=>path.id===494921190),point=street.points[1].map((p,i)=>(p+street.points[2][i])/2);
     const {leopoldSidewalks}=await import('/src/world/reference-details.ts');
     const curbPoints=leopoldSidewalks.runs.map(run=>run.curb[Math.floor(run.curb.length/2)]);
+    const sidewalks=curbPoints.map(point=>{
+      const road=g.projectRoute(point,street.points).point,dx=point[0]-road[0],dz=point[1]-road[1],length=Math.hypot(dx,dz);
+      const band=[point[0]+dx/length*.6,point[1]+dz/length*.6];
+      return {hit:down(band),paving:g.featureElevation(street,band)+.055};
+    });
     return {
       colors:Object.fromEntries([['lion','#918b79'],['shield','#a5a18e'],['curb','#a7a89d']].map(([key,color])=>[key,w.surfaceMaterials.get('stone',color).color.getHexString()])),
       asphalt:down(lab.point),labGround:g.elevation(...lab.point),labBlocked:g.blocked(lab.point,g.elevation(...lab.point)),
@@ -64,6 +69,8 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       lions:site.faces.map(face=>cast([face.point[0]+face.normal[0]*2,site.crest-2.25,face.point[1]+face.normal[1]*2],[-face.normal[0],0,-face.normal[1]],3)),
       shield:cast([site.shield.point[0]+Math.sin(site.shield.angle)*2,site.shield.height,site.shield.point[1]+Math.cos(site.shield.angle)*2],[-Math.sin(site.shield.angle),0,-Math.cos(site.shield.angle)],3),
       curbs:curbPoints.map(point=>({hit:down(point),paving:g.featureElevation(street,point)+.055})),
+      sidewalks,
+      distinctMotif:w.surfaceMaterials.get('mosaic','#d0ccbd').map!==w.surfaceMaterials.get('cobble','#b2b5ae').map,
       road:down(point),roadBlocked:g.blocked(point,g.elevation(...point))
     };
   `);
@@ -80,6 +87,11 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   for (const curb of photoFixes.curbs) {
     expect(curb.hit.color).toBe(photoFixes.colors.curb);
     expect(curb.hit.height - curb.paving).toBeCloseTo(0.02, 2);
+  }
+  expect(photoFixes.distinctMotif).toBe(true);
+  for (const sidewalk of photoFixes.sidewalks) {
+    expect(sidewalk.hit.color).toBe('d0ccbd');
+    expect(sidewalk.hit.height - sidewalk.paving).toBeCloseTo(0.02, 3);
   }
   expect(photoFixes.road.color).toBe('b2b5ae');
   expect(photoFixes.roadBlocked).toBe(false);
