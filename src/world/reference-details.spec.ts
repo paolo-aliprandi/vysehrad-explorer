@@ -60,6 +60,8 @@ import {
   buildings,
   center,
   inside,
+  pevnostiGrade,
+  visitorFrontagePads,
   type Point,
 } from './geo';
 import { makeApproach, makePassages } from './passages';
@@ -165,8 +167,8 @@ it('raises patterned Leopold sidewalks two centimetres above the road, leaving t
       for (let i = 0; i < positions.count; i++) {
         const point: Point = [positions.getX(i), positions.getZ(i)];
         const projection = projectRoute(point, street.points);
-        expect(projection.distance).toBeGreaterThan(4.2);
-        expect(projection.distance).toBeLessThan(9);
+        expect(projection.distance).toBeGreaterThan(pathWidth(street) / 2);
+        expect(projection.distance).toBeLessThan(11);
         expect(
           Math.hypot(point[0] - frame.center[0], point[1] - frame.center[1]),
         ).toBeGreaterThan(4.7);
@@ -188,6 +190,21 @@ it('raises patterned Leopold sidewalks two centimetres above the road, leaving t
     );
     expect(ray.intersectObjects(scene.meshes)).toHaveLength(0);
     for (const run of leopoldSidewalks.runs) {
+      const wallFront = run.frontage.slice(0, 2);
+      const wallLength = Math.hypot(
+        wallFront[1][0] - wallFront[0][0],
+        wallFront[1][1] - wallFront[0][1],
+      );
+      const straight = run.curb.filter((point) => {
+        const projection = projectRoute(point, wallFront);
+        return projection.along > 3 && projection.along < wallLength - 3;
+      });
+      expect(straight.length).toBeGreaterThan(20);
+      for (const point of straight)
+        expect(
+          projectRoute(point, wallFront).distance -
+            wallThickness(run.wall, point) / 2,
+        ).toBeCloseTo(1.325, 3);
       const midpoint = run.curb[Math.floor(run.curb.length / 2)];
       const roadPoint = projectRoute(midpoint, street.points).point;
       const dx = midpoint[0] - roadPoint[0],
@@ -210,7 +227,7 @@ it('raises patterned Leopold sidewalks two centimetres above the road, leaving t
   }
 });
 
-it('mounts the two-headed eagle, both lion masks and the reverse shield at the mapped garden corner', () => {
+it('keeps the eagle on the outer tip and mounts the shield at the separate concave garden junction', () => {
   const scene = geometryScene(makeGardenHeraldry, THREE.DoubleSide);
   try {
     const rampart = walls.find((wall) => wall.id === 1532977610);
@@ -241,19 +258,11 @@ it('mounts the two-headed eagle, both lion masks and the reverse shield at the m
       expect(ray.intersectObjects(scene.meshes).length).toBeGreaterThan(0);
     }
     const { point, angle } = gardenHeraldry.shield;
-    const width = wallThickness(rampart, gardenHeraldry.corner);
-    for (const face of gardenHeraldry.faces) {
-      const profile = wallProfile(rampart, gardenHeraldry.corner, face.normal);
-      const { inset } = retainedWallOffsets(
-        gardenHeraldry.corner,
-        width,
-        profile,
-      );
-      expect(
-        (point[0] - gardenHeraldry.corner[0]) * face.normal[0] +
-          (point[1] - gardenHeraldry.corner[1]) * face.normal[1],
-      ).toBeLessThan(-inset - width);
-    }
+    expect(gardenHeraldry.shield.corner).toEqual(meeting);
+    expect(
+      Math.hypot(point[0] - meeting[0], point[1] - meeting[1]),
+    ).toBeLessThan(2);
+    expect(gardenHeraldry.shield.faces).toHaveLength(2);
     const ray = new THREE.Raycaster(
       new THREE.Vector3(
         point[0] + Math.sin(angle) * 2,
@@ -276,6 +285,24 @@ it('mounts the two-headed eagle, both lion masks and the reverse shield at the m
     ).toBe(true);
   } finally {
     scene.dispose();
+  }
+});
+
+it('grounds both visitor buildings on fixed frontage pads rather than uneven hillside samples', () => {
+  for (const pad of visitorFrontagePads) {
+    expect(foundation(pad.building)).toBe(pad.level);
+    const samples = pad.building.points.flatMap((point, index, ring) => {
+      const next = ring[(index + 1) % ring.length];
+      return [
+        point,
+        [(point[0] + next[0]) / 2, (point[1] + next[1]) / 2] as Point,
+      ];
+    });
+    for (const point of samples)
+      expect(elevation(...point)).toBeCloseTo(pad.level, 3);
+    expect(
+      Math.abs(pad.level - pevnostiGrade(center(pad.building.points)).level),
+    ).toBeLessThan(0.01);
   }
 });
 

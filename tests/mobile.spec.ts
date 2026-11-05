@@ -36,6 +36,17 @@ async function checkWelcomeLayout(page: Page) {
 }
 
 async function checkExplorationLayout(page: Page) {
+  for (const selector of ['.scene', '.scene canvas', '.controls-bar']) {
+    await expect(page.locator(selector)).toHaveCSS('user-select', 'none');
+  }
+  const nativeMenuAllowed = await page
+    .locator('.scene')
+    .evaluate((scene) =>
+      scene.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true }),
+      ),
+    );
+  expect(nativeMenuAllowed).toBe(false);
   await expect(page.locator('.expedition-card')).not.toBeVisible();
   await expect(page.locator('.minimap-heading')).not.toBeVisible();
   await expect(page.locator('.minimap-button .world-map')).not.toBeVisible();
@@ -84,6 +95,7 @@ async function checkExplorationLayout(page: Page) {
   await menu.tap();
   await page.getByRole('button', { name: 'Open exploration map' }).tap();
   await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCSS('user-select', 'text');
   await page.getByRole('button', { name: 'Close dialog' }).tap();
 }
 
@@ -168,9 +180,11 @@ test('drags to look and walks on double-tap-and-hold, stopping on release, cance
   );
   const distance = await inspect('return w.distance;');
   await hold();
+  await page.waitForTimeout(800);
   await expect
     .poll(() => inspect('return w.distance;'))
     .toBeGreaterThan(distance + 0.1);
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe('');
   await end();
   expect(await inspect('return w.touch.walking;')).toBe(false);
   const stopped = await inspect('return [w.position.x,w.position.z];');

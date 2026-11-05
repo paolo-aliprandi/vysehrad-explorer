@@ -44,6 +44,26 @@ for (const browserName of ['chromium', 'webkit'] as const) {
           name: 'Send report privately',
         });
         const close = page.getByRole('button', { name: 'Close dialog' });
+        const description = page.getByRole('textbox', {
+          name: 'Describe the location and what should change',
+        });
+        await expect(description).toHaveCSS('user-select', 'text');
+        await description.fill(
+          'Keep this report text editable and selectable.',
+        );
+        expect(
+          await description.evaluate((element: HTMLTextAreaElement) => {
+            element.setSelectionRange(0, 4);
+            return element.value.slice(
+              element.selectionStart,
+              element.selectionEnd,
+            );
+          }),
+        ).toBe('Keep');
+        await description.blur();
+        await dialog.locator('.dialog-content').evaluate((content) => {
+          content.scrollTop = 0;
+        });
         await expect(submit).not.toBeInViewport();
         if (browserName === 'chromium') {
           const cdp = await page.context().newCDPSession(page);

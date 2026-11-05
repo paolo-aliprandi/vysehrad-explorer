@@ -30,6 +30,7 @@ import {
   type Point,
 } from './geo';
 import { drapedPolygon, ribbonEdges, samplePolyline } from './surfaces';
+import { leopoldSidewalks } from './reference-details';
 
 type PavingKind = 'cobble' | 'gravel';
 export type PavingSurface = {
@@ -408,6 +409,14 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
     );
   for (const feature of ordered) {
     let full = pavingFootprint(feature);
+    if (feature.id === leopoldSidewalks.street.id)
+      full = polygonBoolean(
+        'union',
+        full,
+        leopoldSidewalks.runs.map(
+          (run): Polygon => [run.road.map(([x, z]) => [x, z])],
+        ),
+      );
     const sidewalks = retainedStreetCorridors.some(
       (corridor) => corridor.feature.id === feature.id,
     )
@@ -510,6 +519,7 @@ export function pavingGeometry(surface: PavingSurface) {
         : (x, z) => featureElevation(feature, [x, z]),
       rings.slice(1),
       !!road,
+      [494921190, 494921198, 494921210].includes(feature.id),
     );
     const positions = source.attributes.position;
     const a = new THREE.Vector3(),

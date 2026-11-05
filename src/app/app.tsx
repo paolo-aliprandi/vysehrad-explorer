@@ -811,7 +811,13 @@ export function App() {
     <main
       className={`app ${started ? 'playing' : 'welcome'} ${photo ? 'photo-mode' : ''}`}
     >
-      <div className="scene" ref={host} />
+      <div
+        className="scene"
+        ref={host}
+        onContextMenu={(event) => {
+          if (started) event.preventDefault();
+        }}
+      />
       {!started && (
         <div className="welcome-aerials" aria-hidden="true">
           {welcomeAerials.map((view, index) => (

@@ -1438,6 +1438,27 @@ export function pevnostiGrade(point: Point) {
     weight: 1 - smooth((projection.distance - 8.5) / (6 - 3 * gardenBank)),
   };
 }
+export const visitorFrontagePads = [49811200, 494921208].map((id) => {
+  const building = buildings.find((building) => building.id === id);
+  if (!building) throw new Error('Missing visitor street-frontage building.');
+  const frame = orientedBounds(building.points);
+  const normal: Point = [-frame.axis[1], frame.axis[0]];
+  const at = (u: number, v: number): Point => [
+    frame.center[0] + frame.axis[0] * u + normal[0] * v,
+    frame.center[1] + frame.axis[1] * u + normal[1] * v,
+  ];
+  return {
+    building,
+    level: pevnostiGrade(frame.center).level,
+    polygon: [
+      at(-frame.width / 2 - 0.6, -frame.depth / 2 - 0.6),
+      at(frame.width / 2 + 0.6, -frame.depth / 2 - 0.6),
+      at(frame.width / 2 + 0.6, frame.depth / 2 + 0.6),
+      at(-frame.width / 2 - 0.6, frame.depth / 2 + 0.6),
+      at(-frame.width / 2 - 0.6, -frame.depth / 2 - 0.6),
+    ],
+  };
+});
 const taborPosternTerraces = features
   .filter((feature) => posternIds.has(feature.id))
   .map((feature) => {
@@ -1970,6 +1991,10 @@ export function foundation(feature: Feature): number {
   if (feature.id === 49811189) return taborLevel;
   if (feature.id === 49811195)
     return pevnostiGrade(center(feature.points)).level;
+  const frontage = visitorFrontagePads.find(
+    (pad) => pad.building.id === feature.id,
+  );
+  if (frontage) return frontage.level;
   const p = center(feature.points);
   const parent = platforms.find(
     (platform) =>
@@ -2066,6 +2091,12 @@ function gradedElevation(
   if (x > 45 && x < 315 && z > 100 && z < 345) {
     const road = pevnostiGrade([x, z]);
     result += (road.level - result) * road.weight;
+    for (const pad of visitorFrontagePads) {
+      const distance = inside([x, z], pad.polygon)
+        ? 0
+        : projectRoute([x, z], pad.polygon).distance;
+      if (distance < 1) result += (pad.level - result) * (1 - smooth(distance));
+    }
   }
   return result;
 }
@@ -2652,6 +2683,10 @@ export function unretainedElevation(x: number, z: number) {
 }
 export function elevation(x: number, z: number) {
   if (onAveMariaCourt([x, z])) return aveMariaCourtElevation(x, z);
+  if (x > 105 && x < 150 && z > 160 && z < 204) {
+    const pad = visitorFrontagePads.find((pad) => inside([x, z], pad.polygon));
+    if (pad) return pad.level;
+  }
   const ground = unretainedElevation(x, z);
   const section = retainedStreetSection([x, z]);
   if (section) return retainedStreetElevation(section, ground);
@@ -3424,6 +3459,8 @@ export function standingElevation(point: Point, previousHeight = Infinity) {
   return stairs ? stairElevation(stairs, point) : elevation(...point);
 }
 export function featureElevation(feature: Feature, point: Point) {
+  if ([494921190, 494921198, 494921210].includes(feature.id))
+    return pevnostiGrade(point).level;
   if (feature.id === gardenExitAccess.feature.id) {
     const floor = gardenExitFloor(point);
     if (floor !== undefined) return floor - 0.085;
@@ -4889,10 +4926,43 @@ export const gardenHeraldry = (() => {
     nz = a.normal[1] + b.normal[1],
     length = Math.hypot(nx, nz);
   const profile = wallProfile(rampart, corner, a.normal);
-  const thickness = wallThickness(rampart, corner);
-  const { inset } = retainedWallOffsets(corner, thickness, profile);
-  const reverseOffset = inset + thickness + 0.035;
-  const innerJoin = intersection(-reverseOffset, -reverseOffset);
+  const gardenNext = gardenWall.points[gardenWall.points.length - 2];
+  const gardenLength = Math.hypot(
+    gardenNext[0] - meeting[0],
+    gardenNext[1] - meeting[1],
+  );
+  const gardenAxis: Point = [
+    (gardenNext[0] - meeting[0]) / gardenLength,
+    (gardenNext[1] - meeting[1]) / gardenLength,
+  ];
+  const rampartPrevious = rampart.points[index - 1];
+  const rampartLength = Math.hypot(
+    rampartPrevious[0] - meeting[0],
+    rampartPrevious[1] - meeting[1],
+  );
+  const rampartAxis: Point = [
+    (rampartPrevious[0] - meeting[0]) / rampartLength,
+    (rampartPrevious[1] - meeting[1]) / rampartLength,
+  ];
+  const concave = [
+    {
+      axis: rampartAxis,
+      normal: [rampartAxis[1], -rampartAxis[0]] as Point,
+      offset: 0.06,
+    },
+    {
+      axis: gardenAxis,
+      normal: [-gardenAxis[1], gardenAxis[0]] as Point,
+      offset: wallThickness(gardenWall, meeting) / 2 + 0.04,
+    },
+  ].map((face) => ({
+    ...face,
+    point: [
+      meeting[0] + face.axis[0] * 1.65 + face.normal[0] * face.offset,
+      meeting[1] + face.axis[1] * 1.65 + face.normal[1] * face.offset,
+    ] as Point,
+    angle: Math.atan2(face.normal[0], face.normal[1]),
+  }));
   return {
     corner,
     crest: profile.top,
@@ -4915,12 +4985,11 @@ export const gardenHeraldry = (() => {
       angle: Math.atan2(nx, nz),
     },
     shield: {
-      height: profile.top - 0.75,
-      point: [
-        innerJoin[0] + a.axis[0] * 1.05,
-        innerJoin[1] + a.axis[1] * 1.05,
-      ] as Point,
-      angle: Math.atan2(-a.normal[0], -a.normal[1]),
+      corner: meeting,
+      height: profile.top - 2,
+      point: concave[0].point,
+      angle: concave[0].angle,
+      faces: concave,
     },
   };
 })();

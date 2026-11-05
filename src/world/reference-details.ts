@@ -31,9 +31,8 @@ import {
   citadela,
   cemeteryLabyrinth,
   gardenHeraldry,
-  pathWidth,
   gateFrame,
-  featureElevation,
+  pevnostiGrade,
   type Point,
   type Feature,
 } from './geo';
@@ -99,60 +98,108 @@ export const leopoldSidewalks = (() => {
   if (!street || !gate)
     throw new Error('Missing photographed Leopold approach.');
   const frame = gateFrame(gate);
-  const route = samplePolyline(street.points, 0.8).filter(
-    (point) =>
-      Math.hypot(point[0] - frame.center[0], point[1] - frame.center[1]) > 5,
-  );
   const runs = [
-    [494921198, 698001346],
-    [494921210, 698001345],
-  ].map(([id, wallId]) => {
-    const sidewalk = paths.find((path) => path.id === id);
+    [698001346, 1, 49811200],
+    [698001345, 0, 494921208],
+  ].map(([wallId, segment, buildingId]) => {
     const wall = walls.find((wall) => wall.id === wallId);
-    if (!sidewalk || !wall)
-      throw new Error('Missing Leopold approach sidewalk or boundary wall.');
-    const sections = route.map((point) => {
-      const projection = projectRoute(point, sidewalk.points);
-      let normal = projection.normal;
-      if (
-        (projection.point[0] - point[0]) * normal[0] +
-          (projection.point[1] - point[1]) * normal[1] <
-        0
-      )
-        normal = [-normal[0], -normal[1]];
-      const at = (offset: number): Point => [
-        projection.point[0] + normal[0] * offset,
-        projection.point[1] + normal[1] * offset,
-      ];
-      const boundary = projectRoute(point, wall.points);
-      const dx = point[0] - boundary.point[0],
-        dz = point[1] - boundary.point[1];
-      const distance = Math.hypot(dx, dz);
-      const inset = wallThickness(wall, boundary.point) / 2 + 0.025;
+    const building = buildings.find((building) => building.id === buildingId);
+    if (!wall || !building)
+      throw new Error('Missing Leopold approach frontage.');
+    const wallFront = [wall.points[segment], wall.points[segment + 1]].sort(
+      (a, b) =>
+        projectRoute(a, street.points).along -
+        projectRoute(b, street.points).along,
+    );
+    const buildingRing =
+      buildingId === informationCentre.building.id
+        ? [
+            informationCentre.at(
+              -informationCentre.width / 2,
+              informationCentre.depth / 2,
+            ),
+            informationCentre.at(
+              informationCentre.width / 2,
+              informationCentre.depth / 2,
+            ),
+          ]
+        : building.points
+            .slice(1)
+            .map((point, index) => [building.points[index], point])
+            .sort(
+              (a, b) =>
+                projectRoute(center(a), street.points).distance -
+                projectRoute(center(b), street.points).distance,
+            )[0];
+    buildingRing.sort(
+      (a, b) =>
+        Math.hypot(a[0] - wallFront[1][0], a[1] - wallFront[1][1]) -
+        Math.hypot(b[0] - wallFront[1][0], b[1] - wallFront[1][1]),
+    );
+    const frontage = [...wallFront, ...buildingRing];
+    const samples = samplePolyline(frontage, 0.8).filter(
+      (point) =>
+        Math.hypot(point[0] - frame.center[0], point[1] - frame.center[1]) > 5,
+    );
+    const setback = (point: Point) =>
+      projectRoute(point, buildingRing).distance < 0.05 ? 0.025 : 0.4;
+    const outerEdges = ribbonEdges(samples, (point) => setback(point) * 2);
+    const curbEdges = ribbonEdges(
+      samples,
+      (point) => (setback(point) + 1.3) * 2,
+    );
+    const sections = samples.map((point, index) => {
+      const projection = projectRoute(point, street.points);
+      const towardRoad = (edge: ReturnType<typeof ribbonEdges>[number]) =>
+        Math.hypot(
+          edge.left[0] - projection.point[0],
+          edge.left[1] - projection.point[1],
+        ) <
+        Math.hypot(
+          edge.right[0] - projection.point[0],
+          edge.right[1] - projection.point[1],
+        )
+          ? edge.left
+          : edge.right;
       return {
-        curb: at(pathWidth(sidewalk) / 2),
-        outer: [
-          boundary.point[0] + (dx / distance) * inset,
-          boundary.point[1] + (dz / distance) * inset,
-        ] as Point,
+        curb: towardRoad(curbEdges[index]),
+        outer: towardRoad(outerEdges[index]),
       };
     });
     const curb = sections.map((section) => section.curb);
     return {
+      wall,
+      building,
+      frontage,
       curb,
       polygon: [...curb, ...sections.map((section) => section.outer).reverse()],
+      road: [
+        ...curb,
+        ...curb
+          .map((point) => projectRoute(point, street.points).point)
+          .reverse(),
+      ],
     };
   });
-  return { street, runs, polygons: runs.map((run) => run.polygon) };
+  return {
+    street,
+    runs,
+    polygons: runs.flatMap((run) => [run.polygon, run.road]),
+  };
 })();
 
 export function makeLeopoldCurbs(add: AddGeometry) {
-  const { street, runs } = leopoldSidewalks;
+  const { runs } = leopoldSidewalks;
   for (const run of runs) {
     add(
       '#d0ccbd',
-      drapedPolygon(run.polygon, 0.075, (x, z) =>
-        featureElevation(street, [x, z]),
+      drapedPolygon(
+        run.polygon,
+        0.075,
+        (x, z) => pevnostiGrade([x, z]).level,
+        [],
+        false,
+        true,
       ),
       'mosaic',
     );
@@ -162,7 +209,7 @@ export function makeLeopoldCurbs(add: AddGeometry) {
         run.curb,
         0.18,
         (point) => {
-          const paving = featureElevation(street, point) + 0.055;
+          const paving = pevnostiGrade(point).level + 0.055;
           return { bottom: paving - 0.025, top: paving + 0.02 };
         },
         false,
@@ -412,10 +459,14 @@ export function makeGardenHeraldry(add: AddGeometry) {
       stone,
     );
   }
-  dressing(
-    localEmitter(site.shield.point, site.crest - 1.2, site.shield.angle, add),
-    -1,
-  );
+  for (const face of site.shield.faces)
+    dressing(
+      localEmitter(face.point, site.crest - 1.2, face.angle, add),
+      -Math.sign(
+        face.axis[0] * Math.cos(face.angle) -
+          face.axis[1] * Math.sin(face.angle),
+      ),
+    );
   const reverse = localEmitter(
     site.shield.point,
     site.shield.height,
@@ -455,7 +506,7 @@ export function makeInformationCentre(add: AddGeometry) {
   add('#b8b1a0', drapedPolygon(site.apron, 0.085), 'cobble');
   add(
     '#b8b1a0',
-    drapedPolygon(site.sidewalk, 0.085, () => site.ground),
+    drapedPolygon(site.sidewalk, 0.085, () => site.ground, [], false, true),
     'cobble',
   );
   const emit = localEmitter(site.point, site.ground, site.angle, add);

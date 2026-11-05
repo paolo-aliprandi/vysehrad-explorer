@@ -644,6 +644,7 @@ function drapeTriangles(
   offset: number,
   sample = elevation,
   planarStreetCells = false,
+  absoluteHeight = false,
 ) {
   const vertices: number[] = [];
   const heightCache = new Map<string, number>();
@@ -784,9 +785,10 @@ function drapeTriangles(
                 z + cellDepth / 2,
               );
               if (
-                cliff ||
-                garden ||
-                onCourtBankTerrain(x + cellWidth / 2, z + cellDepth / 2)
+                !absoluteHeight &&
+                (cliff ||
+                  garden ||
+                  onCourtBankTerrain(x + cellWidth / 2, z + cellDepth / 2))
               ) {
                 // Cell intersections can produce almost coincident vertices.
                 polygon = polygon
@@ -884,6 +886,7 @@ export function drapedPolygon(
   sample = elevation,
   cutouts: readonly (readonly Point[])[] = [],
   planarStreetCells = false,
+  absoluteHeight = false,
 ) {
   const outer: Polygon = [points.map(([x, z]) => [x, z])];
   const polygons = cutouts.length
@@ -906,6 +909,7 @@ export function drapedPolygon(
     offset,
     sample,
     planarStreetCells,
+    absoluteHeight,
   );
 }
 
