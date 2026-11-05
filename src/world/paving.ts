@@ -409,12 +409,14 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
     );
   for (const feature of ordered) {
     let full = pavingFootprint(feature);
-    if (feature.id === leopoldSidewalks.street.id)
+    if (leopoldSidewalks.streets.some((street) => street.id === feature.id))
       full = polygonBoolean(
         'union',
         full,
-        leopoldSidewalks.runs.map(
-          (run): Polygon => [run.road.map(([x, z]) => [x, z])],
+        leopoldSidewalks.runs.flatMap((run) =>
+          run.roads
+            .filter((road) => road.street.id === feature.id)
+            .map((road): Polygon => [road.polygon.map(([x, z]) => [x, z])]),
         ),
       );
     const sidewalks = retainedStreetCorridors.some(
@@ -519,7 +521,7 @@ export function pavingGeometry(surface: PavingSurface) {
         : (x, z) => featureElevation(feature, [x, z]),
       rings.slice(1),
       !!road,
-      [494921190, 494921198, 494921210].includes(feature.id),
+      [494921190, 494921198, 494921210, 370193785].includes(feature.id),
     );
     const positions = source.attributes.position;
     const a = new THREE.Vector3(),

@@ -70,24 +70,56 @@ aveMariaFeature.tags = {
 export const exposedRocks = features.filter(
   (feature) => feature.tags.natural === 'bare_rock',
 );
-// Preserve the mapped street alignment while setting the gift shop and Špička remnant back from its shoulder.
+// Keep the mapped road fixed and leave room for its foreground sidewalks.
 const pevnostiSetbacks = new Map<number, Point>();
 const setbackRoad = features.find((feature) => feature.id === 370193785);
 if (!setbackRoad) throw new Error('The V Pevnosti frontage road is missing.');
-for (const id of [55117756, 49811195, 49811196]) {
+for (const id of [55117756, 49811195, 49811196, 49811192, 55117753]) {
   const feature = features.find((feature) => feature.id === id);
   if (!feature)
     throw new Error(`The V Pevnosti roadside building ${id} is missing.`);
-  const midpoint = center(feature.points);
+  const anchor =
+    id === 55117753
+      ? features.find((feature) => feature.id === 49811192)
+      : feature;
+  if (!anchor) throw new Error('Missing sidewalk setback reference.');
+  const previous = id === 55117753 ? pevnostiSetbacks.get(49811192) : undefined;
+  const midpoint = center(anchor.points);
   const projection = projectRoute(midpoint, setbackRoad.points);
   const dx = midpoint[0] - projection.point[0],
     dz = midpoint[1] - projection.point[1];
   const length = Math.hypot(dx, dz);
   if (length < 0.001)
     throw new Error(`Roadside building ${id} has no setback direction.`);
-  const setback = id === 49811196 ? 10 - projection.distance : 2;
-  const offset: Point = [(dx * setback) / length, (dz * setback) / length];
+  const setback =
+    id === 49811196
+      ? 10 - projection.distance
+      : id === 49811192 || id === 55117753
+        ? 1.8
+        : 2;
+  const offset: Point = previous ?? [
+    (dx * setback) / length,
+    (dz * setback) / length,
+  ];
   pevnostiSetbacks.set(id, offset);
+  const children = features.filter(
+    (part) =>
+      part.tags['building:part'] &&
+      (inside(center(part.points), feature.points) ||
+        part.points.every(
+          (point) =>
+            inside(point, feature.points) ||
+            projectRoute(point, feature.points).distance < 0.05,
+        )),
+  );
+  for (const part of children) {
+    part.points = part.points.map(
+      ([x, z]): Point => [x + offset[0], z + offset[1]],
+    );
+    part.holes = part.holes.map((ring) =>
+      ring.map(([x, z]): Point => [x + offset[0], z + offset[1]]),
+    );
+  }
   feature.points = feature.points.map(
     ([x, z]): Point => [x + offset[0], z + offset[1]],
   );
@@ -111,6 +143,12 @@ for (const id of [55117756, 49811195, 49811196]) {
     if (id === 49811195) feature.tags = { ...feature.tags, height: '4.6' };
   }
 }
+const schoolFrontage = features.find((feature) => feature.id === 49811192);
+const schoolFence = features.find((feature) => feature.id === 754190640);
+if (!schoolFrontage || !schoolFence)
+  throw new Error('Missing setback school frontage or its garden fence.');
+schoolFence.points[schoolFence.points.length - 1] =
+  schoolFrontage.points[schoolFrontage.points.length - 3];
 export function exposedRockAt(point: Point, margin = 0) {
   return exposedRocks.some(
     (rock) =>
@@ -1424,6 +1462,17 @@ export function pevnostiGrade(point: Point) {
     end.along === start.along
       ? 0
       : smooth((projection.along - start.along) / (end.along - start.along));
+  let level = start.level + (end.level - start.level) * t;
+  if (start === roadAnchors[2]) {
+    // The inside bend must not switch abruptly between two longitudinal grades.
+    const section = projectRoute(point, [start.point, end.point]);
+    const frontageLevel =
+      start.level +
+      (end.level - start.level) * smooth(section.along / section.length);
+    level +=
+      (frontageLevel - level) *
+      (1 - smooth((projection.along - start.along - 35) / 5));
+  }
   const signed =
     (point[0] - projection.point[0]) * projection.normal[0] +
     (point[1] - projection.point[1]) * projection.normal[1];
@@ -1432,10 +1481,20 @@ export function pevnostiGrade(point: Point) {
       ? smooth((projection.along - roadAnchors[1].along - 6) / 8) *
         (1 - smooth((projection.along - roadAnchors[2].along + 10) / 12))
       : 0;
+  const schoolShoulder =
+    signed > 0
+      ? smooth((projection.along - roadAnchors[1].along - 10) / 10) *
+        (1 - smooth((projection.along - roadAnchors[2].along - 35) / 5)) *
+        2.5
+      : 0;
   return {
     ...projection,
-    level: start.level + (end.level - start.level) * t,
-    weight: 1 - smooth((projection.distance - 8.5) / (6 - 3 * gardenBank)),
+    level,
+    weight:
+      1 -
+      smooth(
+        (projection.distance - 8.5 - schoolShoulder) / (6 - 3 * gardenBank),
+      ),
   };
 }
 export const visitorFrontagePads = [49811200, 494921208].map((id) => {
@@ -2167,12 +2226,12 @@ function fieldElevation(
 // Resolve the narrow street shoulders without widening the pad over the garden bank.
 export const approachTerrainField = {
   minX: 60,
-  maxX: 150,
+  maxX: 170,
   minZ: 120,
-  maxZ: 205,
-  columns: 90,
-  rows: 85,
-  heights: new Float32Array(91 * 86),
+  maxZ: 240,
+  columns: 110,
+  rows: 120,
+  heights: new Float32Array(111 * 121),
 };
 export function onApproachTerrain(x: number, z: number) {
   return (
@@ -2193,8 +2252,9 @@ for (let row = 0; row <= approachTerrainField.rows; row++)
       approachTerrainField.maxZ - z,
     );
     const coarse = fieldElevation(upperTerrainField, x, z);
-    approachTerrainField.heights[row * 91 + col] =
-      coarse + (gradedElevation(x, z) - coarse) * smooth(edge / 5);
+    approachTerrainField.heights[
+      row * (approachTerrainField.columns + 1) + col
+    ] = coarse + (gradedElevation(x, z) - coarse) * smooth(edge / 5);
   }
 
 export function originalElevation(x: number, z: number) {
@@ -3461,6 +3521,12 @@ export function standingElevation(point: Point, previousHeight = Infinity) {
 export function featureElevation(feature: Feature, point: Point) {
   if ([494921190, 494921198, 494921210].includes(feature.id))
     return pevnostiGrade(point).level;
+  if (feature.id === 370193785) {
+    const grade = pevnostiGrade(point);
+    const original = originalElevation(...point);
+    const weight = 1 - smooth((grade.along - roadAnchors[2].along - 35) / 5);
+    return original + (grade.level - original) * weight;
+  }
   if (feature.id === gardenExitAccess.feature.id) {
     const floor = gardenExitFloor(point);
     if (floor !== undefined) return floor - 0.085;
@@ -4619,8 +4685,8 @@ const kioskBorder = (() => {
 })();
 export const referenceBorderBushes = [
   ...Array.from(
-    { length: 8 },
-    (_, i): Point => [136 + i * 1.45, 179.5 - i * 1.25],
+    { length: 7 },
+    (_, i): Point => [137.45 + i * 1.45, 178.25 - i * 1.25],
   ),
   ...kioskBorder,
 ]
@@ -4926,43 +4992,47 @@ export const gardenHeraldry = (() => {
     nz = a.normal[1] + b.normal[1],
     length = Math.hypot(nx, nz);
   const profile = wallProfile(rampart, corner, a.normal);
-  const gardenNext = gardenWall.points[gardenWall.points.length - 2];
-  const gardenLength = Math.hypot(
-    gardenNext[0] - meeting[0],
-    gardenNext[1] - meeting[1],
-  );
-  const gardenAxis: Point = [
-    (gardenNext[0] - meeting[0]) / gardenLength,
-    (gardenNext[1] - meeting[1]) / gardenLength,
+  const shieldCorner = rampart.points[index - 2];
+  const shieldFaces = [rampart.points[index - 3], meeting].map((next) => {
+    const length = Math.hypot(
+      next[0] - shieldCorner[0],
+      next[1] - shieldCorner[1],
+    );
+    const axis: Point = [
+      (next[0] - shieldCorner[0]) / length,
+      (next[1] - shieldCorner[1]) / length,
+    ];
+    let normal: Point = [axis[1], -axis[0]];
+    if (
+      inside(
+        [
+          (shieldCorner[0] + next[0]) / 2 + normal[0],
+          (shieldCorner[1] + next[1]) / 2 + normal[1],
+        ],
+        courtBankBoundary,
+      )
+    )
+      normal = [-normal[0], -normal[1]];
+    return {
+      axis,
+      normal,
+      point: [
+        shieldCorner[0] + axis[0] * 1.05 + normal[0] * 0.06,
+        shieldCorner[1] + axis[1] * 1.05 + normal[1] * 0.06,
+      ] as Point,
+      angle: Math.atan2(normal[0], normal[1]),
+    };
+  });
+  const shieldNormal: Point = [
+    shieldFaces[0].normal[0] + shieldFaces[1].normal[0],
+    shieldFaces[0].normal[1] + shieldFaces[1].normal[1],
   ];
-  const rampartPrevious = rampart.points[index - 1];
-  const rampartLength = Math.hypot(
-    rampartPrevious[0] - meeting[0],
-    rampartPrevious[1] - meeting[1],
-  );
-  const rampartAxis: Point = [
-    (rampartPrevious[0] - meeting[0]) / rampartLength,
-    (rampartPrevious[1] - meeting[1]) / rampartLength,
-  ];
-  const concave = [
-    {
-      axis: rampartAxis,
-      normal: [rampartAxis[1], -rampartAxis[0]] as Point,
-      offset: 0.06,
-    },
-    {
-      axis: gardenAxis,
-      normal: [-gardenAxis[1], gardenAxis[0]] as Point,
-      offset: wallThickness(gardenWall, meeting) / 2 + 0.04,
-    },
-  ].map((face) => ({
-    ...face,
-    point: [
-      meeting[0] + face.axis[0] * 1.65 + face.normal[0] * face.offset,
-      meeting[1] + face.axis[1] * 1.65 + face.normal[1] * face.offset,
-    ] as Point,
-    angle: Math.atan2(face.normal[0], face.normal[1]),
-  }));
+  const shieldLength = Math.hypot(...shieldNormal);
+  const shieldCrest = wallProfile(
+    rampart,
+    shieldCorner,
+    shieldFaces[0].normal,
+  ).top;
   return {
     corner,
     crest: profile.top,
@@ -4985,11 +5055,15 @@ export const gardenHeraldry = (() => {
       angle: Math.atan2(nx, nz),
     },
     shield: {
-      corner: meeting,
-      height: profile.top - 2,
-      point: concave[0].point,
-      angle: concave[0].angle,
-      faces: concave,
+      corner: shieldCorner,
+      crest: shieldCrest,
+      height: shieldCrest - 2,
+      point: [
+        shieldCorner[0] + (shieldNormal[0] / shieldLength) * 0.22,
+        shieldCorner[1] + (shieldNormal[1] / shieldLength) * 0.22,
+      ] as Point,
+      angle: Math.atan2(shieldNormal[0], shieldNormal[1]),
+      faces: shieldFaces,
     },
   };
 })();

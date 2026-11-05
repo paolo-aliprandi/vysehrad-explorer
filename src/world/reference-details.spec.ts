@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import dataset from '../data/world.json';
 import {
   arcadeInterior,
   makeArcadeCeiling,
@@ -62,6 +63,7 @@ import {
   inside,
   pevnostiGrade,
   visitorFrontagePads,
+  parts,
   type Point,
 } from './geo';
 import { makeApproach, makePassages } from './passages';
@@ -150,7 +152,7 @@ it('paints the cemetery labyrinth on asphalt north of the private garden fence w
 
 it('raises patterned Leopold sidewalks two centimetres above the road, leaving the gate and carriageway open', () => {
   const scene = geometryScene(makeLeopoldCurbs, THREE.DoubleSide);
-  const street = paths.find((path) => path.id === 494921190);
+  const street = leopoldSidewalks.street;
   const gate = buildings.find((building) => building.id === 51718887);
   if (!street || !gate) throw new Error('Missing curb fixtures.');
   const frame = gateFrame(gate);
@@ -227,7 +229,7 @@ it('raises patterned Leopold sidewalks two centimetres above the road, leaving t
   }
 });
 
-it('keeps the eagle on the outer tip and mounts the shield at the separate concave garden junction', () => {
+it('keeps the eagle on the outer tip and moves the shield to the convex corner left of the garden junction', () => {
   const scene = geometryScene(makeGardenHeraldry, THREE.DoubleSide);
   try {
     const rampart = walls.find((wall) => wall.id === 1532977610);
@@ -258,10 +260,14 @@ it('keeps the eagle on the outer tip and mounts the shield at the separate conca
       expect(ray.intersectObjects(scene.meshes).length).toBeGreaterThan(0);
     }
     const { point, angle } = gardenHeraldry.shield;
-    expect(gardenHeraldry.shield.corner).toEqual(meeting);
+    const leftCorner = rampart.points[index - 2];
+    expect(gardenHeraldry.shield.corner).toEqual(leftCorner);
     expect(
-      Math.hypot(point[0] - meeting[0], point[1] - meeting[1]),
-    ).toBeLessThan(2);
+      Math.hypot(leftCorner[0] - meeting[0], leftCorner[1] - meeting[1]),
+    ).toBeGreaterThan(30);
+    expect(
+      Math.hypot(point[0] - leftCorner[0], point[1] - leftCorner[1]),
+    ).toBeLessThan(0.3);
     expect(gardenHeraldry.shield.faces).toHaveLength(2);
     const ray = new THREE.Raycaster(
       new THREE.Vector3(
@@ -279,10 +285,102 @@ it('keeps the eagle on the outer tip and mounts the shield at the separate conca
         mesh.geometry.computeBoundingBox();
         return (
           (mesh.geometry.boundingBox?.max.y ?? Infinity) <
-          gardenHeraldry.crest + 0.1
+          Math.max(gardenHeraldry.crest, gardenHeraldry.shield.crest) + 0.1
         );
       }),
     ).toBe(true);
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('continues the raised mosaic past the fence and in front of the setback school without narrowing the road', () => {
+  const scene = geometryScene(makeLeopoldCurbs, THREE.DoubleSide);
+  const run = leopoldSidewalks.runs.find(
+    (run) => run.building.id === 494921208,
+  );
+  const school = buildings.find((building) => building.id === 49811192);
+  const attached = buildings.find((building) => building.id === 55117753);
+  const original = dataset.features.find(
+    (building) => building.id === 49811192,
+  );
+  if (!run || !school || !attached || !original)
+    throw new Error('Missing extension fixtures.');
+  try {
+    const edge = school.points.slice(-3);
+    const oldEdge = original.points.slice(-3);
+    const shift = Math.hypot(
+      edge[0][0] - oldEdge[0][0],
+      edge[0][1] - oldEdge[0][1],
+    );
+    expect(shift).toBeCloseTo(1.8, 3);
+    const roof = parts.find((part) => part.id === 502676879);
+    const originalRoof = dataset.features.find((part) => part.id === 502676879);
+    if (!roof || !originalRoof) throw new Error('Missing concave school roof.');
+    expect(roof.points[0][0] - originalRoof.points[0][0]).toBeCloseTo(
+      edge[0][0] - oldEdge[0][0],
+      5,
+    );
+    expect(roof.points[0][1] - originalRoof.points[0][1]).toBeCloseTo(
+      edge[0][1] - oldEdge[0][1],
+      5,
+    );
+    expect(
+      attached.points.some(
+        (point) =>
+          Math.hypot(point[0] - edge[2][0], point[1] - edge[2][1]) < 0.001,
+      ),
+    ).toBe(true);
+    const samples = run.curb.filter((point) => {
+      const projection = projectRoute(point, edge);
+      return projection.along > 3 && projection.along < 20;
+    });
+    expect(samples.length).toBeGreaterThan(15);
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(),
+      new THREE.Vector3(0, -1, 0),
+    );
+    for (const point of samples) {
+      expect(projectRoute(point, edge).distance).toBeCloseTo(1.325, 2);
+      const road = projectRoute(point, leopoldSidewalks.street.points).point;
+      const dx = point[0] - road[0],
+        dz = point[1] - road[1],
+        length = Math.hypot(dx, dz);
+      const band: Point = [
+        point[0] + (dx / length) * 0.6,
+        point[1] + (dz / length) * 0.6,
+      ];
+      ray.ray.origin.set(band[0], 80, band[1]);
+      const hit = ray.intersectObjects(scene.meshes)[0];
+      expect(hit?.object.name).toBe('mosaic:#d0ccbd');
+      expect(hit.point.y - pevnostiGrade(band).level).toBeCloseTo(0.075, 3);
+      expect(inside(band, school.points)).toBe(false);
+      expect(blocked(band, elevation(...band))).toBe(false);
+    }
+    for (const road of leopoldSidewalks.streets) {
+      for (const point of road.points) {
+        ray.ray.origin.set(point[0], 80, point[1]);
+        expect(ray.intersectObjects(scene.meshes)).toHaveLength(0);
+      }
+    }
+    for (const [index, sidewalk] of leopoldSidewalks.runs.entries())
+      for (const point of sidewalk.curb.filter((point) =>
+        index === 0
+          ? point[0] > 134 && point[1] > 178
+          : point[0] > 130 && point[1] > 196,
+      )) {
+        const road = projectRoute(point, leopoldSidewalks.street.points).point;
+        const dx = point[0] - road[0],
+          dz = point[1] - road[1],
+          length = Math.hypot(dx, dz);
+        const band: Point = [
+          point[0] + (dx / length) * 0.6,
+          point[1] + (dz / length) * 0.6,
+        ];
+        expect(blocked(band, elevation(...band)), JSON.stringify(band)).toBe(
+          false,
+        );
+      }
   } finally {
     scene.dispose();
   }

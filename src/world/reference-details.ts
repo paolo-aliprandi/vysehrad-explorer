@@ -93,10 +93,19 @@ function beam(a: Vertex, b: Vertex, radius: number) {
 }
 
 export const leopoldSidewalks = (() => {
-  const street = paths.find((path) => path.id === 494921190);
+  const approach = paths.find((path) => path.id === 494921190);
+  const continuation = paths.find((path) => path.id === 370193785);
   const gate = buildings.find((building) => building.id === 51718887);
-  if (!street || !gate)
+  const school = buildings.find((building) => building.id === 49811192);
+  const fence = walls.find((wall) => wall.id === 754190640);
+  if (!approach || !continuation || !gate || !school || !fence)
     throw new Error('Missing photographed Leopold approach.');
+  const streets = [approach, continuation];
+  const street = {
+    ...approach,
+    points: [...approach.points, ...continuation.points.slice(1)],
+  };
+  const junction = projectRoute(continuation.points[0], street.points).along;
   const frame = gateFrame(gate);
   const runs = [
     [698001346, 1, 49811200],
@@ -136,13 +145,22 @@ export const leopoldSidewalks = (() => {
         Math.hypot(a[0] - wallFront[1][0], a[1] - wallFront[1][1]) -
         Math.hypot(b[0] - wallFront[1][0], b[1] - wallFront[1][1]),
     );
-    const frontage = [...wallFront, ...buildingRing];
+    const schoolFront = school.points.slice(-3);
+    const extension: Point[] =
+      buildingId === 49811200
+        ? [[145.4, 188.1]]
+        : [fence.points[2], ...schoolFront];
+    const frontage = [...wallFront, ...buildingRing, ...extension];
     const samples = samplePolyline(frontage, 0.8).filter(
       (point) =>
         Math.hypot(point[0] - frame.center[0], point[1] - frame.center[1]) > 5,
     );
     const setback = (point: Point) =>
-      projectRoute(point, buildingRing).distance < 0.05 ? 0.025 : 0.4;
+      projectRoute(point, buildingRing).distance < 0.05 ||
+      (buildingId === 494921208 &&
+        projectRoute(point, schoolFront).distance < 0.05)
+        ? 0.025
+        : 0.4;
     const outerEdges = ribbonEdges(samples, (point) => setback(point) * 2);
     const curbEdges = ribbonEdges(
       samples,
@@ -167,22 +185,42 @@ export const leopoldSidewalks = (() => {
       };
     });
     const curb = sections.map((section) => section.curb);
+    const split = curb.findIndex(
+      (point) => projectRoute(point, street.points).along >= junction,
+    );
+    const roadPolygon = (edge: Point[]) => [
+      ...edge,
+      ...edge
+        .map((point) => projectRoute(point, street.points).point)
+        .reverse(),
+    ];
+    const roads = [
+      {
+        street: approach,
+        polygon: roadPolygon(split < 0 ? curb : curb.slice(0, split + 1)),
+      },
+      ...(split < 0
+        ? []
+        : [
+            {
+              street: continuation,
+              polygon: roadPolygon(curb.slice(Math.max(0, split - 1))),
+            },
+          ]),
+    ].filter((road) => road.polygon.length >= 4);
     return {
       wall,
       building,
       frontage,
       curb,
       polygon: [...curb, ...sections.map((section) => section.outer).reverse()],
-      road: [
-        ...curb,
-        ...curb
-          .map((point) => projectRoute(point, street.points).point)
-          .reverse(),
-      ],
+      road: roadPolygon(curb),
+      roads,
     };
   });
   return {
     street,
+    streets,
     runs,
     polygons: runs.flatMap((run) => [run.polygon, run.road]),
   };
@@ -461,7 +499,7 @@ export function makeGardenHeraldry(add: AddGeometry) {
   }
   for (const face of site.shield.faces)
     dressing(
-      localEmitter(face.point, site.crest - 1.2, face.angle, add),
+      localEmitter(face.point, site.shield.crest - 1.2, face.angle, add),
       -Math.sign(
         face.axis[0] * Math.cos(face.angle) -
           face.axis[1] * Math.sin(face.angle),
