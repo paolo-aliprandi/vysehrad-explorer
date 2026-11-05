@@ -406,6 +406,36 @@ export class Materials {
   }
 }
 
+export function spatialBatches(geometries: THREE.BufferGeometry[]) {
+  const cells = new Map<string, THREE.BufferGeometry[]>();
+  const center = new THREE.Vector3();
+  for (const geometry of geometries) {
+    geometry.computeBoundingBox();
+    geometry.boundingBox?.getCenter(center);
+    const key = `${Math.floor(center.x / 64)}|${Math.floor(center.z / 64)}`;
+    const cell = cells.get(key) ?? [];
+    cell.push(geometry);
+    cells.set(key, cell);
+  }
+  return [...cells.values()];
+}
+
+export function prepareBatchGeometry(
+  geometry: THREE.BufferGeometry,
+  kind: MaterialKind,
+) {
+  if (!geometry.index) {
+    const count = geometry.attributes.position.count;
+    const indices =
+      count > 65535 ? new Uint32Array(count) : new Uint16Array(count);
+    for (let i = 0; i < count; i++) indices[i] = i;
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  }
+  if (kind !== 'fresco' || !geometry.getAttribute('uv'))
+    worldUVs(geometry, kind);
+  return geometry;
+}
+
 export function worldUVs(geometry: THREE.BufferGeometry, kind: MaterialKind) {
   const positions = geometry.attributes.position,
     normals = geometry.attributes.normal;

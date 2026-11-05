@@ -64,6 +64,8 @@ import {
   Materials,
   paintedSky,
   paintedWater,
+  prepareBatchGeometry,
+  spatialBatches,
   worldUVs,
   type MaterialKind,
 } from './materials';
@@ -623,6 +625,8 @@ export class World {
     );
     // Keep OSM terrain and collision coordinates native; scale at the rendering boundary.
     this.scene.scale.setScalar(environmentScale);
+    this.scene.updateMatrix();
+    this.scene.matrixAutoUpdate = false;
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: 'high-performance',
@@ -908,42 +912,50 @@ export class World {
       geometry.dispose();
       return;
     }
-    const normalized = geometry.index ? geometry.toNonIndexed() : geometry;
-    if (normalized !== geometry) geometry.dispose();
-    if (kind !== 'fresco' || !normalized.getAttribute('uv'))
-      worldUVs(normalized, kind);
+    prepareBatchGeometry(geometry, kind);
     const key = `${kind}|${color}`;
     const existing = this.batches.get(key) ?? { kind, color, geometries: [] };
-    existing.geometries.push(normalized);
+    existing.geometries.push(geometry);
     this.batches.set(key, existing);
   }
 
   private flushBatches() {
     for (const { color, kind, geometries } of this.batches.values()) {
-      const geometry = mergeGeometries(geometries);
-      if (!geometry) throw new Error('Could not assemble OSM geometry.');
-      const mesh = new THREE.Mesh(
-        geometry,
-        this.surfaceMaterials.get(kind, color),
+      const vertices = geometries.reduce(
+        (sum, geometry) => sum + geometry.attributes.position.count,
+        0,
       );
-      this.scene.add(mesh);
-      mesh.castShadow = !['grass', 'cobble', 'glass'].includes(kind);
-      mesh.receiveShadow = true;
-      if (
-        [
-          'plaster',
-          'stone',
-          'rubble',
-          'brick',
-          'slate',
-          'wood',
-          'bark',
-          'metal',
-          'foliage',
-          'fresco',
-        ].includes(kind)
-      )
-        this.blockers.push(mesh);
+      const chunks =
+        vertices > 200000 && (kind === 'foliage' || kind === 'metal')
+          ? spatialBatches(geometries)
+          : [geometries];
+      for (const chunk of chunks) {
+        const geometry = mergeGeometries(chunk);
+        if (!geometry) throw new Error('Could not assemble OSM geometry.');
+        const mesh = new THREE.Mesh(
+          geometry,
+          this.surfaceMaterials.get(kind, color),
+        );
+        mesh.matrixAutoUpdate = false;
+        this.scene.add(mesh);
+        mesh.castShadow = !['grass', 'cobble', 'glass'].includes(kind);
+        mesh.receiveShadow = true;
+        if (
+          [
+            'plaster',
+            'stone',
+            'rubble',
+            'brick',
+            'slate',
+            'wood',
+            'bark',
+            'metal',
+            'foliage',
+            'fresco',
+          ].includes(kind)
+        )
+          this.blockers.push(mesh);
+      }
       geometries.forEach((g) => g.dispose());
     }
     this.batches.clear();
