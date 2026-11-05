@@ -33,6 +33,7 @@ import {
   gardenHeraldry,
   gateFrame,
   pevnostiGrade,
+  stairwellFootprint,
   type Point,
   type Feature,
 } from './geo';
@@ -97,8 +98,26 @@ export const leopoldSidewalks = (() => {
   const continuation = paths.find((path) => path.id === 370193785);
   const gate = buildings.find((building) => building.id === 51718887);
   const school = buildings.find((building) => building.id === 49811192);
+  const attached = buildings.find((building) => building.id === 55117753);
+  const shop = buildings.find((building) => building.id === 55117756);
+  const southernWall = walls.find((wall) => wall.id === 1060436899);
   const fence = walls.find((wall) => wall.id === 754190640);
-  if (!approach || !continuation || !gate || !school || !fence)
+  const easternWalk = paths.find((path) => path.id === 494921219);
+  const westernWalk = paths.find((path) => path.id === 494921210);
+  const tabor = buildings.find((building) => building.id === 49811189);
+  if (
+    !approach ||
+    !continuation ||
+    !gate ||
+    !school ||
+    !attached ||
+    !shop ||
+    !southernWall ||
+    !fence ||
+    !easternWalk ||
+    !westernWalk ||
+    !tabor
+  )
     throw new Error('Missing photographed Leopold approach.');
   const streets = [approach, continuation];
   const street = {
@@ -106,6 +125,70 @@ export const leopoldSidewalks = (() => {
     points: [...approach.points, ...continuation.points.slice(1)],
   };
   const junction = projectRoute(continuation.points[0], street.points).along;
+  const end = continuation.points[continuation.points.length - 1];
+  const limit = projectRoute(end, street.points).along - 2;
+  const endNormal = projectRoute(end, continuation.points).normal;
+  const schoolFront = school.points.slice(-3);
+  const frontFace = (building: Feature) =>
+    building.points
+      .slice(1)
+      .map((point, index) => [building.points[index], point])
+      .filter(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]) > 3.4)
+      .sort(
+        (a, b) =>
+          projectRoute(center(a), street.points).distance -
+          projectRoute(center(b), street.points).distance,
+      )[0]
+      .sort(
+        (a, b) =>
+          projectRoute(a, street.points).along -
+          projectRoute(b, street.points).along,
+      );
+  const attachedFront = frontFace(attached);
+  const shopFront = frontFace(shop);
+  const wallFrontage = [...southernWall.points].reverse();
+  const roadward = (point: Point, distance: number): Point => {
+    const projection = projectRoute(point, street.points);
+    return [
+      point[0] +
+        ((projection.point[0] - point[0]) * distance) / projection.distance,
+      point[1] +
+        ((projection.point[1] - point[1]) * distance) / projection.distance,
+    ];
+  };
+  const westernCurb = [
+    roadward(schoolFront[0], 1.325),
+    roadward(shopFront[1], 2.4),
+    ...[...westernWalk.points]
+      .reverse()
+      .filter(
+        (point) =>
+          projectRoute(point, street.points).along >
+          projectRoute(shopFront[1], street.points).along + 1,
+      )
+      .map((point) => roadward(point, 0.65)),
+    [end[0] + endNormal[0] * 5.4, end[1] + endNormal[1] * 5.4] as Point,
+  ];
+  const westernStart = projectRoute(schoolFront[0], street.points).along;
+  const mappedFrontage = (walk: Feature, side: number, after: Point) => {
+    const points = samplePolyline([...walk.points].reverse(), 0.8);
+    const afterAlong = projectRoute(after, street.points).along + 1;
+    const frontage = ribbonEdges(points, 2.1)
+      .map((edge) => {
+        const distance = (point: Point) =>
+          projectRoute(point, street.points).distance;
+        return distance(edge.left) > distance(edge.right)
+          ? edge.left
+          : edge.right;
+      })
+      .filter((point) => projectRoute(point, street.points).along > afterAlong);
+    frontage.push([
+      end[0] + endNormal[0] * side * 6.05,
+      end[1] + endNormal[1] * side * 6.05,
+    ]);
+    return frontage;
+  };
+  const easternFrontage = mappedFrontage(easternWalk, -1, [145.4, 188.1]);
   const frame = gateFrame(gate);
   const runs = [
     [698001346, 1, 49811200],
@@ -145,20 +228,35 @@ export const leopoldSidewalks = (() => {
         Math.hypot(a[0] - wallFront[1][0], a[1] - wallFront[1][1]) -
         Math.hypot(b[0] - wallFront[1][0], b[1] - wallFront[1][1]),
     );
-    const schoolFront = school.points.slice(-3);
     const extension: Point[] =
       buildingId === 49811200
-        ? [[145.4, 188.1]]
-        : [fence.points[2], ...schoolFront];
-    const frontage = [...wallFront, ...buildingRing, ...extension];
+        ? [[145.4, 188.1], ...easternFrontage]
+        : [
+            fence.points[2],
+            ...schoolFront,
+            ...attachedFront,
+            ...shopFront,
+            ...wallFrontage.slice(1),
+          ];
+    const frontage = [...wallFront, ...buildingRing, ...extension].filter(
+      (point, index, points) =>
+        index === 0 ||
+        Math.hypot(
+          point[0] - points[index - 1][0],
+          point[1] - points[index - 1][1],
+        ) > 0.001,
+    );
     const samples = samplePolyline(frontage, 0.8).filter(
       (point) =>
-        Math.hypot(point[0] - frame.center[0], point[1] - frame.center[1]) > 5,
+        Math.hypot(point[0] - frame.center[0], point[1] - frame.center[1]) >
+          5 && projectRoute(point, street.points).along < limit,
     );
     const setback = (point: Point) =>
       projectRoute(point, buildingRing).distance < 0.05 ||
       (buildingId === 494921208 &&
-        projectRoute(point, schoolFront).distance < 0.05)
+        [schoolFront, attachedFront, shopFront].some(
+          (face) => projectRoute(point, face).distance < 0.05,
+        ))
         ? 0.025
         : 0.4;
     const outerEdges = ribbonEdges(samples, (point) => setback(point) * 2);
@@ -180,11 +278,26 @@ export const leopoldSidewalks = (() => {
           ? edge.left
           : edge.right;
       return {
-        curb: towardRoad(curbEdges[index]),
+        curb:
+          buildingId === 494921208 && projection.along >= westernStart - 0.01
+            ? projectRoute(point, westernCurb).point
+            : towardRoad(curbEdges[index]),
         outer: towardRoad(outerEdges[index]),
       };
     });
     const curb = sections.map((section) => section.curb);
+    const curbRuns: Point[][] = [];
+    let active: Point[] = [];
+    for (const point of curb) {
+      if (
+        inside(point, stairwellFootprint) ||
+        projectRoute(point, stairwellFootprint).distance < 0.15
+      ) {
+        if (active.length > 1) curbRuns.push(active);
+        active = [];
+      } else active.push(point);
+    }
+    if (active.length > 1) curbRuns.push(active);
     const split = curb.findIndex(
       (point) => projectRoute(point, street.points).along >= junction,
     );
@@ -213,6 +326,7 @@ export const leopoldSidewalks = (() => {
       building,
       frontage,
       curb,
+      curbRuns,
       polygon: [...curb, ...sections.map((section) => section.outer).reverse()],
       road: roadPolygon(curb),
       roads,
@@ -221,6 +335,8 @@ export const leopoldSidewalks = (() => {
   return {
     street,
     streets,
+    tabor,
+    cutouts: [stairwellFootprint],
     runs,
     polygons: runs.flatMap((run) => [run.polygon, run.road]),
   };
@@ -235,25 +351,29 @@ export function makeLeopoldCurbs(add: AddGeometry) {
         run.polygon,
         0.075,
         (x, z) => pevnostiGrade([x, z]).level,
-        [],
+        leopoldSidewalks.cutouts,
         false,
         true,
       ),
       'mosaic',
     );
-    add(
-      '#a7a89d',
-      continuousWall(
-        run.curb,
+    for (const curb of run.curbRuns) {
+      const geometry = continuousWall(
+        curb,
         0.18,
-        (point) => {
-          const paving = pevnostiGrade(point).level + 0.055;
-          return { bottom: paving - 0.025, top: paving + 0.02 };
-        },
+        () => ({ bottom: 0.03, top: 0.075 }),
         false,
-      ),
-      'stone',
-    );
+      );
+      const positions = geometry.attributes.position;
+      for (let i = 0; i < positions.count; i++)
+        positions.setY(
+          i,
+          positions.getY(i) +
+            pevnostiGrade([positions.getX(i), positions.getZ(i)]).level,
+        );
+      geometry.computeVertexNormals();
+      add('#a7a89d', geometry, 'stone');
+    }
   }
 }
 

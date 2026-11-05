@@ -1156,9 +1156,14 @@ export function decorateBuilding(
   );
   const front = (z: number) => buildingFront(feature, z);
   let remaining = church ? 60 : 24;
-  for (let i = 1; i < ring.length; i++) {
-    const a = ring[i - 1],
-      b = ring[i];
+  const faces = ring.slice(1).map((b, index) => [ring[index], b] as const);
+  if (entrance)
+    faces.sort(
+      (a, b) =>
+        projectRoute(entrance.face, a).distance -
+        projectRoute(entrance.face, b).distance,
+    );
+  for (const [a, b] of faces) {
     const dx = b[0] - a[0],
       dz = b[1] - a[1],
       length = Math.hypot(dx, dz);

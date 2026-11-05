@@ -149,6 +149,16 @@ if (!schoolFrontage || !schoolFence)
   throw new Error('Missing setback school frontage or its garden fence.');
 schoolFence.points[schoolFence.points.length - 1] =
   schoolFrontage.points[schoolFrontage.points.length - 3];
+const shopFrontage = features.find((feature) => feature.id === 55117756);
+const shopBoundary = features.find((feature) => feature.id === 1060436899);
+if (!shopFrontage || !shopBoundary)
+  throw new Error('Missing shop frontage boundary.');
+shopBoundary.points[shopBoundary.points.length - 1] = shopFrontage.points[4];
+const attachedFrontage = features.find((feature) => feature.id === 55117753);
+const frontageLinkWall = features.find((feature) => feature.id === 55117755);
+if (!attachedFrontage || !frontageLinkWall)
+  throw new Error('Missing school-to-shop boundary.');
+frontageLinkWall.points = [attachedFrontage.points[8], shopFrontage.points[3]];
 export function exposedRockAt(point: Point, margin = 0) {
   return exposedRocks.some(
     (rock) =>
@@ -453,7 +463,7 @@ export const cemeteryArcadeColumns = cemeteryArcadeBays.flatMap((bay) =>
 export function modelBuildingPart(feature: Feature): Feature {
   if (!feature.tags['building:part']) return feature;
   const parent = buildings.find((building) =>
-    inside(center(feature.points), building.points),
+    buildingContainsPart(building, feature),
   );
   if (!parent) return feature;
   return {
@@ -488,12 +498,22 @@ export function modelBuildingPart(feature: Feature): Feature {
     }),
   };
 }
+export function buildingContainsPart(building: Feature, part: Feature) {
+  return (
+    inside(center(part.points), building.points) ||
+    part.points.every(
+      (point) =>
+        inside(point, building.points) ||
+        projectRoute(point, building.points).distance < 0.05,
+    )
+  );
+}
 export function uncoveredBuilding(feature: Feature): Feature[] {
   const children = parts
     .filter(
       (part) =>
         meters(part.tags.min_height, 0) === 0 &&
-        inside(center(part.points), feature.points),
+        buildingContainsPart(feature, part),
     )
     .map(modelBuildingPart);
   if (!children.length) return [feature];
@@ -1463,15 +1483,13 @@ export function pevnostiGrade(point: Point) {
       ? 0
       : smooth((projection.along - start.along) / (end.along - start.along));
   let level = start.level + (end.level - start.level) * t;
-  if (start === roadAnchors[2]) {
+  if (start === roadAnchors[2] || start === roadAnchors[3]) {
     // The inside bend must not switch abruptly between two longitudinal grades.
     const section = projectRoute(point, [start.point, end.point]);
     const frontageLevel =
       start.level +
       (end.level - start.level) * smooth(section.along / section.length);
-    level +=
-      (frontageLevel - level) *
-      (1 - smooth((projection.along - start.along - 35) / 5));
+    level = frontageLevel;
   }
   const signed =
     (point[0] - projection.point[0]) * projection.normal[0] +
@@ -2058,7 +2076,8 @@ export function foundation(feature: Feature): number {
   const parent = platforms.find(
     (platform) =>
       platform.feature.id === feature.id ||
-      (feature.tags['building:part'] && inside(p, platform.feature.points)),
+      (feature.tags['building:part'] &&
+        buildingContainsPart(platform.feature, feature)),
   );
   if (!parent) return rawElevation(...p);
   if (cemeteryArcades.some((arcade) => arcade.feature.id === parent.feature.id))
@@ -2521,13 +2540,13 @@ export const terrainField = {
   heights: upperTerrainField.heights.slice(),
 };
 export const taborTerrainField = {
-  minX: 185,
+  minX: 150,
   maxX: 275,
-  minZ: 235,
+  minZ: 225,
   maxZ: 325,
-  columns: 90,
-  rows: 90,
-  heights: new Float32Array(91 * 91),
+  columns: 125,
+  rows: 100,
+  heights: new Float32Array(126 * 101),
 };
 export function onTaborTerrain(x: number, z: number) {
   return (
@@ -2586,11 +2605,12 @@ for (let row = 0; row <= terrainField.rows; row++)
   }
 for (let row = 0; row <= taborTerrainField.rows; row++)
   for (let col = 0; col <= taborTerrainField.columns; col++)
-    taborTerrainField.heights[row * 91 + col] = fieldElevation(
-      terrainField,
-      taborTerrainField.minX + col,
-      taborTerrainField.minZ + row,
-    );
+    taborTerrainField.heights[row * (taborTerrainField.columns + 1) + col] =
+      fieldElevation(
+        terrainField,
+        taborTerrainField.minX + col,
+        taborTerrainField.minZ + row,
+      );
 export const gardenTerrainField = {
   minX: 155,
   maxX: 185,
@@ -2716,21 +2736,30 @@ export function unretainedElevation(x: number, z: number) {
   if (gallery && !gallery.underground) return gallery.floor;
   if (onGardenBankTerrain(x, z))
     return gardenTerrainElevation([x, z], inside([x, z], rampartBoundary));
+  // Prefer the unblended core where the detailed terrain fields overlap.
+  let field = onApproachTerrain(x, z) ? approachTerrainField : terrainField;
+  if (
+    onTaborTerrain(x, z) &&
+    (field === terrainField ||
+      Math.min(
+        x - taborTerrainField.minX,
+        taborTerrainField.maxX - x,
+        z - taborTerrainField.minZ,
+        taborTerrainField.maxZ - z,
+      ) >
+        Math.min(
+          x - field.minX,
+          field.maxX - x,
+          z - field.minZ,
+          field.maxZ - z,
+        ))
+  )
+    field = taborTerrainField;
   const level = restoreCliff(
     [x, z],
     restoreCourtBank(
       [x, z],
-      fieldElevation(
-        onGardenTerrain(x, z)
-          ? gardenTerrainField
-          : onApproachTerrain(x, z)
-            ? approachTerrainField
-            : onTaborTerrain(x, z)
-              ? taborTerrainField
-              : terrainField,
-        x,
-        z,
-      ),
+      fieldElevation(onGardenTerrain(x, z) ? gardenTerrainField : field, x, z),
     ),
   );
   if (x > 175 && x < 275 && z > 225 && z < 325) {
@@ -3420,7 +3449,7 @@ for (let row = 0; row <= taborTerrainField.rows; row++)
       point[1] - taborTerrainField.minZ,
       taborTerrainField.maxZ - point[1],
     );
-    taborTerrainField.heights[row * 91 + col] =
+    taborTerrainField.heights[row * (taborTerrainField.columns + 1) + col] =
       fieldElevation(terrainField, ...point) +
       (level - fieldElevation(terrainField, ...point)) * smooth(edge / 5);
   }
@@ -3519,14 +3548,8 @@ export function standingElevation(point: Point, previousHeight = Infinity) {
   return stairs ? stairElevation(stairs, point) : elevation(...point);
 }
 export function featureElevation(feature: Feature, point: Point) {
-  if ([494921190, 494921198, 494921210].includes(feature.id))
+  if ([494921190, 494921198, 494921210, 370193785].includes(feature.id))
     return pevnostiGrade(point).level;
-  if (feature.id === 370193785) {
-    const grade = pevnostiGrade(point);
-    const original = originalElevation(...point);
-    const weight = 1 - smooth((grade.along - roadAnchors[2].along - 35) / 5);
-    return original + (grade.level - original) * weight;
-  }
   if (feature.id === gardenExitAccess.feature.id) {
     const floor = gardenExitFloor(point);
     if (floor !== undefined) return floor - 0.085;
@@ -4362,10 +4385,19 @@ export const spickaFrontage = (() => {
     frame.center[0] + houseAxis[0] * u - houseAxis[1] * v,
     frame.center[1] + houseAxis[1] * u + houseAxis[0] * v,
   ];
-  const face = frame.depth / 2 + 1.1;
+  const gardenFront = (u: number): Point => {
+    const housePoint = houseAt(u, frame.depth / 2);
+    const projection = projectRoute(housePoint, sidewalk.points);
+    return [
+      projection.point[0] +
+        (housePoint[0] - projection.point[0]) / projection.distance,
+      projection.point[1] +
+        (housePoint[1] - projection.point[1]) / projection.distance,
+    ];
+  };
   const fences = [
-    [houseAt(-10, face - 1.1), houseAt(-10, face), houseAt(-1.6, face)],
-    [houseAt(1.6, face), houseAt(10, face), houseAt(10, face - 1.1)],
+    [houseAt(-10, frame.depth / 2), gardenFront(-10), gardenFront(-1.6)],
+    [gardenFront(1.6), gardenFront(10), houseAt(10, frame.depth / 2)],
   ];
   return {
     pump,
@@ -4377,7 +4409,13 @@ export const spickaFrontage = (() => {
     curb: [at(-14, 1.8), at(11, 1.8)],
     fences,
     house,
-    houseEntrance: houseAt(0, face),
+    houseGarden: [
+      houseAt(-10, frame.depth / 2),
+      gardenFront(-10),
+      gardenFront(10),
+      houseAt(10, frame.depth / 2),
+    ],
+    houseEntrance: gardenFront(0),
   };
 })();
 

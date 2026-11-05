@@ -27,6 +27,8 @@ import {
   sculptures,
   foundation,
   modelBuildingPart,
+  buildingContainsPart,
+  uncoveredBuilding,
   originalElevation,
   upperPromenade,
   posterns,
@@ -682,6 +684,48 @@ it('opens both Špička arches while retaining the pub behind its recessed entra
   material.dispose();
 });
 
+it('assigns the concave school roof to its parent without generating a second facade and doors underneath it', () => {
+  const school = buildings.find((building) => building.id === 49811192);
+  const part = parts.find((part) => part.id === 502676879);
+  if (!school || !part) throw new Error('Missing concave school fixtures.');
+  expect(inside(center(part.points), school.points)).toBe(false);
+  expect(buildingContainsPart(school, part)).toBe(true);
+  const frontage = school.points.slice(-3);
+  for (const fraction of [0.2, 0.5, 0.8]) {
+    const point: Point = [
+      frontage[0][0] + (frontage[2][0] - frontage[0][0]) * fraction,
+      frontage[0][1] + (frontage[2][1] - frontage[0][1]) * fraction,
+    ];
+    for (const fragment of uncoveredBuilding(school))
+      expect(projectRoute(point, fragment.points).distance).toBeGreaterThan(1);
+  }
+  expect(foundation(part)).toBe(foundation(school));
+  const glazing: THREE.BufferGeometry[] = [];
+  decorateBuilding(
+    { ...modelBuildingPart(part), tags: { ...school.tags, ...part.tags } },
+    foundation(part),
+    9.3,
+    (_color, geometry, kind) => {
+      if (kind === 'glass') glazing.push(geometry);
+      else geometry.dispose();
+    },
+  );
+  try {
+    const streetFace = frontage.slice(1);
+    const windows = glazing.filter((geometry) => {
+      geometry.computeBoundingBox();
+      const midpoint = geometry.boundingBox?.getCenter(new THREE.Vector3());
+      return (
+        midpoint &&
+        projectRoute([midpoint.x, midpoint.z], streetFace).distance < 0.15
+      );
+    });
+    expect(windows.length).toBeGreaterThanOrEqual(6);
+  } finally {
+    glazing.forEach((geometry) => geometry.dispose());
+  }
+});
+
 it('renders the historic hand pump and hollow stone basin beside planted hedges and an open house-front gate', () => {
   const geometries: THREE.BufferGeometry[] = [];
   makeSpickaFrontage((_color, geometry) => geometries.push(geometry));
@@ -714,6 +758,28 @@ it('renders the historic hand pump and hollow stone basin beside planted hedges 
   expect(blocked(spickaFrontage.houseEntrance)).toBe(false);
   const houseDoor = buildingEntrance(spickaFrontage.house, 6.2);
   if (!houseDoor) throw new Error('Missing neighboring house door.');
+  const approach: Point = [
+    houseDoor.point[0] + houseDoor.normal[0] * 1.1,
+    houseDoor.point[1] + houseDoor.normal[1] * 1.1,
+  ];
+  const garden = spickaFrontage.houseGarden;
+  expect(
+    inside(
+      [(garden[0][0] + garden[2][0]) / 2, (garden[0][1] + garden[2][1]) / 2],
+      garden,
+    ),
+  ).toBe(true);
+  for (let step = 0; step <= 8; step++) {
+    const fraction = step / 8;
+    expect(
+      blocked([
+        spickaFrontage.houseEntrance[0] +
+          (approach[0] - spickaFrontage.houseEntrance[0]) * fraction,
+        spickaFrontage.houseEntrance[1] +
+          (approach[1] - spickaFrontage.houseEntrance[1]) * fraction,
+      ]),
+    ).toBe(false);
+  }
   expect(
     blocked([
       houseDoor.point[0] + houseDoor.normal[0] * 1.1,

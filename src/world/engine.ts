@@ -144,6 +144,7 @@ import {
   blocked,
   bounds,
   buildings,
+  buildingContainsPart,
   center,
   discoveredNear,
   elevation,
@@ -1037,11 +1038,12 @@ export class World {
           const z =
             triangle.reduce((sum, index) => sum + positions.getZ(index), 0) / 3;
           const separate =
-            field === hillDetail &&
-            (onApproachTerrain(x, z) ||
-              onTaborTerrain(x, z) ||
-              onCliffTerrain(x, z) ||
-              onCourtBankTerrain(x, z));
+            (field === approachTerrainField && onTaborTerrain(x, z)) ||
+            (field === hillDetail &&
+              (onApproachTerrain(x, z) ||
+                onTaborTerrain(x, z) ||
+                onCliffTerrain(x, z) ||
+                onCourtBankTerrain(x, z)));
           if (
             !onGardenBankTerrain(x, z) &&
             !onCourtBankTerrain(x, z) &&
@@ -1198,7 +1200,7 @@ export class World {
         continue;
       }
       const children = feature.tags.building
-        ? parts.filter((p) => inside(center(p.points), feature.points))
+        ? parts.filter((p) => buildingContainsPart(feature, p))
         : [];
       if (feature.id === 49810596)
         makeProvostFrontage(
@@ -1399,7 +1401,7 @@ export class World {
     const points = feature.points;
     const [x, z] = center(points);
     const parent = feature.tags['building:part']
-      ? buildings.find((building) => inside([x, z], building.points))
+      ? buildings.find((building) => buildingContainsPart(building, feature))
       : undefined;
     const tags = { ...parent?.tags, ...feature.tags };
     feature = { ...feature, tags };
@@ -1490,7 +1492,7 @@ export class World {
     if (
       tags['building:part'] ||
       !tags.building ||
-      !parts.some((p) => inside(center(p.points), points))
+      !parts.some((p) => buildingContainsPart(feature, p))
     )
       decorateBuilding(
         feature,
