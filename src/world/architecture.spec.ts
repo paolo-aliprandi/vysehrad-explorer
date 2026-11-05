@@ -2513,6 +2513,42 @@ it('opens all three Brick Gate passages and the separate garden arch in the actu
   material.dispose();
 });
 
+it('places an upright folded-wing eagle on Leopold Gate’s central crown without obstructing its passages', () => {
+  const gate = features.find((feature) => feature.id === 51718887);
+  if (!gate) throw new Error('Missing Leopold Gate.');
+  const frame = gateFrame(gate);
+  const height = meters(gate.tags.height, 8.4);
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const meshes: THREE.Mesh[] = [];
+  makeGate(gate, 0, (_color, geometry) => {
+    geometry
+      .translate(-frame.center[0], 0, -frame.center[1])
+      .rotateY(-frame.angle);
+    meshes.push(new THREE.Mesh(geometry, material));
+  });
+  const hit = (x: number, y: number) =>
+    new THREE.Raycaster(
+      new THREE.Vector3(x, y, -20),
+      new THREE.Vector3(0, 0, 1),
+    ).intersectObjects(meshes);
+  for (const x of [-0.39, 0, 0.39])
+    expect(hit(x, height + 3.5).length).toBeGreaterThan(0);
+  for (const x of [-0.75, 0.75]) expect(hit(x, height + 3.5)).toHaveLength(0);
+  expect(hit(0, height + 4.48).length).toBeGreaterThan(0);
+  expect(hit(0, height + 2.27).length).toBeGreaterThan(0);
+  expect(hit(0, height + 2.4).length).toBeGreaterThan(0);
+  expect(
+    new THREE.Raycaster(
+      new THREE.Vector3(0, height + 6, -0.64),
+      new THREE.Vector3(0, -1, 0),
+    ).intersectObjects(meshes)[0]?.point.y,
+  ).toBeGreaterThan(height + 4.2);
+  for (const opening of gateOpenings(gate))
+    expect(hit(opening.offset, 2)).toHaveLength(0);
+  meshes.forEach((mesh) => mesh.geometry.dispose());
+  material.dispose();
+});
+
 it('renders see-through cemetery railings with solid posts and pickets, not an opaque wall', () => {
   const geometries: THREE.BufferGeometry[] = [];
   makeFence(

@@ -2180,11 +2180,102 @@ export function makeGate(feature: Feature, ground: number, add: AddGeometry) {
       '#bcb49f',
     );
     local(
-      new THREE.SphereGeometry(0.23, 12, 8),
+      new THREE.CylinderGeometry(0.36, 0.43, 0.22, 12),
       0,
-      height + 2.45,
+      height + 2.36,
       0,
       '#8f9284',
+    );
+    const eagle = (
+      geometry: THREE.BufferGeometry,
+      x: number,
+      y: number,
+      z: number,
+      color = '#8f9284',
+    ) => local(geometry, x, height + 2.47 + y, z, color);
+    const oval = (
+      x: number,
+      y: number,
+      z: number,
+      sx: number,
+      sy: number,
+      sz: number,
+    ) => eagle(new THREE.SphereGeometry(1, 16, 12).scale(sx, sy, sz), x, y, z);
+    oval(0, 1.02, 0, 0.38, 0.72, 0.34);
+    oval(0, 1.7, -0.06, 0.18, 0.34, 0.2);
+    oval(0, 2.01, -0.16, 0.22, 0.2, 0.25);
+    for (const side of [-1, 1]) {
+      eagle(
+        new THREE.CylinderGeometry(0.065, 0.08, 0.25, 8),
+        side * 0.17,
+        0.23,
+        0,
+      );
+      for (let toe = -1; toe <= 1; toe++)
+        oval(side * 0.17 + toe * 0.055, 0.075, -0.12, 0.035, 0.045, 0.17);
+      eagle(
+        new THREE.SphereGeometry(1, 16, 12)
+          .scale(0.14, 0.66, 0.3)
+          .rotateX(-0.18),
+        side * 0.35,
+        1.01,
+        0.08,
+      );
+      for (let feather = 0; feather < 5; feather++)
+        eagle(
+          new THREE.SphereGeometry(1, 10, 8)
+            .scale(0.045, 0.46, 0.065)
+            .rotateX(-0.18),
+          side * 0.45,
+          0.94 - feather * 0.045,
+          -0.1 + feather * 0.1,
+          '#969789',
+        );
+      eagle(
+        new THREE.SphereGeometry(0.028, 8, 6),
+        side * 0.2,
+        2.055,
+        -0.25,
+        '#53574d',
+      );
+      eagle(
+        new THREE.SphereGeometry(1, 10, 8)
+          .scale(0.055, 0.025, 0.1)
+          .rotateX(-0.15),
+        side * 0.2,
+        2.105,
+        -0.24,
+      );
+    }
+    for (let feather = -2; feather <= 2; feather++)
+      eagle(
+        new THREE.SphereGeometry(1, 10, 8)
+          .scale(0.065, 0.35, 0.09)
+          .rotateX(0.3),
+        feather * 0.09,
+        0.43 + Math.abs(feather) * 0.045,
+        0.36,
+        '#969789',
+      );
+    const beak = new THREE.Shape();
+    beak.moveTo(0, 0.08);
+    beak.quadraticCurveTo(0.24, 0.09, 0.32, -0.14);
+    beak.lineTo(0.22, -0.22);
+    beak.lineTo(0.21, -0.09);
+    beak.lineTo(0, -0.06);
+    beak.closePath();
+    eagle(
+      new THREE.ExtrudeGeometry(beak, {
+        depth: 0.12,
+        bevelEnabled: false,
+        curveSegments: 8,
+      })
+        .translate(0, 0, -0.06)
+        .rotateY(Math.PI / 2),
+      0,
+      2.01,
+      -0.39,
+      '#aaa694',
     );
     return;
   }
