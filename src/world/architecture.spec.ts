@@ -701,12 +701,14 @@ it('assigns the concave school roof to its parent without generating a second fa
   }
   expect(foundation(part)).toBe(foundation(school));
   const glazing: THREE.BufferGeometry[] = [];
+  const trims: THREE.BufferGeometry[] = [];
   decorateBuilding(
     { ...modelBuildingPart(part), tags: { ...school.tags, ...part.tags } },
     foundation(part),
     9.3,
-    (_color, geometry, kind) => {
+    (color, geometry, kind) => {
       if (kind === 'glass') glazing.push(geometry);
+      else if (color === '#c5bba5') trims.push(geometry);
       else geometry.dispose();
     },
   );
@@ -721,8 +723,43 @@ it('assigns the concave school roof to its parent without generating a second fa
       );
     });
     expect(windows.length).toBeGreaterThanOrEqual(6);
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    try {
+      const meshes = trims.map(
+        (geometry) => new THREE.Mesh(geometry, material),
+      );
+      const [a, b] = streetFace,
+        dx = b[0] - a[0],
+        dz = b[1] - a[1],
+        length = Math.hypot(dx, dz);
+      const normal: Point = [dz / length, -dx / length];
+      for (const fraction of [0.2, 0.5, 0.8]) {
+        const point: Point = [a[0] + dx * fraction, a[1] + dz * fraction];
+        const base = upperElevation(
+          point[0] + normal[0] * 0.05,
+          point[1] + normal[1] * 0.05,
+        );
+        const cast = (height: number) =>
+          new THREE.Raycaster(
+            new THREE.Vector3(
+              point[0] + normal[0] * 2,
+              base + height,
+              point[1] + normal[1] * 2,
+            ),
+            new THREE.Vector3(-normal[0], 0, -normal[1]),
+            0,
+            3,
+          ).intersectObjects(meshes);
+        expect(cast(0.2).length).toBeGreaterThan(0);
+        expect(cast(0.9)).toHaveLength(0);
+        expect(cast(1.5)).toHaveLength(0);
+      }
+    } finally {
+      material.dispose();
+    }
   } finally {
     glazing.forEach((geometry) => geometry.dispose());
+    trims.forEach((geometry) => geometry.dispose());
   }
 });
 

@@ -1247,6 +1247,11 @@ export function decorateBuilding(
     for (const level of trimLevels) {
       if (portalFacade && level < 7) continue;
       const trimHeight = level === 0.35 ? 0.45 : 0.22;
+      const plinth = !church && level === 0.35;
+      const trimLevel = (point: Point) =>
+        plinth
+          ? upperElevation(...point) + 0.025 + trimHeight / 2
+          : ground + level;
       const doors = [
         ...(entrance
           ? [
@@ -1277,8 +1282,8 @@ export function decorateBuilding(
       let spans = [[-0.05, length + 0.05]];
       for (const door of doors) {
         if (
-          ground + level + trimHeight / 2 <= door.ground ||
-          ground + level - trimHeight / 2 >= door.ground + door.height ||
+          trimLevel(door.point) + trimHeight / 2 <= door.ground ||
+          trimLevel(door.point) - trimHeight / 2 >= door.ground + door.height ||
           projectRoute(door.point, [a, b]).distance > 0.15
         )
           continue;
@@ -1296,6 +1301,26 @@ export function decorateBuilding(
         );
       }
       for (const [start, end] of spans) {
+        if (plinth) {
+          const points: Point[] = [start, end].map((along) => [
+            a[0] + (dx * along) / length + nx * 0.05,
+            a[1] + (dz * along) / length + nz * 0.05,
+          ]);
+          add(
+            '#c5bba5',
+            continuousWall(
+              points,
+              0.25,
+              (point) => ({
+                bottom: trimLevel(point) - trimHeight / 2,
+                top: trimLevel(point) + trimHeight / 2,
+              }),
+              false,
+            ),
+            'stone',
+          );
+          continue;
+        }
         const trim = new THREE.BoxGeometry(
           end - start,
           trimHeight,

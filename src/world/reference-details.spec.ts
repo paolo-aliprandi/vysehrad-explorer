@@ -13,6 +13,7 @@ import {
   makeCemeteryLabyrinth,
   makeGardenHeraldry,
   makeLeopoldCurbs,
+  makeVratislavaSidewalks,
   leopoldSidewalks,
 } from './reference-details';
 import {
@@ -65,6 +66,8 @@ import {
   visitorFrontagePads,
   parts,
   stairwellFootprint,
+  cafeFrontage,
+  spickaFrontage,
   type Point,
 } from './geo';
 import { makeApproach, makePassages } from './passages';
@@ -470,6 +473,49 @@ it('reaches Tábor Gate on both sides with the same raised mosaic and leaves the
       );
       expect(ray.intersectObjects(scene.meshes)).toHaveLength(0);
     }
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('surrounds U Vratislava with connected mosaic up to the pump hedge line while preserving the garden and planting beds', () => {
+  const scene = geometryScene(makeVratislavaSidewalks, THREE.DoubleSide);
+  const cafe = cafeFrontage();
+  const at = (u: number, v: number): Point => [
+    cafe.center[0] + cafe.axis[0] * u - cafe.axis[1] * v,
+    cafe.center[1] + cafe.axis[1] * u + cafe.axis[0] * v,
+  ];
+  const hit = (point: Point) =>
+    new THREE.Raycaster(
+      new THREE.Vector3(point[0], 80, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    ).intersectObjects(scene.meshes)[0];
+  try {
+    for (const point of [
+      at(-cafe.width / 2 - 0.95, 0),
+      at(cafe.width / 2 + 0.95, 0),
+      at(0, -cafe.depth / 2 - 0.95),
+      spickaFrontage.at(-7, 3.45),
+      spickaFrontage.at(7, 3.45),
+      spickaFrontage.at(-7, -1.35),
+      spickaFrontage.at(7, -1.35),
+    ]) {
+      expect(hit(point)?.object.name, JSON.stringify(point)).toBe(
+        'mosaic:#d0ccbd',
+      );
+      expect(hit(point)?.point.y).toBeCloseTo(elevation(...point) + 0.075, 2);
+      expect(blocked(point, elevation(...point)), JSON.stringify(point)).toBe(
+        false,
+      );
+    }
+    for (const point of [
+      center(cafe.building.points),
+      center(spickaFrontage.houseGarden),
+      spickaFrontage.pump.point,
+      at(0, 4.8),
+      spickaFrontage.at(0, 4.6),
+    ])
+      expect(hit(point), JSON.stringify(point)).toBeUndefined();
   } finally {
     scene.dispose();
   }

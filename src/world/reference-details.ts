@@ -34,6 +34,8 @@ import {
   gateFrame,
   pevnostiGrade,
   stairwellFootprint,
+  cafeFrontage,
+  spickaFrontage,
   type Point,
   type Feature,
 } from './geo';
@@ -332,13 +334,83 @@ export const leopoldSidewalks = (() => {
       roads,
     };
   });
+  const cafe = cafeFrontage();
+  const cafeAt = (u: number, v: number): Point => [
+    cafe.center[0] + cafe.axis[0] * u - cafe.axis[1] * v,
+    cafe.center[1] + cafe.axis[1] * u + cafe.axis[0] * v,
+  ];
+  const backNorth = cafeAt(-cafe.width / 2 - 1.3, -cafe.depth / 2 - 1.3);
+  const backSouth = cafeAt(cafe.width / 2 + 1.3, -cafe.depth / 2 - 1.3);
+  const frontNorth = cafeAt(-cafe.width / 2 - 1.3, cafe.depth / 2 + 1.3);
+  const hedgeSouth = spickaFrontage.at(-15, 4.1);
+  const hedgeNorth = spickaFrontage.at(12, 4.1);
+  const from =
+    Math.min(
+      projectRoute(backNorth, street.points).along,
+      projectRoute(frontNorth, street.points).along,
+    ) - 1;
+  const to = projectRoute(hedgeSouth, street.points).along;
+  const forecourtEdge = runs[0].curb.filter((point) => {
+    const along = projectRoute(point, street.points).along;
+    return along >= from && along <= to;
+  });
+  const house = spickaFrontage.house;
+  const outward = (point: Point): Point => {
+    const projection = projectRoute(point, street.points);
+    return [
+      point[0] + ((point[0] - projection.point[0]) * 1.3) / projection.distance,
+      point[1] + ((point[1] - projection.point[1]) * 1.3) / projection.distance,
+    ];
+  };
+  const forecourtPolygon = [
+    ...forecourtEdge,
+    hedgeSouth,
+    hedgeNorth,
+    outward(house.points[7]),
+    outward(house.points[1]),
+    backSouth,
+    backNorth,
+    frontNorth,
+  ];
+  const terrace = [
+    cafeAt(-5, 2.3),
+    cafeAt(5, 2.3),
+    cafeAt(5, 7.3),
+    cafeAt(-5, 7.3),
+  ];
+  const forecourt = {
+    polygon: forecourtPolygon,
+    cutouts: [
+      runs[0].polygon,
+      spickaFrontage.houseGarden,
+      [
+        spickaFrontage.at(-15, -1.025),
+        spickaFrontage.at(12, -1.025),
+        spickaFrontage.at(12, 2.8),
+        spickaFrontage.at(-15, 2.8),
+      ],
+      spickaFrontage.pumpApron,
+      terrace,
+      ...buildings
+        .filter(
+          (building) =>
+            building.points.some((point) => inside(point, forecourtPolygon)) ||
+            forecourtPolygon.some((point) => inside(point, building.points)),
+        )
+        .map((building) => building.points),
+    ],
+  };
   return {
     street,
     streets,
     tabor,
     cutouts: [stairwellFootprint],
     runs,
-    polygons: runs.flatMap((run) => [run.polygon, run.road]),
+    forecourt,
+    polygons: [
+      ...runs.flatMap((run) => [run.polygon, run.road]),
+      forecourt.polygon,
+    ],
   };
 })();
 
@@ -375,6 +447,22 @@ export function makeLeopoldCurbs(add: AddGeometry) {
       add('#a7a89d', geometry, 'stone');
     }
   }
+}
+
+export function makeVratislavaSidewalks(add: AddGeometry) {
+  const { forecourt } = leopoldSidewalks;
+  add(
+    '#d0ccbd',
+    drapedPolygon(
+      forecourt.polygon,
+      0.075,
+      elevation,
+      forecourt.cutouts,
+      false,
+      true,
+    ),
+    'mosaic',
+  );
 }
 
 export function makeCemeteryLabyrinth(add: AddGeometry) {
@@ -2080,6 +2168,7 @@ export function makeReferenceDetails(add: AddGeometry) {
   makeCemeteryLabyrinth(add);
   makeGardenHeraldry(add);
   makeLeopoldCurbs(add);
+  makeVratislavaSidewalks(add);
   makeCitadela(add);
   makeGardenReferences(add);
   makeGardenKiosk(add);
