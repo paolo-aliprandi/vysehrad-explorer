@@ -66,6 +66,36 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   for (const passage of brickGate.passages)
     expect(passage.hits, JSON.stringify(passage)).toBe(0);
   expect(brickGate.upperMasonry).toBeGreaterThan(0);
+  const visitorPlaces = await inspect(`
+    const g=await import('/src/world/geo.ts'),info=g.informationCentre,cafe=g.citadela;
+    w.scene.updateMatrixWorld(true);
+    const meshes=w.scene.children.filter(mesh=>mesh.isMesh&&!mesh.isInstancedMesh);
+    const down=(point,height)=>{
+      w.raycaster.set(w.position.clone().set(point[0]*1.5,height*1.5,point[1]*1.5),w.position.clone().set(0,-1,0));
+      w.raycaster.far=15;
+      const hit=w.raycaster.intersectObjects(meshes,false)[0];
+      return {color:hit?.object.material.color.getHexString(),height:hit?.point.y/1.5};
+    };
+    const entrance=info.at(-.7,info.depth/2+.4);
+    w.raycaster.set(w.position.clone().set(entrance[0]*1.5,(info.ground+1.4)*1.5,entrance[1]*1.5),w.position.clone().set(-Math.sin(info.angle),0,-Math.cos(info.angle)));
+    w.raycaster.far=1.5;
+    const door=w.raycaster.intersectObjects(meshes,false)[0];
+    return {
+      roof:down(info.point,info.ground+7),ground:info.ground,door:door?.object.material.color.getHexString(),
+      approach:down(info.at(0,info.depth/2+3.5),info.ground+2),
+      tables:cafe.tables.map(point=>down(point,g.elevation(...point)+2)),
+      loungers:cafe.loungers.map(point=>down(point,g.elevation(...point)+2))
+    };
+  `);
+  expect(visitorPlaces.roof.color).toBe('59635e');
+  expect(visitorPlaces.roof.height - visitorPlaces.ground).toBeCloseTo(3.65, 3);
+  expect(visitorPlaces.door).toBe('73837b');
+  expect(visitorPlaces.approach.color).toBe('b8b1a0');
+  expect(visitorPlaces.tables.length).toBeGreaterThanOrEqual(3);
+  for (const table of visitorPlaces.tables) expect(table.color).toBe('bcb7a6');
+  expect(visitorPlaces.loungers.length).toBeGreaterThanOrEqual(8);
+  for (const lounger of visitorPlaces.loungers)
+    expect(['d2b58f', 'b6746e']).toContain(lounger.color);
   const kiosks = await inspect(`
     const {kioskSites}=await import('/src/world/kiosks.ts'),g=await import('/src/world/geo.ts');
     const mode=w.mode,previous=w.position.clone();

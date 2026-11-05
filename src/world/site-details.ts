@@ -6,6 +6,8 @@ import {
   siteDetails,
   cafeFrontage,
   cafeTableOffsets,
+  informationCentre,
+  citadela,
   streetFrontages,
   features,
   paths,
@@ -1202,6 +1204,21 @@ export function makeSiteDetails(add: AddGeometry) {
     spickaGate.ground + 4.3,
     2.6,
     spickaGate.frame.angle,
+  );
+  sign(
+    'INFOCENTRUM VYŠEHRAD',
+    informationCentre.at(0, informationCentre.depth / 2 + 0.12),
+    informationCentre.ground + 2.79,
+    2.9,
+    informationCentre.angle,
+  );
+  const citadelaSign = citadela.at(0, 0.1);
+  sign(
+    'BYSTRO CAFÉ CITADELA',
+    citadelaSign,
+    elevation(...citadelaSign) + 2.65,
+    3.4,
+    citadela.angle,
   );
   const frame = cafeFrontage();
   const local = (u: number, v: number): Point => [

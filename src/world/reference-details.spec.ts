@@ -7,6 +7,8 @@ import {
   makeGardenKiosk,
   makeReferenceBankIvy,
   makeArtilleryEntrance,
+  makeInformationCentre,
+  makeCitadela,
 } from './reference-details';
 import {
   brickGateStairs,
@@ -45,6 +47,8 @@ import {
   referenceBorderBushes,
   retainedStreetWalls,
   retainedWallOffsets,
+  informationCentre,
+  citadela,
   type Point,
 } from './geo';
 import { makeApproach, makePassages } from './passages';
@@ -80,6 +84,130 @@ function geometryScene(
     },
   };
 }
+
+it('replaces the information-centre gable with a low brick pavilion, glazed entrance and real slit-window openings', () => {
+  const site = informationCentre;
+  const scene = geometryScene(makeInformationCentre, THREE.DoubleSide);
+  const normal = new THREE.Vector3(
+    Math.sin(site.angle),
+    0,
+    Math.cos(site.angle),
+  );
+  const right = new THREE.Vector3(
+    Math.cos(site.angle),
+    0,
+    -Math.sin(site.angle),
+  );
+  const ray = (
+    u: number,
+    v: number,
+    height: number,
+    direction: THREE.Vector3,
+  ) => {
+    const point = site.at(u, v);
+    return new THREE.Raycaster(
+      new THREE.Vector3(point[0], site.ground + height, point[1]),
+      direction,
+      0,
+      1,
+    ).intersectObjects(scene.meshes)[0]?.object.name;
+  };
+  try {
+    expect(
+      ray(-0.7, site.depth / 2 + 0.4, 1.4, normal.clone().negate()),
+    ).toMatch(/^glass:/);
+    for (const v of [5.8, 2.5, -0.8, -4.1])
+      expect(ray(site.width / 2 + 0.4, v, 1.5, right.clone().negate())).toMatch(
+        /^glass:/,
+      );
+    expect(ray(site.width / 2 + 0.4, 0, 1.5, right.clone().negate())).toMatch(
+      /^brick:/,
+    );
+    for (const mesh of scene.meshes) {
+      mesh.geometry.computeBoundingBox();
+      const bounds = mesh.geometry.boundingBox;
+      if (!bounds) throw new Error('Missing information-centre bounds.');
+      expect(bounds.max.y).toBeLessThan(site.ground + 3.8);
+    }
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('adds Citadela café tables, cobbled courtyard and two rows of grounded wooden sling chairs without blocking mapped access', () => {
+  expect(citadela.tables.length).toBeGreaterThanOrEqual(3);
+  expect(citadela.loungers.length).toBeGreaterThanOrEqual(8);
+  const scene = geometryScene(makeCitadela, THREE.DoubleSide);
+  const down = new THREE.Vector3(0, -1, 0);
+  const floor = (point: Point) =>
+    new THREE.Raycaster(
+      new THREE.Vector3(point[0], elevation(...point) + 2, point[1]),
+      down,
+      0,
+      3,
+    ).intersectObjects(scene.meshes)[0];
+  try {
+    for (const point of citadela.tables) {
+      expect(floor(point)?.object.name).toMatch(/^wood:/);
+      expect(floor(point).point.y - elevation(...point)).toBeCloseTo(0.885, 3);
+      expect(sitePropBlocked(point, elevation(...point))).toBe(true);
+    }
+    for (const point of citadela.loungers) {
+      expect(floor(point)?.object.name).toMatch(/^plaster:/);
+      expect(sitePropBlocked(point, elevation(...point))).toBe(true);
+    }
+    let groundedLegs = 0;
+    for (const mesh of scene.meshes.filter(
+      (mesh) => mesh.name === 'wood:#bca17c',
+    )) {
+      const positions = mesh.geometry.getAttribute('position');
+      let clearance = Infinity;
+      for (let i = 0; i < positions.count; i++)
+        clearance = Math.min(
+          clearance,
+          positions.getY(i) - elevation(positions.getX(i), positions.getZ(i)),
+        );
+      if (clearance < 0.2) {
+        expect(Math.abs(clearance)).toBeLessThan(0.08);
+        groundedLegs++;
+      }
+    }
+    expect(groundedLegs).toBe(citadela.loungers.length * 4);
+    for (const u of [-12, 0, 12]) {
+      const point = citadela.at(u, 6);
+      expect(floor(point)?.object.name).toMatch(/^cobble:/);
+      expect(
+        Math.abs(floor(point).point.y - elevation(...point) - 0.085),
+      ).toBeLessThan(0.04);
+    }
+    for (const id of [255297804, 26715955, 26694437]) {
+      const path = paths.find((path) => path.id === id);
+      if (!path) throw new Error('Missing Citadela access path.');
+      for (let i = 1; i < path.points.length; i++) {
+        const a = path.points[i - 1],
+          b = path.points[i];
+        for (let t = 0; t <= 1; t += 0.1) {
+          const point: Point = [
+            a[0] + (b[0] - a[0]) * t,
+            a[1] + (b[1] - a[1]) * t,
+          ];
+          if (
+            Math.hypot(
+              point[0] - citadela.point[0],
+              point[1] - citadela.point[1],
+            ) < 22
+          )
+            expect(
+              sitePropBlocked(point, elevation(...point)),
+              JSON.stringify(point),
+            ).toBe(false);
+        }
+      }
+    }
+  } finally {
+    scene.dispose();
+  }
+});
 
 it('grades the lawn and masonry perimeter above Brick Gate into one straight crest while preserving the road beneath', () => {
   const cover = upperCovers.find((cover) => cover.id === 51700613);

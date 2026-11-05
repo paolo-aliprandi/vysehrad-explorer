@@ -95,10 +95,8 @@ at(mapped(51718887), [
   'Leopold Gate (Leopoldova brána)',
   'Former moat near Leopold Gate',
 ]);
-at(mapped(51700613), [
-  'Brick Gate (Cihelná brána)',
-  'Vyšehrad Information Centre',
-]);
+at(mapped(51700613), ['Brick Gate (Cihelná brána)']);
+at(mapped(49811200), ['Vyšehrad Information Centre']);
 at(ramparts, [
   'Vyšehrad fortress walls',
   'Baroque bastions',

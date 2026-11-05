@@ -24,9 +24,10 @@ import {
   wallOpening,
   courtBankBoundary,
   buildings,
-  foundation,
   unretainedElevation,
   artilleryEntrance,
+  informationCentre,
+  citadela,
   type Point,
   type Feature,
 } from './geo';
@@ -79,6 +80,256 @@ function beam(a: Vertex, b: Vertex, radius: number) {
       ),
     )
     .translate(...from.add(to).multiplyScalar(0.5).toArray());
+}
+
+export function makeInformationCentre(add: AddGeometry) {
+  const site = informationCentre;
+  for (const paving of [site.apron, site.sidewalk])
+    add('#b8b1a0', drapedPolygon(paving, 0.085), 'cobble');
+  const emit = localEmitter(site.point, site.ground, site.angle, add);
+  const w = site.width,
+    d = site.depth,
+    h = 3.05;
+  const box = (
+    width: number,
+    height: number,
+    depth: number,
+    x: number,
+    y: number,
+    z: number,
+    color: string,
+    kind: Kind = 'brick',
+  ) =>
+    emit(
+      new THREE.BoxGeometry(width, height, depth).translate(x, y, z),
+      color,
+      kind,
+    );
+  box(w, 0.18, d, 0, 0.01, 0, '#b8b3a5', 'stone');
+  box(w, h, 0.2, 0, h / 2, -d / 2 + 0.1, '#a48168');
+  box(0.2, h, d, -w / 2 + 0.1, h / 2, 0, '#a48168');
+  const front = new THREE.Shape();
+  front.moveTo(-w / 2, 0);
+  front.lineTo(w / 2, 0);
+  front.lineTo(w / 2, h);
+  front.lineTo(-w / 2, h);
+  front.closePath();
+  const doorway = new THREE.Path();
+  doorway.moveTo(-1.35, 0.08);
+  doorway.lineTo(-1.35, 2.55);
+  doorway.lineTo(1.35, 2.55);
+  doorway.lineTo(1.35, 0.08);
+  doorway.closePath();
+  front.holes.push(doorway);
+  emit(
+    new THREE.ExtrudeGeometry(front, {
+      depth: 0.2,
+      bevelEnabled: false,
+    }).translate(0, 0, d / 2 - 0.2),
+    '#a48168',
+    'brick',
+  );
+  box(2.62, 2.43, 0.035, 0, 1.315, d / 2 - 0.07, '#73837b', 'glass');
+  for (const x of [-1.34, 0.62, 1.34])
+    box(0.07, 2.52, 0.08, x, 1.32, d / 2, '#353d38', 'metal');
+  for (const y of [0.09, 2.55])
+    box(2.75, 0.08, 0.08, 0, y, d / 2, '#353d38', 'metal');
+  box(0.045, 1.15, 0.08, 0.84, 1.12, d / 2 + 0.07, '#252f2c', 'metal');
+  box(2.2, 0.85, 0.55, -0.3, 0.54, d / 2 - 1.05, '#c7baa0', 'wood');
+  const windows = [-5.8, -2.5, 0.8, 4.1];
+  const side = new THREE.Shape();
+  side.moveTo(-d / 2, 0);
+  side.lineTo(d / 2, 0);
+  side.lineTo(d / 2, h);
+  side.lineTo(-d / 2, h);
+  side.closePath();
+  for (const z of windows) {
+    const opening = new THREE.Path();
+    opening.moveTo(z - 0.3, 0.65);
+    opening.lineTo(z - 0.3, 2.45);
+    opening.lineTo(z + 0.3, 2.45);
+    opening.lineTo(z + 0.3, 0.65);
+    opening.closePath();
+    side.holes.push(opening);
+    box(0.035, 1.8, 0.6, w / 2 - 0.04, 1.55, -z, '#485b54', 'glass');
+    for (const edge of [-0.32, 0.32])
+      box(0.075, 1.9, 0.055, w / 2, 1.55, -z + edge, '#353d38', 'metal');
+    for (const y of [0.62, 2.48])
+      box(0.075, 0.055, 0.69, w / 2, y, -z, '#353d38', 'metal');
+  }
+  emit(
+    new THREE.ExtrudeGeometry(side, { depth: 0.2, bevelEnabled: false })
+      .rotateY(Math.PI / 2)
+      .translate(w / 2 - 0.2, 0, 0),
+    '#a48168',
+    'brick',
+  );
+  box(w + 0.8, 0.18, d + 0.8, 0, 3.05, 0, '#d4d0be', 'plaster');
+  box(w + 0.84, 0.12, d + 0.84, 0, 3.2, 0, '#48524d', 'metal');
+  const roof = new THREE.BufferGeometry();
+  const roofW = w / 2 + 0.35,
+    roofD = d / 2 + 0.35;
+  roof.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(
+      [
+        -roofW,
+        3.28,
+        -roofD,
+        roofW,
+        3.28,
+        -roofD,
+        roofW,
+        3.28,
+        roofD,
+        -roofW,
+        3.28,
+        roofD,
+        0,
+        3.65,
+        -roofD + 1.4,
+        0,
+        3.65,
+        roofD - 1.4,
+      ],
+      3,
+    ),
+  );
+  roof.setIndex([0, 4, 1, 1, 4, 5, 1, 5, 2, 2, 5, 3, 3, 5, 4, 3, 4, 0]);
+  const covering = roof.toNonIndexed();
+  roof.dispose();
+  covering.computeVertexNormals();
+  emit(covering, '#59635e', 'metal');
+  for (const x of [-w / 2 - 0.35, w / 2 + 0.35])
+    box(0.08, 0.12, d + 0.8, x, 3.3, 0, '#68716b', 'metal');
+  for (const z of [-d / 2 - 0.35, d / 2 + 0.35])
+    box(w + 0.8, 0.12, 0.08, 0, 3.3, z, '#68716b', 'metal');
+  for (let z = -6; z <= 6; z += 3)
+    box(0.025, 0.1, 0.12, w / 2 + 0.405, 3.02, z, '#293732', 'metal');
+  const railZ = [-d / 2, -d / 2 + 3, -d / 2 + 6, -d / 2 + 9, d / 2 - 1.3];
+  for (const z of railZ)
+    box(0.045, 0.95, 0.045, w / 2 + 0.7, 0.52, z, '#37473c', 'metal');
+  box(0.045, 0.045, d - 1.3, w / 2 + 0.7, 0.98, -0.65, '#37473c', 'metal');
+  const board = localEmitter(
+    site.board,
+    elevation(...site.board) + 0.09,
+    site.angle,
+    add,
+  );
+  for (const x of [-0.32, 0.32]) {
+    board(beam([x, 0, -0.36], [x, 1.12, 0], 0.035), '#8e7c5e', 'wood');
+    board(beam([x, 0, 0.36], [x, 1.12, 0], 0.035), '#8e7c5e', 'wood');
+  }
+  board(
+    new THREE.BoxGeometry(0.7, 0.83, 0.06)
+      .rotateX(-0.3)
+      .translate(0, 0.68, 0.15),
+    '#294b3a',
+    'wood',
+  );
+}
+
+export function makeCitadela(add: AddGeometry) {
+  const site = citadela;
+  add('#b8b1a0', drapedPolygon(site.courtyard, 0.085), 'cobble');
+  const emitAt = (point: Point, angle = site.angle, offset = 0.09) => {
+    const ground = elevation(...point) + offset;
+    return localEmitter(point, ground, angle, (color, geometry, kind) => {
+      const positions = geometry.getAttribute('position');
+      for (let i = 0; i < positions.count; i++) {
+        const height = positions.getY(i) - ground;
+        if (height < 0.15)
+          positions.setY(
+            i,
+            elevation(positions.getX(i), positions.getZ(i)) + offset + height,
+          );
+      }
+      geometry.computeVertexNormals();
+      add(color, geometry, kind);
+    });
+  };
+  for (const point of site.tables) {
+    const emit = emitAt(point);
+    emit(
+      new THREE.CylinderGeometry(0.58, 0.58, 0.07, 20).translate(0, 0.76, 0),
+      '#bcb7a6',
+      'wood',
+    );
+    for (const x of [-0.36, 0.36])
+      for (const z of [-0.36, 0.36])
+        emit(
+          new THREE.BoxGeometry(0.04, 0.73, 0.04).translate(x, 0.365, z),
+          '#37453b',
+          'metal',
+        );
+    for (const x of [-1, 1]) {
+      emit(
+        new THREE.BoxGeometry(0.48, 0.065, 0.5).translate(x, 0.44, 0),
+        '#d0cbb8',
+        'wood',
+      );
+      emit(
+        new THREE.BoxGeometry(0.055, 0.48, 0.48).translate(
+          x + Math.sign(x) * 0.22,
+          0.71,
+          0,
+        ),
+        '#d0cbb8',
+        'wood',
+      );
+      for (const side of [-0.19, 0.19])
+        for (const z of [-0.19, 0.19])
+          emit(
+            new THREE.BoxGeometry(0.035, 0.43, 0.035).translate(
+              x + side,
+              0.215,
+              z,
+            ),
+            '#37453b',
+            'metal',
+          );
+    }
+    emit(
+      new THREE.CylinderGeometry(0.11, 0.08, 0.18, 12).translate(0.18, 0.88, 0),
+      '#ad8464',
+      'terracotta',
+    );
+    emit(
+      new THREE.SphereGeometry(0.15, 8, 6).translate(0.18, 1.02, 0),
+      '#687e50',
+      'foliage',
+    );
+  }
+  for (const [index, point] of site.loungers.entries()) {
+    const emit = emitAt(point, site.loungerAngle, 0.015);
+    for (const side of [-0.34, 0.34]) {
+      emit(
+        beam([side, 0.04, -0.65], [side, 0.92, 0.5], 0.025),
+        '#bca17c',
+        'wood',
+      );
+      emit(
+        beam([side, 0.04, 0.65], [side, 0.69, -0.42], 0.025),
+        '#bca17c',
+        'wood',
+      );
+    }
+    for (const [y, z] of [
+      [0.92, 0.5],
+      [0.37, -0.22],
+    ])
+      emit(
+        new THREE.CylinderGeometry(0.025, 0.025, 0.72, 8)
+          .rotateZ(Math.PI / 2)
+          .translate(0, y, z),
+        '#bca17c',
+        'wood',
+      );
+    const fabric = new THREE.BoxGeometry(0.61, 0.94, 0.018);
+    fabric.rotateX(Math.atan2(0.72, 0.55));
+    fabric.translate(0, 0.645, 0.14);
+    emit(fabric, index % 3 === 0 ? '#d2b58f' : '#b6746e', 'plaster');
+  }
 }
 
 export function makeGardenReferences(add: AddGeometry) {
@@ -428,31 +679,6 @@ export function makeReferenceBankIvy(add: AddGeometry) {
       }
     }
   }
-  const shed = buildings.find((building) => building.id === 49811200);
-  if (!shed) throw new Error('Missing long shed beside the park path.');
-  const facade = projectRoute([141, 175], shed.points);
-  const a = shed.points[facade.segment],
-    b = shed.points[facade.segment + 1];
-  const normal = facade.normal;
-  const sign = inside(
-    [facade.point[0] + normal[0] * 0.1, facade.point[1] + normal[1] * 0.1],
-    shed.points,
-  )
-    ? -1
-    : 1;
-  const crest = foundation(shed) + 2.85;
-  for (const [seed, t] of [0.18, 0.26, 0.56, 0.64, 0.83].entries())
-    makeIvyClump(
-      [
-        a[0] + (b[0] - a[0]) * t + normal[0] * sign * 0.07,
-        a[1] + (b[1] - a[1]) * t + normal[1] * sign * 0.07,
-      ],
-      crest,
-      0.65 + 0.12 * (seed % 3),
-      -Math.atan2(b[1] - a[1], b[0] - a[0]),
-      seed,
-      add,
-    );
   makeRoyalWallIvy(add);
 }
 
@@ -1228,6 +1454,7 @@ export function makeCemeteryEntranceDetails(add: AddGeometry) {
 }
 
 export function makeReferenceDetails(add: AddGeometry) {
+  makeCitadela(add);
   makeGardenReferences(add);
   makeGardenKiosk(add);
   makeHiddenChurch(add);

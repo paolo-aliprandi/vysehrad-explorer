@@ -1,5 +1,5 @@
 import catalogue from '../data/points-of-interest.json';
-import { features, cemeteries, referenceSites } from './geo';
+import { features, cemeteries, referenceSites, informationCentre } from './geo';
 import { nearbyPointsOfInterest, pointsOfInterest } from './points-of-interest';
 
 it('makes every supplied history entry discoverable once, merging duplicate place names', () => {
@@ -18,6 +18,21 @@ it('invites reading at an accessible cathedral edge, not just its inaccessible c
     nearbyPointsOfInterest(cathedral.points[0]).map((poi) => poi.name),
   ).toContain('Basilica of Sts. Peter and Paul');
   expect(nearbyPointsOfInterest([-580, -500])).toEqual([]);
+});
+
+it('places the information-centre history at the replacement pavilion, not inside Brick Gate', () => {
+  const gate = features.find((feature) => feature.id === 51700613);
+  if (!gate) throw new Error('Missing Brick Gate fixture.');
+  expect(
+    nearbyPointsOfInterest(
+      informationCentre.at(0, informationCentre.depth / 2 + 1),
+    ).map((poi) => poi.name),
+  ).toContain('Vyšehrad Information Centre');
+  const gateNames = nearbyPointsOfInterest(gate.points[0]).map(
+    (poi) => poi.name,
+  );
+  expect(gateNames).toContain('Brick Gate (Cihelná brána)');
+  expect(gateNames).not.toContain('Vyšehrad Information Centre');
 });
 
 it('offers grave histories in the cemetery without pretending their individual positions were surveyed', () => {

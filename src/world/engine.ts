@@ -96,6 +96,7 @@ import {
   makeReferenceLabels,
   makeProvostFrontage,
   makeCanonGables,
+  makeInformationCentre,
 } from './reference-details';
 import { makeNuselskyBridge } from './bridge';
 import { makeRiversideGallery } from './gallery';
@@ -144,6 +145,8 @@ import {
   discoveredNear,
   elevation,
   upperElevation,
+  informationCentre,
+  citadela,
   originalElevation,
   unretainedElevation,
   retainedStreetWalls,
@@ -1372,6 +1375,10 @@ export class World {
   }
 
   private makeBuilding(feature: Feature) {
+    if (feature.id === 49811200) {
+      makeInformationCentre(this.batch.bind(this));
+      return;
+    }
     feature = modelBuildingPart(feature);
     const points = feature.points;
     const [x, z] = center(points);
@@ -1516,7 +1523,7 @@ export class World {
       dummy.updateMatrix();
       trunk.setMatrixAt(i, dummy.matrix);
       for (let lobe = 0; lobe < 4; lobe++) {
-        if (i % 8 === 0) {
+        if (i % 8 === 0 && !inside([x, z], citadela.courtyard)) {
           dummy.position.set(x, y + (4.8 + lobe * 1.65) * scale, z);
           const radius = (3.1 - lobe * 0.55) * scale;
           dummy.scale.set(radius, 4.2 * scale, radius);
@@ -1575,6 +1582,7 @@ export class World {
       }
     });
     trunk.instanceMatrix.needsUpdate = true;
+    evergreens.count = evergreenIndex;
     leaves.instanceMatrix.needsUpdate = true;
     if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
     evergreens.instanceMatrix.needsUpdate = true;
@@ -1703,6 +1711,11 @@ export class World {
               !patch.feature.holes.some((hole) => inside(point, hole)),
           ) ||
           excluded.some((area) => contains(point, area)) ||
+          [
+            citadela.courtyard,
+            informationCentre.apron,
+            informationCentre.sidewalk,
+          ].some((paving) => inside(point, paving)) ||
           panoramaDecks.some((deck) => inside(point, deck.points)) ||
           aveMariaCourtCuts.some((cut) => inside(point, cut)) ||
           retainedStreetSection(point) ||

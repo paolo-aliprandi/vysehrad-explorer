@@ -4704,6 +4704,120 @@ for (const guard of retainedGardenGuards)
         wallProfile(guard.wall, projection.point, projection.normal).top + 0.05,
     });
   }
+export const informationCentre = (() => {
+  const building = buildings.find((feature) => feature.id === 49811200);
+  if (!building) throw new Error('Missing information-centre footprint.');
+  const frame = orientedBounds(building.points);
+  const angle = frame.angle - Math.PI / 2;
+  const at = (u: number, v: number): Point => [
+    frame.center[0] + Math.cos(angle) * u + Math.sin(angle) * v,
+    frame.center[1] - Math.sin(angle) * u + Math.cos(angle) * v,
+  ];
+  const street = paths.find((path) => path.id === 494921190);
+  if (!street) throw new Error('Missing information-centre street.');
+  const projection = projectRoute(at(0, frame.width / 2), street.points);
+  const end: Point = [
+    projection.point[0] - projection.normal[0] * (pathWidth(street) / 2 - 0.2),
+    projection.point[1] - projection.normal[1] * (pathWidth(street) / 2 - 0.2),
+  ];
+  const apronWidth = frame.depth / 2 + 0.6;
+  return {
+    building,
+    point: frame.center,
+    width: frame.depth,
+    depth: frame.width,
+    angle,
+    ground: foundation(building),
+    at,
+    board: at(apronWidth - 0.5, frame.width / 2 + 1.3),
+    apron: [
+      at(-apronWidth, frame.width / 2 - 0.2),
+      at(apronWidth, frame.width / 2 - 0.2),
+      [
+        end[0] + Math.cos(angle) * apronWidth,
+        end[1] - Math.sin(angle) * apronWidth,
+      ],
+      [
+        end[0] - Math.cos(angle) * apronWidth,
+        end[1] + Math.sin(angle) * apronWidth,
+      ],
+      at(-apronWidth, frame.width / 2 - 0.2),
+    ] as Point[],
+    sidewalk: [
+      at(frame.depth / 2 - 0.1, -frame.width / 2),
+      at(frame.depth / 2 + 1, -frame.width / 2),
+      at(frame.depth / 2 + 1, frame.width / 2),
+      at(frame.depth / 2 - 0.1, frame.width / 2),
+      at(frame.depth / 2 - 0.1, -frame.width / 2),
+    ],
+  };
+})();
+export const citadela = (() => {
+  const building = buildings.find((feature) => feature.id === 49810585);
+  if (!building) throw new Error('Missing Citadela courtyard building.');
+  const frame = orientedBounds(building.points);
+  const angle = frame.angle + Math.PI;
+  const point: Point = [
+    frame.center[0] + (frame.axis[1] * frame.depth) / 2,
+    frame.center[1] - (frame.axis[0] * frame.depth) / 2,
+  ];
+  const at = (u: number, v: number): Point => [
+    point[0] + Math.cos(angle) * u + Math.sin(angle) * v,
+    point[1] - Math.sin(angle) * u + Math.cos(angle) * v,
+  ];
+  const clear = (point: Point) =>
+    paths.every(
+      (path) =>
+        projectRoute(point, path.points).distance > pathWidth(path) / 2 + 0.9,
+    );
+  return {
+    building,
+    point,
+    angle,
+    loungerAngle: angle + Math.PI / 2 + 0.2,
+    at,
+    tables: [-11, -6, 4, 9].map((u) => at(u, 1.8)).filter(clear),
+    loungers: [-13, -10, -7, -4, -1, 2, 5, 8, 11, 14]
+      .flatMap((u) => [12.5, 15.5].map((v) => at(u, v)))
+      .filter(clear),
+    courtyard: [at(-16, 0), at(16, 0), at(16, 10), at(-16, 10), at(-16, 0)],
+  };
+})();
+for (const [kind, points] of [
+  ['table', citadela.tables],
+  ['lounger', citadela.loungers],
+] as const)
+  points.forEach((point, index) =>
+    siteProps.push({
+      id: `citadela-${kind}-${index}`,
+      point,
+      angle: kind === 'table' ? citadela.angle : citadela.loungerAngle,
+      width: kind === 'table' ? 1.1 : 0.75,
+      depth: kind === 'table' ? 1.1 : 1.7,
+      height: kind === 'table' ? 0.78 : 1,
+    }),
+  );
+siteProps.push({
+  id: 'information-centre-board',
+  point: informationCentre.board,
+  angle: informationCentre.angle,
+  width: 0.8,
+  depth: 0.8,
+  height: 1.2,
+});
+for (const [index, point] of citadela.tables.entries())
+  for (const side of [-1, 1])
+    siteProps.push({
+      id: `citadela-chair-${index}-${side}`,
+      point: [
+        point[0] + Math.cos(citadela.angle) * side,
+        point[1] - Math.sin(citadela.angle) * side,
+      ],
+      angle: citadela.angle,
+      width: 0.5,
+      depth: 0.5,
+      height: 1,
+    });
 export const referenceSites = {
   gardenWell: {
     point: [-30.19, 5.53] as Point,
