@@ -43,6 +43,29 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   expect(
     await inspect('return w.scene.getObjectByName("Paving").children.length;'),
   ).toBe(2);
+  const brickGate = await inspect(`
+    const g=await import('/src/world/geo.ts');
+    const gate=g.features.find(feature=>feature.id===51700613),frame=g.gateFrame(gate),floor=g.foundation(gate);
+    w.scene.updateMatrixWorld(true);
+    const hit=(offset,height)=>{
+      w.raycaster.set(w.position.clone().set(
+        (frame.center[0]+frame.axis[0]*offset+frame.axis[1]*(frame.depth/2+1))*1.5,
+        (floor+height)*1.5,
+        (frame.center[1]+frame.axis[1]*offset-frame.axis[0]*(frame.depth/2+1))*1.5
+      ),w.position.clone().set(-frame.axis[1],0,frame.axis[0]));
+      w.raycaster.far=(frame.depth+2)*1.5;
+      return w.raycaster.intersectObjects(w.blockers,false).length;
+    };
+    return {
+      passages:g.gateOpenings(gate).flatMap(opening=>[.8,1.5,2].map(height=>({
+        offset:opening.offset,height,hits:hit(opening.offset,height)
+      }))),
+      upperMasonry:hit(0,10)
+    };
+  `);
+  for (const passage of brickGate.passages)
+    expect(passage.hits, JSON.stringify(passage)).toBe(0);
+  expect(brickGate.upperMasonry).toBeGreaterThan(0);
   const kiosks = await inspect(`
     const {kioskSites}=await import('/src/world/kiosks.ts'),g=await import('/src/world/geo.ts');
     const mode=w.mode,previous=w.position.clone();

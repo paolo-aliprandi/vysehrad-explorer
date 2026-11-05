@@ -318,7 +318,7 @@ function Dialog({
           <Icon name="close" />
         </button>
       </div>
-      {children}
+      <div className="dialog-content">{children}</div>
     </dialog>
   );
 }

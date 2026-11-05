@@ -1043,9 +1043,20 @@ kbd {
   padding: 32px;
   width: min(1000px, calc(100vw - 40px));
   max-height: calc(100dvh - 48px);
+  overflow: hidden;
   background: #f5f2e7;
   color: #2c493d;
   box-shadow: 0 25px 150px #112e3250;
+}
+.dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.dialog-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y pinch-zoom;
 }
 .dialog::backdrop {
   background: #173b3d60;
@@ -1053,6 +1064,7 @@ kbd {
 }
 .dialog-heading {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   gap: 25px;

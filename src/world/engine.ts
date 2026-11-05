@@ -1252,7 +1252,7 @@ export class World {
                   run,
                   0.32,
                   (point) => ({
-                    bottom: elevation(...point) - 0.2,
+                    bottom: upperElevation(...point) - 0.2,
                     top: brickGateFenceLevel(...point) + 0.08,
                   }),
                   false,

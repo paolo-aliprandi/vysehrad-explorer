@@ -1,5 +1,105 @@
 import { expect, test } from '@playwright/test';
 
+for (const browserName of ['chromium', 'webkit'] as const) {
+  test.describe(`${browserName} mobile report scrolling`, () => {
+    test('reaches the submit control by scrolling and keeps the close button accessible', async ({
+      browser,
+      playwright,
+      baseURL,
+    }) => {
+      test.setTimeout(180000);
+      const engine =
+        browserName === 'webkit' ? await playwright.webkit.launch() : browser;
+      const context = await engine.newContext({
+        baseURL,
+        viewport: { width: 390, height: 600 },
+        isMobile: true,
+        hasTouch: true,
+      });
+      try {
+        const page = await context.newPage();
+        const errors: string[] = [];
+        page.on('pageerror', (error) => errors.push(error.message));
+        await page.addInitScript(() => {
+          window.turnstile = {
+            render(_element, options) {
+              options.callback('browser-test-human');
+              return 'widget';
+            },
+            remove() {
+              return undefined;
+            },
+            reset() {
+              return undefined;
+            },
+          };
+        });
+        await page.goto('/');
+        await page.getByRole('button', { name: 'Enter Vyšehrad' }).tap();
+        await page
+          .getByRole('button', { name: 'Report / contribute a photo' })
+          .tap();
+        const dialog = page.getByRole('dialog');
+        const submit = page.getByRole('button', {
+          name: 'Send report privately',
+        });
+        const close = page.getByRole('button', { name: 'Close dialog' });
+        await expect(submit).not.toBeInViewport();
+        if (browserName === 'chromium') {
+          const cdp = await page.context().newCDPSession(page);
+          for (let swipe = 0; swipe < 4; swipe++) {
+            await cdp.send('Input.dispatchTouchEvent', {
+              type: 'touchStart',
+              touchPoints: [{ x: 325, y: 450, id: 1 }],
+            });
+            for (let y = 425; y >= 200; y -= 25) {
+              await cdp.send('Input.dispatchTouchEvent', {
+                type: 'touchMove',
+                touchPoints: [{ x: 325, y, id: 1 }],
+              });
+              await page.waitForTimeout(30);
+            }
+            await cdp.send('Input.dispatchTouchEvent', {
+              type: 'touchEnd',
+              touchPoints: [],
+            });
+          }
+        } else {
+          await submit.evaluate((element) => {
+            for (
+              let parent = element.parentElement;
+              parent;
+              parent = parent.parentElement
+            ) {
+              if (
+                getComputedStyle(parent).overflowY === 'auto' &&
+                parent.scrollHeight > parent.clientHeight
+              ) {
+                parent.scrollTop = parent.scrollHeight;
+                return;
+              }
+            }
+            throw new Error('The report has no scrollable container.');
+          });
+        }
+        await expect(submit).toBeInViewport();
+        await expect(close).toBeInViewport();
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+          ),
+        ).toBe(true);
+        await close.tap();
+        await expect(dialog).not.toBeVisible();
+        expect(errors).toEqual([]);
+      } finally {
+        await context.close();
+        if (browserName === 'webkit') await engine.close();
+      }
+    });
+  });
+}
+
 test('reports the live native avatar position and a normalized photo without a GitHub login', async ({
   page,
 }) => {
