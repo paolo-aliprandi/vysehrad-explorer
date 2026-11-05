@@ -15,6 +15,7 @@ import {
   panoramaSites,
   riversideGallery,
   referenceSites,
+  informationCentre,
   type Point,
 } from './geo';
 
@@ -96,7 +97,7 @@ at(mapped(51718887), [
   'Former moat near Leopold Gate',
 ]);
 at(mapped(51700613), ['Brick Gate (Cihelná brána)']);
-at(mapped(49811200), ['Vyšehrad Information Centre']);
+at(mapped(informationCentre.building.id), ['Vyšehrad Information Centre']);
 at(ramparts, [
   'Vyšehrad fortress walls',
   'Baroque bastions',

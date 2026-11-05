@@ -24,6 +24,7 @@ import {
   wallOpening,
   courtBankBoundary,
   buildings,
+  foundation,
   unretainedElevation,
   artilleryEntrance,
   informationCentre,
@@ -84,12 +85,32 @@ function beam(a: Vertex, b: Vertex, radius: number) {
 
 export function makeInformationCentre(add: AddGeometry) {
   const site = informationCentre;
-  for (const paving of [site.apron, site.sidewalk])
-    add('#b8b1a0', drapedPolygon(paving, 0.085), 'cobble');
+  add('#b8b1a0', drapedPolygon(site.apron, 0.085), 'cobble');
+  add(
+    '#b8b1a0',
+    drapedPolygon(site.sidewalk, 0.085, () => site.ground),
+    'cobble',
+  );
   const emit = localEmitter(site.point, site.ground, site.angle, add);
   const w = site.width,
     d = site.depth,
     h = 3.05;
+  const footprint = [
+    site.at(-w / 2, -d / 2),
+    site.at(w / 2, -d / 2),
+    site.at(w / 2, d / 2),
+    site.at(-w / 2, d / 2),
+    site.at(-w / 2, -d / 2),
+  ];
+  for (const perimeter of [footprint, site.sidewalk])
+    add(
+      '#b8b3a5',
+      continuousWall(perimeter, 0.18, (point) => ({
+        bottom: Math.min(elevation(...point), site.ground) - 0.2,
+        top: site.ground + 0.06,
+      })),
+      'stone',
+    );
   const box = (
     width: number,
     height: number,
@@ -106,6 +127,7 @@ export function makeInformationCentre(add: AddGeometry) {
       kind,
     );
   box(w, 0.18, d, 0, 0.01, 0, '#b8b3a5', 'stone');
+  box(1.1, 0.12, d, w / 2 + 0.45, 0, 0, '#b8b3a5', 'stone');
   box(w, h, 0.2, 0, h / 2, -d / 2 + 0.1, '#a48168');
   box(0.2, h, d, -w / 2 + 0.1, h / 2, 0, '#a48168');
   const front = new THREE.Shape();
@@ -679,6 +701,31 @@ export function makeReferenceBankIvy(add: AddGeometry) {
       }
     }
   }
+  const shed = buildings.find((building) => building.id === 49811200);
+  if (!shed) throw new Error('Missing long shed beside the park path.');
+  const facade = projectRoute([141, 175], shed.points);
+  const a = shed.points[facade.segment],
+    b = shed.points[facade.segment + 1];
+  const normal = facade.normal;
+  const sign = inside(
+    [facade.point[0] + normal[0] * 0.1, facade.point[1] + normal[1] * 0.1],
+    shed.points,
+  )
+    ? -1
+    : 1;
+  const crest = foundation(shed) + 2.85;
+  for (const [seed, t] of [0.18, 0.26, 0.56, 0.64, 0.83].entries())
+    makeIvyClump(
+      [
+        a[0] + (b[0] - a[0]) * t + normal[0] * sign * 0.07,
+        a[1] + (b[1] - a[1]) * t + normal[1] * sign * 0.07,
+      ],
+      crest,
+      0.65 + 0.12 * (seed % 3),
+      -Math.atan2(b[1] - a[1], b[0] - a[0]),
+      seed,
+      add,
+    );
   makeRoyalWallIvy(add);
 }
 

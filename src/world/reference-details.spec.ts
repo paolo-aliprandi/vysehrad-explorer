@@ -49,6 +49,9 @@ import {
   retainedWallOffsets,
   informationCentre,
   citadela,
+  buildings,
+  center,
+  inside,
   type Point,
 } from './geo';
 import { makeApproach, makePassages } from './passages';
@@ -85,8 +88,20 @@ function geometryScene(
   };
 }
 
-it('replaces the information-centre gable with a low brick pavilion, glazed entrance and real slit-window openings', () => {
+it('places the low brick information pavilion across the road from the preserved ivy-covered shed, with glazed entrance and slit windows', () => {
   const site = informationCentre;
+  const shed = buildings.find((building) => building.id === 49811200);
+  const street = paths.find((path) => path.id === 494921190);
+  if (!shed || !street) throw new Error('Missing information-centre frontage.');
+  const roadSide = (point: Point) => {
+    const projection = projectRoute(point, street.points);
+    return (
+      (point[0] - projection.point[0]) * projection.normal[0] +
+      (point[1] - projection.point[1]) * projection.normal[1]
+    );
+  };
+  expect(roadSide(site.point) * roadSide(center(shed.points))).toBeLessThan(0);
+  expect(site.building).not.toBe(shed);
   const scene = geometryScene(makeInformationCentre, THREE.DoubleSide);
   const normal = new THREE.Vector3(
     Math.sin(site.angle),
@@ -123,6 +138,19 @@ it('replaces the information-centre gable with a low brick pavilion, glazed entr
     expect(ray(site.width / 2 + 0.4, 0, 1.5, right.clone().negate())).toMatch(
       /^brick:/,
     );
+    for (const v of [-5, 0, 5]) {
+      const point = site.at(site.width / 2 + 0.45, v);
+      const support = new THREE.Raycaster(
+        new THREE.Vector3(point[0], site.ground + 0.4, point[1]),
+        new THREE.Vector3(0, -1, 0),
+        0,
+        1,
+      ).intersectObjects(
+        scene.meshes.filter((mesh) => mesh.name.startsWith('stone:')),
+      )[0];
+      expect(support).toBeDefined();
+      expect(support.point.y).toBeCloseTo(site.ground + 0.06, 3);
+    }
     for (const mesh of scene.meshes) {
       mesh.geometry.computeBoundingBox();
       const bounds = mesh.geometry.boundingBox;
@@ -579,6 +607,37 @@ it('hangs ivy down the marked bank and grounds its iron fence on the crest, whil
       });
   }, THREE.DoubleSide);
   try {
+    const shed = buildings.find((building) => building.id === 49811200);
+    if (!shed) throw new Error('Missing ivy-covered shed.');
+    const facade = projectRoute([141, 175], shed.points);
+    const a = shed.points[facade.segment],
+      b = shed.points[facade.segment + 1];
+    const sign = inside(
+      [
+        facade.point[0] + facade.normal[0] * 0.1,
+        facade.point[1] + facade.normal[1] * 0.1,
+      ],
+      shed.points,
+    )
+      ? -1
+      : 1;
+    for (const t of [0.18, 0.56, 0.83]) {
+      const leaf = new THREE.Raycaster(
+        new THREE.Vector3(
+          a[0] + (b[0] - a[0]) * t + facade.normal[0] * sign,
+          foundation(shed) + 2.55,
+          a[1] + (b[1] - a[1]) * t + facade.normal[1] * sign,
+        ),
+        new THREE.Vector3(
+          -facade.normal[0] * sign,
+          0,
+          -facade.normal[1] * sign,
+        ),
+        0,
+        2,
+      ).intersectObjects(scene.meshes)[0];
+      expect(leaf?.object.name).toMatch(/^foliage:/);
+    }
     const wall = walls.find((wall) => wall.id === -9000103);
     if (!wall) throw new Error('Missing marked garden retaining wall.');
     const projection = projectRoute([-48, -34], wall.points);

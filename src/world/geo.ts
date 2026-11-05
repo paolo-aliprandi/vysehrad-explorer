@@ -4705,7 +4705,7 @@ for (const guard of retainedGardenGuards)
     });
   }
 export const informationCentre = (() => {
-  const building = buildings.find((feature) => feature.id === 49811200);
+  const building = buildings.find((feature) => feature.id === 494921208);
   if (!building) throw new Error('Missing information-centre footprint.');
   const frame = orientedBounds(building.points);
   const angle = frame.angle - Math.PI / 2;

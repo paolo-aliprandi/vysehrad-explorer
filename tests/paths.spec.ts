@@ -80,9 +80,12 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     w.raycaster.set(w.position.clone().set(entrance[0]*1.5,(info.ground+1.4)*1.5,entrance[1]*1.5),w.position.clone().set(-Math.sin(info.angle),0,-Math.cos(info.angle)));
     w.raycaster.far=1.5;
     const door=w.raycaster.intersectObjects(meshes,false)[0];
+    const shed=g.buildings.find(building=>building.id===49811200);
+    if(!shed)throw new Error('Missing restored ivy-covered shed.');
     return {
       roof:down(info.point,info.ground+7),ground:info.ground,door:door?.object.material.color.getHexString(),
-      approach:down(info.at(0,info.depth/2+3.5),info.ground+2),
+      approach:down(g.center(info.apron),info.ground+2),
+      restoredRoof:down(g.orientedBounds(shed.points).center,g.foundation(shed)+7),shedGround:g.foundation(shed),
       tables:cafe.tables.map(point=>down(point,g.elevation(...point)+2)),
       loungers:cafe.loungers.map(point=>down(point,g.elevation(...point)+2))
     };
@@ -91,6 +94,10 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   expect(visitorPlaces.roof.height - visitorPlaces.ground).toBeCloseTo(3.65, 3);
   expect(visitorPlaces.door).toBe('73837b');
   expect(visitorPlaces.approach.color).toBe('b8b1a0');
+  expect(visitorPlaces.restoredRoof.color).toBe('a8775c');
+  expect(
+    visitorPlaces.restoredRoof.height - visitorPlaces.shedGround,
+  ).toBeGreaterThan(4);
   expect(visitorPlaces.tables.length).toBeGreaterThanOrEqual(3);
   for (const table of visitorPlaces.tables) expect(table.color).toBe('bcb7a6');
   expect(visitorPlaces.loungers.length).toBeGreaterThanOrEqual(8);

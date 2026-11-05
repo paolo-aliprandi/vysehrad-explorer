@@ -1375,7 +1375,7 @@ export class World {
   }
 
   private makeBuilding(feature: Feature) {
-    if (feature.id === 49811200) {
+    if (feature.id === informationCentre.building.id) {
       makeInformationCentre(this.batch.bind(this));
       return;
     }
