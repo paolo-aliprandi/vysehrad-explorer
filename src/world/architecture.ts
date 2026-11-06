@@ -38,6 +38,8 @@ import {
   streetFrontages,
   streetFurniture,
   cathedralPortals,
+  cathedralForecourt,
+  streetGrade,
   cathedralDoorLeaf,
   aveMariaFrontage,
   aveMariaCourtCuts,
@@ -914,12 +916,44 @@ export function makeCathedralForecourt(add: AddGeometry) {
       pathWidth(route),
       0.058,
       elevation,
-      [outer],
+      [outer, cathedralForecourt.polygon],
     ),
     'cobble',
   );
-  add('#deded6', drapedPolygon(outer, 0.059), 'mosaic');
-  add('#535952', drapedPolygon(outer, 0.062, elevation, [inset]), 'stone');
+  const pave = (
+    color: string,
+    polygon: Point[],
+    offset: number,
+    kind: MaterialKind,
+    holes: Point[][] = [],
+  ) => {
+    const shape: Polygon = [polygon, ...holes].map((ring) =>
+      ring.map(([x, z]) => [x, z]),
+    );
+    const plaza: Polygon = [cathedralForecourt.polygon.map(([x, z]) => [x, z])];
+    for (const graded of [true, false]) {
+      const pieces = graded
+        ? polygonClipping.intersection(shape, plaza)
+        : polygonClipping.difference(shape, plaza);
+      for (const piece of pieces)
+        add(
+          color,
+          drapedPolygon(
+            piece[0],
+            offset,
+            graded
+              ? (x, z) => streetGrade(cathedralForecourt, [x, z])
+              : unretainedElevation,
+            piece.slice(1),
+            graded,
+            true,
+          ),
+          kind,
+        );
+    }
+  };
+  pave('#deded6', outer, 0.059, 'mosaic');
+  pave('#535952', outer, 0.062, 'stone', [inset]);
   for (const door of doorPositions) {
     const star = Array.from({ length: 16 }, (_, index) => {
       const angle = (index * Math.PI) / 8;
@@ -929,20 +963,18 @@ export function makeCathedralForecourt(add: AddGeometry) {
         3.35 + Math.sin(angle) * radius,
       );
     });
-    add('#4a514b', drapedPolygon(star, 0.066), 'stone');
+    pave('#4a514b', star, 0.066, 'stone');
   }
   for (const v of [2.2, 4.6])
-    add(
+    pave(
       '#62685f',
-      drapedPolygon(
-        [
-          at(left + 0.3, v - 0.08),
-          at(right - 0.3, v - 0.08),
-          at(right - 0.3, v + 0.08),
-          at(left + 0.3, v + 0.08),
-        ],
-        0.061,
-      ),
+      [
+        at(left + 0.3, v - 0.08),
+        at(right - 0.3, v - 0.08),
+        at(right - 0.3, v + 0.08),
+        at(left + 0.3, v + 0.08),
+      ],
+      0.061,
       'stone',
     );
 }

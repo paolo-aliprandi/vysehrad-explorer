@@ -17,6 +17,8 @@ import {
   makeLeopoldInteriorSidewalks,
   leopoldInteriorPaving,
   leopoldSidewalks,
+  cathedralPaving,
+  makeCathedralSidewalks,
 } from './reference-details';
 import {
   brickGateStairs,
@@ -72,6 +74,7 @@ import {
   spickaFrontage,
   rotundaStreet,
   streetFurniture,
+  cathedralForecourt,
   type Point,
 } from './geo';
 import { makeApproach, makePassages } from './passages';
@@ -305,6 +308,190 @@ it('moves both interior gate sidewalks onto the green shoulders rather than keep
     }
   } finally {
     scene.dispose();
+  }
+});
+
+it('adds level cathedral and chapter sidewalks without paving the cemetery, hedge beds or statue garden', () => {
+  const scene = geometryScene(makeCathedralSidewalks, THREE.DoubleSide);
+  const mosaic = scene.meshes.filter((mesh) => mesh.name === 'mosaic:#d0ccbd');
+  const terrain = retainedStreetTerrain();
+  const ray = new THREE.Raycaster();
+  const at = (point: Point) => {
+    ray.set(
+      new THREE.Vector3(point[0], 80, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    );
+    return ray.intersectObjects(mosaic)[0];
+  };
+  const contains = (
+    point: Point,
+    side: (typeof cathedralPaving.sidewalks)[number],
+  ) =>
+    side.polygons.some(
+      (polygon) =>
+        inside(point, polygon[0]) &&
+        !polygon.slice(1).some((hole) => inside(point, hole)),
+    );
+  const sections = [0, 0, 0, 0];
+  try {
+    for (const [index, side] of cathedralPaving.sidewalks.entries()) {
+      for (const curb of side.curb.filter((_point, i) => i % 8 === 4)) {
+        const road = projectRoute(
+          curb,
+          side.feature.id === cathedralForecourt.feature.id
+            ? cathedralForecourt.points
+            : side.feature.points,
+        );
+        const dx = curb[0] - road.point[0],
+          dz = curb[1] - road.point[1];
+        const distance = Math.hypot(dx, dz);
+        const points = [0.18, 0.65, 1.12].map(
+          (offset): Point => [
+            curb[0] + (dx / distance) * offset,
+            curb[1] + (dz / distance) * offset,
+          ],
+        );
+        if (!points.every((point) => contains(point, side))) continue;
+        const heights = points.map((point) => {
+          const hit = at(point);
+          expect(hit?.object.name, JSON.stringify(point)).toBe(
+            'mosaic:#d0ccbd',
+          );
+          expect(
+            hit.point.y - terrain.heightAt(point),
+            JSON.stringify(point),
+          ).toBeGreaterThan(0.055);
+          return hit.point.y;
+        });
+        expect(blocked(points[1]), JSON.stringify(points[1])).toBe(false);
+        expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(
+          0.003 + 1e-5,
+        );
+        sections[index]++;
+      }
+    }
+    for (const count of sections) expect(count).toBeGreaterThan(3);
+    for (const point of [
+      [-235, -12],
+      [-230, -16],
+      [29.77, 54.07],
+      [-107.37, 40.22],
+      ...karlachBorderBushes.map((bush) => bush.point),
+    ] as Point[])
+      expect(at(point), JSON.stringify(point)).toBeUndefined();
+  } finally {
+    scene.dispose();
+    terrain.geometries.forEach((geometry) => geometry.dispose());
+  }
+});
+
+it('closes the chapter facade gaps with level mosaic without moving the curb or paving inside buildings', () => {
+  const scene = geometryScene(makeCathedralSidewalks, THREE.DoubleSide);
+  const mosaic = scene.meshes.filter((mesh) => mesh.name === 'mosaic:#d0ccbd');
+  const side = cathedralPaving.sidewalks[3];
+  const ray = new THREE.Raycaster();
+  const at = (point: Point) => {
+    ray.set(
+      new THREE.Vector3(point[0], 80, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    );
+    return ray.intersectObjects(mosaic)[0];
+  };
+  try {
+    for (const [a, b] of [
+      [
+        [-105.65, 38.12],
+        [-86.78, 42.4],
+      ],
+      [
+        [-86.78, 42.4],
+        [-71.36, 46.1],
+      ],
+      [
+        [-71.36, 46.1],
+        [-57.78, 49.16],
+      ],
+    ] as [Point, Point][]) {
+      for (const fraction of [0.15, 0.5, 0.85]) {
+        const wall: Point = [
+          a[0] + (b[0] - a[0]) * fraction,
+          a[1] + (b[1] - a[1]) * fraction,
+        ];
+        const { normal } = projectRoute(wall, side.feature.points);
+        const heights = [0.02, 0.1, 0.4, 1.3].map((distance) => {
+          const point: Point = [
+            wall[0] - normal[0] * distance,
+            wall[1] - normal[1] * distance,
+          ];
+          const hit = at(point);
+          if (!hit)
+            throw new Error(
+              `Missing facade mosaic at ${JSON.stringify(point)}`,
+            );
+          return hit.point.y;
+        });
+        expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(0.003);
+        expect(
+          at([wall[0] + normal[0] * 0.1, wall[1] + normal[1] * 0.1]),
+        ).toBeUndefined();
+      }
+    }
+  } finally {
+    scene.dispose();
+  }
+});
+
+it('fills the marked cathedral frontage with continuous cobbles rather than isolated ribbons and grass', () => {
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const surfaces = pavingSurfaces(
+    paths.filter((path) =>
+      path.points.some(([x, z]) => x > -260 && x < -210 && z > -15 && z < 32),
+    ),
+  ).filter((surface) =>
+    surface.polygons
+      .flat(2)
+      .some(([x, z]) => x > -260 && x < -210 && z > -15 && z < 32),
+  );
+  const meshes = surfaces.map((surface) => {
+    const mesh = new THREE.Mesh(pavingGeometry(surface), material);
+    mesh.name = surface.style.kind;
+    return mesh;
+  });
+  const terrain = retainedStreetTerrain();
+  const ray = new THREE.Raycaster();
+  try {
+    for (const point of [
+      [-240, -3],
+      [-232, -2],
+      [-225, -5],
+      [-229, 17],
+      [-229, 25],
+      [-240, 8],
+    ] as Point[]) {
+      ray.set(
+        new THREE.Vector3(point[0], 80, point[1]),
+        new THREE.Vector3(0, -1, 0),
+      );
+      const hits = ray.intersectObjects(meshes);
+      expect(hits[0]?.object.name, JSON.stringify(point)).toBe('cobble');
+      expect(hits[0].point.y - terrain.heightAt(point)).toBeGreaterThan(0.04);
+    }
+    for (const point of [
+      [-235, -12],
+      [-230, -16],
+    ] as Point[]) {
+      ray.set(
+        new THREE.Vector3(point[0], 80, point[1]),
+        new THREE.Vector3(0, -1, 0),
+      );
+      expect(ray.intersectObjects(meshes), JSON.stringify(point)).toHaveLength(
+        0,
+      );
+    }
+  } finally {
+    meshes.forEach((mesh) => mesh.geometry.dispose());
+    terrain.geometries.forEach((geometry) => geometry.dispose());
+    material.dispose();
   }
 });
 

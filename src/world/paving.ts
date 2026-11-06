@@ -20,6 +20,7 @@ import {
   retainedStreetSurfaceElevation,
   rotundaStreet,
   naHradbachStreet,
+  cathedralForecourt,
   aveMariaCourtCuts,
   aveMariaFrontage,
   karlachBorderBeds,
@@ -31,7 +32,11 @@ import {
   type Point,
 } from './geo';
 import { drapedPolygon, ribbonEdges, samplePolyline } from './surfaces';
-import { leopoldSidewalks, leopoldInteriorPaving } from './reference-details';
+import {
+  leopoldSidewalks,
+  leopoldInteriorPaving,
+  cathedralPaving,
+} from './reference-details';
 
 type PavingKind = 'cobble' | 'gravel';
 export type PavingSurface = {
@@ -215,6 +220,8 @@ export function pavingFootprint(feature: Feature): MultiPolygon {
   if (corridor) return [[corridor.polygon.map(([x, z]) => [x, z])]];
   if (feature.id === rotundaStreet.feature.id)
     return [[rotundaStreet.pavingPolygon.map(([x, z]) => [x, z])]];
+  if (feature.id === cathedralForecourt.feature.id)
+    return [[cathedralForecourt.polygon.map(([x, z]) => [x, z])]];
   if (feature.tags.area === 'yes') {
     return [
       [
@@ -449,6 +456,14 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
       );
     if (feature.points.some(([x, z]) => x > -120 && x < 20 && z > 20 && z < 60))
       full = polygonBoolean('difference', full, karlachBorderBeds);
+    if (
+      feature.points.some(([x, z]) => x > -260 && x < 35 && z > -15 && z < 75)
+    )
+      full = polygonBoolean(
+        'difference',
+        full,
+        cathedralPaving.sidewalks.flatMap((side) => side.polygons),
+      );
     if (projectRoute(aveMariaFrontage.point, feature.points).distance < 20)
       full = polygonBoolean(
         'difference',
@@ -533,6 +548,7 @@ export function pavingGeometry(surface: PavingSurface) {
     ...retainedStreetCorridors,
     rotundaStreet,
     naHradbachStreet,
+    cathedralForecourt,
   ].find((area) => area.feature.id === feature.id);
   const vertices: number[] = [];
   for (const polygon of surface.polygons) {

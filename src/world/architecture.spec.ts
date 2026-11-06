@@ -40,6 +40,7 @@ import {
   featureElevation,
   pathWidth,
   paths,
+  cathedralForecourt,
   type Point,
   pevnostiGrade,
   projectRoute,
@@ -462,6 +463,8 @@ describe('screenshot geometry repairs', () => {
 it('paves the main cathedral doorway and joins its forecourt to the mapped approach without a raised walking barrier', () => {
   const geometry: THREE.BufferGeometry[] = [];
   makeCathedralForecourt((_color, item) => geometry.push(item));
+  for (const surface of pavingSurfaces([cathedralForecourt.feature]))
+    geometry.push(pavingGeometry(surface));
   const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
   const meshes = geometry.map((item) => new THREE.Mesh(item, material));
   for (const mesh of meshes) mesh.updateMatrixWorld(true);

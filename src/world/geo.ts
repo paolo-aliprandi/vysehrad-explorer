@@ -1375,6 +1375,7 @@ export function retainedStreetSection(point: Point) {
         level: number;
         distance: number;
         width: number;
+        flatHalfWidth: number;
         weight: number;
       }
     | undefined;
@@ -1415,6 +1416,10 @@ export function retainedStreetSection(point: Point) {
       b.edges[side].point[1] - b.point[1],
     );
     const width = widthA + (widthB - widthA) * t;
+    const chapterStreet =
+      corridor.feature.id === 587280816 &&
+      route.point[0] > -114.1 &&
+      route.point[0] < 30;
     if (nearest && route.distance >= nearest.distance) continue;
     nearest = {
       level:
@@ -1423,7 +1428,10 @@ export function retainedStreetSection(point: Point) {
           route.fraction,
       distance: route.distance,
       width,
-      weight: smooth(Math.min(route.along, corridor.length - route.along) / 5),
+      flatHalfWidth: width - (chapterStreet ? 0 : 1),
+      weight: chapterStreet
+        ? 1
+        : smooth(Math.min(route.along, corridor.length - route.along) / 5),
     };
   }
   if (nearest) {
@@ -1447,7 +1455,7 @@ function retainedStreetElevation(
   // Keep the carriageway and sidewalks level across the cut, not the whole hill.
   const shoulder =
     1 -
-    smooth(section.distance - section.width + 1) *
+    smooth(section.distance - section.flatHalfWidth) *
       (1 - smooth((Math.abs(ground - section.level) - 0.35) / 0.2));
   return ground + (section.level - ground) * section.weight * shoulder;
 }
@@ -2777,6 +2785,14 @@ export function elevation(x: number, z: number) {
     if (pad) return pad.level;
   }
   const ground = unretainedElevation(x, z);
+  if (
+    x > -256 &&
+    x < -212 &&
+    z > -13 &&
+    z < 32 &&
+    inside([x, z], cathedralForecourt.polygon)
+  )
+    return streetGrade(cathedralForecourt, [x, z]);
   const section = retainedStreetSection([x, z]);
   if (section) return retainedStreetElevation(section, ground);
   const point: Point = [x, z];
@@ -3146,11 +3162,54 @@ export const naHradbachStreet = (() => {
     maxZ: Math.max(...polygon.map((point) => point[1])),
   };
 })();
+export const cathedralForecourt = (() => {
+  const street = paths.find((path) => path.id === 27762644);
+  const approach = paths.find((path) => path.id === 1234076195);
+  const departure = paths.find((path) => path.id === 1234076196);
+  if (!street || !approach || !departure)
+    throw new Error('Missing cathedral square streets.');
+  const points = [
+    ...approach.points,
+    ...street.points.slice(1),
+    ...departure.points.slice(1),
+  ];
+  const polygon: Point[] = [
+    [-252, -10.6],
+    [-250.3, -10.5],
+    [-247.5, -7],
+    [-245, -4.3],
+    [-218.7, -12],
+    [-218.2, -9.3],
+    [-212.7, -9],
+    [-212.8, -6.5],
+    [-218, -6.8],
+    [-218, 24.5],
+    [-216.6, 25.9],
+    [-216.8, 31],
+    [-228.5, 30.89],
+    [-234.2, 28.66],
+    [-233.6, 24.61],
+    [-233.37, 16.05],
+    [-233.77, 11.74],
+    [-243.23, 11.35],
+    [-246.81, 8.58],
+    [-250.55, 5.94],
+    [-254.94, 3.34],
+    [-252, -10.6],
+  ];
+  return {
+    feature: { ...street, points },
+    points,
+    levels: points.map((point) => unretainedElevation(...point)),
+    polygon,
+  };
+})();
 export const retainedStreetAreas = [
   ...retainedStreetCorridors,
   retainedStreetAccess,
   naHradbachStreet,
   rotundaStreet,
+  cathedralForecourt,
   ...retainedStreetBanks,
 ];
 export function retainedStreetSurfaceElevation(
@@ -3164,6 +3223,8 @@ export function retainedStreetSurfaceElevation(
       : streetGrade(rotundaStreet, point);
   }
   if (area === naHradbachStreet) return streetGrade(naHradbachStreet, point);
+  if (area === cathedralForecourt)
+    return streetGrade(cathedralForecourt, point);
   // Keep shared cell-corner samples on the graded side of the retaining cut.
   const sample = inside(point, area.polygon)
     ? point
@@ -3631,6 +3692,14 @@ export function standingElevation(point: Point, previousHeight = Infinity) {
   return stairs ? stairElevation(stairs, point) : elevation(...point);
 }
 export function featureElevation(feature: Feature, point: Point) {
+  if (
+    point[0] > -256 &&
+    point[0] < -212 &&
+    point[1] > -13 &&
+    point[1] < 32 &&
+    inside(point, cathedralForecourt.polygon)
+  )
+    return streetGrade(cathedralForecourt, point);
   if ([494921190, 494921198, 494921210, 370193785].includes(feature.id))
     return pevnostiGrade(point).level;
   if (feature.id === gardenExitAccess.feature.id) {

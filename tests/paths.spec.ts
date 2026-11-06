@@ -55,7 +55,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     };
     const down=point=>cast([point[0],g.elevation(...point)+5,point[1]],[0,-1,0]);
     const street=g.paths.find(path=>path.id===494921190),point=street.points[1].map((p,i)=>(p+street.points[2][i])/2);
-    const {leopoldSidewalks,leopoldInteriorPaving}=await import('/src/world/reference-details.ts');
+    const {leopoldSidewalks,leopoldInteriorPaving,cathedralPaving}=await import('/src/world/reference-details.ts');
     const soil=w.blockers.filter(mesh=>mesh.name==='Terrain'||mesh.name==='Terrain rock');
     const soilAt=point=>{
       w.raycaster.set(w.position.clone().set(point[0]*1.5,120,point[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=100;
@@ -101,6 +101,19 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       return cast([statue.point[0]+x*Math.cos(a)+z*Math.sin(a),statueGround+1.6+y,statue.point[1]-x*Math.sin(a)+z*Math.cos(a)],[Math.cos(a),0,-Math.sin(a)],1.2);
     };
     const wenceslas={underHoof:statueAt(.3,.625),hoof:statueAt(.8,1.02),eagle:statueAt(3.88,1.44),flag:statueAt(3.8,.99)};
+    const cathedralSections=cathedralPaving.sidewalks.flatMap(side=>side.curb.filter((_p,i)=>i%8===4).flatMap(curb=>{
+      const road=g.projectRoute(curb,side.feature.id===g.cathedralForecourt.feature.id?g.cathedralForecourt.points:side.feature.points);
+      const dx=curb[0]-road.point[0],dz=curb[1]-road.point[1],distance=Math.hypot(dx,dz);
+      const points=[.18,.65,1.12].map(offset=>[curb[0]+dx/distance*offset,curb[1]+dz/distance*offset]);
+      if(!points.every(point=>side.polygons.some(p=>g.inside(point,p[0])&&!p.slice(1).some(h=>g.inside(point,h)))))return [];
+      return [points.map(point=>({point,hit:mosaicAt(point),ground:soilAt(point),blocked:g.blocked(point)}))];
+    }));
+    const cathedralCobbles=[[-240,-3],[-232,-2],[-225,-5],[-229,17],[-229,25],[-240,8]]
+      .map(point=>({point,hit:cast([point[0],80,point[1]],[0,-1,0],50),ground:soilAt(point)}));
+    const cathedralGreen=[[-235,-12],[-230,-16],[29.77,54.07],[-107.37,40.22]]
+      .map(point=>({point,hit:mosaicAt(point)}));
+    const cathedralFacades=[[-102.8149,38.7425],[-79.0654,44.2305],[-64.5655,47.6105]]
+      .map(point=>({point,hit:mosaicAt(point),ground:soilAt(point)}));
     const gate=g.buildings.find(feature=>feature.id===51718887),frame=g.gateFrame(gate);
     const arches=g.gateOpenings(gate).flatMap(opening=>[-1.8,0,1.8].map(z=>{
       const point=[frame.center[0]+Math.cos(frame.angle)*opening.offset+Math.sin(frame.angle)*z,frame.center[1]-Math.sin(frame.angle)*opening.offset+Math.cos(frame.angle)*z],ground=g.elevation(...point);
@@ -136,7 +149,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       shield:cast([site.shield.point[0]+Math.sin(site.shield.angle)*2,site.shield.height,site.shield.point[1]+Math.cos(site.shield.angle)*2],[-Math.sin(site.shield.angle),0,-Math.cos(site.shield.angle)],3),
       curbs:curbPoints.map(point=>({hit:down(point),paving:g.featureElevation(street,point)+.055})),
       sidewalks,
-      interior,crossSections,westernContinuation,gateRelocation,junction,wenceslas,arches,stairSurround,
+      interior,crossSections,westernContinuation,gateRelocation,junction,wenceslas,cathedralSections,cathedralCobbles,cathedralGreen,arches,stairSurround,
       vratislava:cafeWalks.map(point=>({point,hit:cast([point[0],80,point[1]],[0,-1,0],50),ground:g.elevation(...point),blocked:g.blocked(point,g.elevation(...point))})),
       extensions:leopoldSidewalks.runs.flatMap((run,index)=>run.curb.filter((point,i)=>i%4===0&&(index===0 ? point[0]>134&&point[1]>178 : point[0]>130&&point[1]>196)).flatMap(point=>{
         const road=g.projectRoute(point,leopoldSidewalks.street.points).point,dx=point[0]-road[0],dz=point[1]-road[1],length=Math.hypot(dx,dz);
@@ -151,6 +164,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
         return {hit:down(probe),ground:g.featureElevation(street,probe)};
       }),
       pads:g.visitorFrontagePads.map(pad=>({level:pad.level,samples:pad.building.points.map(point=>g.elevation(...point))})),
+      cathedralFacades,
       distinctMotif:w.surfaceMaterials.get('mosaic','#d0ccbd').map!==w.surfaceMaterials.get('cobble','#b2b5ae').map,
       road:down(point),roadBlocked:g.blocked(point,g.elevation(...point))
     };
@@ -211,6 +225,31 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   expect(photoFixes.wenceslas.hoof.color).toBeDefined();
   expect(photoFixes.wenceslas.eagle.color).toBe('3b4540');
   expect(photoFixes.wenceslas.flag.color).toBe('dedbcd');
+  expect(photoFixes.cathedralSections.length).toBeGreaterThan(50);
+  for (const section of photoFixes.cathedralSections) {
+    for (const probe of section) {
+      expect(probe.hit.color, JSON.stringify(probe)).toBe('d0ccbd');
+      expect(
+        probe.hit.height - probe.ground,
+        JSON.stringify(probe),
+      ).toBeGreaterThan(0.055);
+    }
+    expect(section[1].blocked, JSON.stringify(section[1])).toBe(false);
+    expect(
+      Math.max(...section.map((probe) => probe.hit.height)) -
+        Math.min(...section.map((probe) => probe.hit.height)),
+    ).toBeLessThan(0.003 + 1e-5);
+  }
+  for (const probe of photoFixes.cathedralCobbles) {
+    expect(probe.hit.color, JSON.stringify(probe)).toBe('b2b5ae');
+    expect(probe.hit.height - probe.ground).toBeGreaterThan(0.04);
+  }
+  for (const probe of photoFixes.cathedralGreen)
+    expect(probe.hit.color, JSON.stringify(probe)).toBeUndefined();
+  for (const probe of photoFixes.cathedralFacades) {
+    expect(probe.hit.color, JSON.stringify(probe)).toBe('d0ccbd');
+    expect(probe.hit.height - probe.ground).toBeGreaterThan(0.055);
+  }
   for (const probe of photoFixes.arches) {
     expect(probe.hit.color, JSON.stringify(probe)).toBe('b2b5ae');
     expect(probe.hit.height - probe.ground, JSON.stringify(probe)).toBeCloseTo(
@@ -445,6 +484,8 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     w.raycaster.far=from.distanceTo(to)+1;
     const retainingHits=w.raycaster.intersectObjects(w.blockers,false).length;
     const terrain=w.blockers.filter(mesh=>mesh.name==='Terrain'||mesh.name==='Terrain rock');
+    const streetSurfaces=[...group.children,...w.scene.children.filter(mesh=>
+      mesh.isMesh&&!mesh.isInstancedMesh&&mesh.material===w.surfaceMaterials.get('mosaic','#d0ccbd'))];
     const renderedStreets=g.retainedStreetCorridors.flatMap(corridor=>
       s.samplePolyline(corridor.points,12).slice(1,-1).flatMap(point=>{
         const normal=g.projectRoute(point,corridor.points).normal;
@@ -452,7 +493,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
           const p=[point[0]+normal[0]*offset,point[1]+normal[1]*offset];
           w.raycaster.set(w.position.clone().set(p[0]*1.5,200,p[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=400;
           const earth=w.raycaster.intersectObjects(terrain,false)[0];
-          const paving=w.raycaster.intersectObjects(group.children,false)[0];
+          const paving=w.raycaster.intersectObjects(streetSurfaces,false)[0];
           const occupied=g.buildings.some(building=>building.tags.historic!=='city_gate'&&!g.meters(building.tags.min_height,0)&&g.inside(p,building.points)&&!building.holes.some(hole=>g.inside(p,hole)));
           return {point:p,occupied,earth:earth?.point.y/1.5,paving:paving?.point.y/1.5,material:paving?.object.name};
         });

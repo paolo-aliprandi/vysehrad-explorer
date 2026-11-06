@@ -639,12 +639,13 @@ describe('connected world surfaces', () => {
       [-210, -70],
       [-265, 20],
     ];
-    const surface = drapedPolygon(polygon, 0.025);
+    const surface = drapedPolygon(polygon, 0.025, unretainedElevation);
     const positions = surface.attributes.position;
     expect(positions.count).toBeGreaterThan(3);
     for (let i = 0; i < positions.count; i++)
       expect(
-        positions.getY(i) - elevation(positions.getX(i), positions.getZ(i)),
+        positions.getY(i) -
+          unretainedElevation(positions.getX(i), positions.getZ(i)),
       ).toBeCloseTo(0.025, 3);
     for (let i = 0; i < positions.count; i += 3) {
       const x =
@@ -653,7 +654,7 @@ describe('connected world surfaces', () => {
         (positions.getZ(i) + positions.getZ(i + 1) + positions.getZ(i + 2)) / 3;
       const y =
         (positions.getY(i) + positions.getY(i + 1) + positions.getY(i + 2)) / 3;
-      expect(y - elevation(x, z)).toBeCloseTo(0.025, 3);
+      expect(y - unretainedElevation(x, z)).toBeCloseTo(0.025, 3);
     }
     surface.dispose();
   });

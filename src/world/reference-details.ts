@@ -38,6 +38,10 @@ import {
   spickaFrontage,
   rotundaStreet,
   naHradbachStreet,
+  cathedralForecourt,
+  retainedStreetCorridors,
+  streetGrade,
+  karlachBorderBeds,
   pathWidth,
   gateOpenings,
   featureElevation,
@@ -818,15 +822,183 @@ export const leopoldInteriorPaving = (() => {
   };
 })();
 
-export function makeLeopoldInteriorSidewalks(add: AddGeometry) {
-  for (const side of leopoldInteriorPaving.sidewalks) {
+export const cathedralPaving = (() => {
+  const street = retainedStreetCorridors.find(
+    (street) => street.feature.id === 587280816,
+  );
+  if (!street) throw new Error('Missing chapter street sidewalk reference.');
+  const ring = (polygon: readonly Point[]): Polygon => [
+    polygon.map(([x, z]) => [x, z]),
+  ];
+  const frontage = (outer: Point[]) => {
+    const curb = samplePolyline(outer, 0.8).map((point): Point => {
+      const road = projectRoute(point, cathedralForecourt.points);
+      return [
+        point[0] + ((road.point[0] - point[0]) * 1.3) / road.distance,
+        point[1] + ((road.point[1] - point[1]) * 1.3) / road.distance,
+      ];
+    });
+    return {
+      feature: cathedralForecourt.feature,
+      curb,
+      polygons: polygonBoolean(
+        'intersection',
+        [ring([...outer, ...[...curb].reverse()])],
+        [ring(cathedralForecourt.polygon)],
+      ),
+    };
+  };
+  const frontages = [
+    frontage([
+      [-250.7, -10.1],
+      [-249.6, -7.2],
+      [-247.8, -5.7],
+      [-246.9, -3.35],
+      [-244.85, -3.95],
+      [-219.05, -11.93],
+      [-218.58, -9.22],
+      [-215.15, -8.97],
+    ]),
+    frontage([
+      [-254.65, 3.4],
+      [-250.4, 6.1],
+      [-246.7, 8.7],
+      [-243.15, 11.55],
+      [-233.55, 11.95],
+      [-233.2, 16.1],
+      [-233.3, 24.5],
+      [-234.05, 28.3],
+      [-228.4, 30.4],
+      [-224.25, 30.55],
+    ]),
+  ];
+  const samples = samplePolyline(street.points, 0.8).filter(
+    (point) => point[0] > -114.1 && point[0] < 30,
+  );
+  const frontageBuildings = buildings.filter((building) =>
+    [
+      365342400, 459551122, 1054906226, 49810431, 49810430, 49810440, 49810441,
+      49810593, 56084055,
+    ].includes(building.id),
+  );
+  for (const sign of [-1, 1]) {
+    const offset = (point: Point, distance: number): Point => {
+      const { normal } = projectRoute(point, street.points);
+      return [
+        point[0] + normal[0] * sign * distance,
+        point[1] + normal[1] * sign * distance,
+      ];
+    };
+    const widths = samples.map((point) => {
+      const { normal } = projectRoute(point, street.points);
+      const nx = normal[0] * sign,
+        nz = normal[1] * sign;
+      let width =
+        sign < 0
+          ? 4.1
+          : 5.4 - Math.max(0, Math.min(1, (point[0] + 5) / 10)) * 0.4;
+      let facade = Infinity;
+      const boundaries = [
+        ...frontageBuildings.map((building) => building.points),
+        street.polygon,
+      ];
+      for (const [index, boundary] of boundaries.entries())
+        for (let i = 1; i < boundary.length; i++) {
+          const a = boundary[i - 1],
+            b = boundary[i];
+          const dx = b[0] - a[0],
+            dz = b[1] - a[1];
+          const determinant = nx * dz - nz * dx;
+          if (Math.abs(determinant) < 1e-8) continue;
+          const qx = a[0] - point[0],
+            qz = a[1] - point[1];
+          const distance = (qx * dz - qz * dx) / determinant;
+          const fraction = (qx * nz - qz * nx) / determinant;
+          if (distance > 0 && fraction >= 0 && fraction <= 1) {
+            width = Math.min(width, distance - 0.25);
+            if (index < frontageBuildings.length)
+              facade = Math.min(facade, distance);
+          }
+        }
+      const clear = (distance: number) =>
+        [0, 0.65].every((inset) => {
+          const sample = offset(point, distance - inset);
+          return frontageBuildings.every(
+            (building) =>
+              !inside(sample, building.points) &&
+              projectRoute(sample, building.points).distance >=
+                (inset ? 0.72 : 0.25),
+          );
+        });
+      if (!clear(width)) {
+        if (!clear(0))
+          throw new Error('The chapter street has no clear sidewalk approach.');
+        let low = 0,
+          high = width;
+        for (let i = 0; i < 12; i++) {
+          const middle = (low + high) / 2;
+          if (clear(middle)) low = middle;
+          else high = middle;
+        }
+        width = low;
+      }
+      return {
+        curb: width - 1.3,
+        outer:
+          sign > 0 &&
+          facade <= width + 1.3 &&
+          inside(offset(point, facade - 0.02), street.polygon)
+            ? facade + 0.02
+            : width,
+      };
+    });
+    const curb = samples.map((point, i) => offset(point, widths[i].curb));
+    const outer = samples.map((point, i) => offset(point, widths[i].outer));
+    frontages.push({
+      feature: street.feature,
+      curb,
+      polygons: [ring([...curb, ...[...outer].reverse()])],
+    });
+  }
+  const obstacles = frontageBuildings.map((building) => ring(building.points));
+  const sidewalks = frontages.map((side) => ({
+    ...side,
+    polygons: polygonBoolean(
+      'difference',
+      side.polygons,
+      obstacles,
+      karlachBorderBeds,
+    ),
+  }));
+  return {
+    feature: cathedralForecourt.feature,
+    polygon: cathedralForecourt.polygon,
+    sidewalks,
+    grade: (feature: Feature, point: Point) =>
+      streetGrade(
+        feature.id === street.feature.id ? street : cathedralForecourt,
+        point,
+      ),
+  };
+})();
+
+function makeRaisedSidewalks(
+  sides: readonly {
+    feature: Feature;
+    curb: readonly Point[];
+    polygons: readonly Polygon[];
+  }[],
+  add: AddGeometry,
+  grade = featureElevation,
+) {
+  for (const side of sides) {
     for (const polygon of side.polygons)
       add(
         '#d0ccbd',
         drapedPolygon(
           polygon[0],
           0.075,
-          (x, z) => featureElevation(side.feature, [x, z]),
+          (x, z) => grade(side.feature, [x, z]),
           polygon.slice(1),
           true,
           true,
@@ -847,10 +1019,7 @@ export function makeLeopoldInteriorSidewalks(add: AddGeometry) {
           positions.setY(
             i,
             positions.getY(i) +
-              featureElevation(side.feature, [
-                positions.getX(i),
-                positions.getZ(i),
-              ]),
+              grade(side.feature, [positions.getX(i), positions.getZ(i)]),
           );
         geometry.computeVertexNormals();
         add('#a7a89d', geometry, 'stone');
@@ -878,6 +1047,14 @@ export function makeLeopoldInteriorSidewalks(add: AddGeometry) {
     }
     emit();
   }
+}
+
+export function makeCathedralSidewalks(add: AddGeometry) {
+  makeRaisedSidewalks(cathedralPaving.sidewalks, add, cathedralPaving.grade);
+}
+
+export function makeLeopoldInteriorSidewalks(add: AddGeometry) {
+  makeRaisedSidewalks(leopoldInteriorPaving.sidewalks, add);
   for (const polygon of leopoldInteriorPaving.entrance)
     add(
       '#d0ccbd',
@@ -2611,6 +2788,7 @@ export function makeReferenceDetails(add: AddGeometry) {
   makeLeopoldCurbs(add);
   makeVratislavaSidewalks(add);
   makeLeopoldInteriorSidewalks(add);
+  makeCathedralSidewalks(add);
   makeCitadela(add);
   makeGardenReferences(add);
   makeGardenKiosk(add);
