@@ -124,6 +124,32 @@ describe('rationalized paving', () => {
         new THREE.Vector3(0, -1, 0),
       );
       expect(ray.intersectObjects(meshes)).toHaveLength(0);
+      const [a, b] = rotundaStreet.points.slice(3, 5);
+      for (const fraction of [0.35, 0.65, 0.85]) {
+        const road: Point = [
+          a[0] + (b[0] - a[0]) * fraction,
+          a[1] + (b[1] - a[1]) * fraction,
+        ];
+        const { normal } = projectRoute(road, rotundaStreet.points);
+        for (const offset of [-3.2, 4.7]) {
+          const point: Point = [
+            road[0] + normal[0] * offset,
+            road[1] + normal[1] * offset,
+          ];
+          ray.set(
+            new THREE.Vector3(point[0], 60, point[1]),
+            new THREE.Vector3(0, -1, 0),
+          );
+          const hit = ray.intersectObjects(meshes)[0];
+          expect(
+            hit,
+            'Cobble replaces the previous sidewalk position',
+          ).toBeDefined();
+          expect(
+            hit.point.y - featureElevation(rotundaStreet.feature, point),
+          ).toBeCloseTo(0.055, 2);
+        }
+      }
     } finally {
       meshes.forEach((mesh) => mesh.geometry.dispose());
       material.dispose();

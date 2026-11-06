@@ -1246,5 +1246,22 @@ describe('OSM world and movement', () => {
         gate.center[1] + gate.axis[1] * 3,
       ]),
     ).toBe(false);
+    for (const point of [
+      [79.579454507571, 151.30175403816116],
+      [72.34829518278998, 141.22547929819868],
+    ] as Point[]) {
+      expect(inside(point, gate.feature.points)).toBe(true);
+      expect(
+        blocked(point),
+        'The mapped wing envelope must not block open sidewalks',
+      ).toBe(false);
+    }
+    expect(
+      blocked([
+        gate.center[0] + gate.axis[0] * 2.7,
+        gate.center[1] + gate.axis[1] * 2.7,
+      ]),
+      'Keep the actual gate pier solid',
+    ).toBe(true);
   });
 });

@@ -505,9 +505,21 @@ export const leopoldInteriorPaving = (() => {
     polygon.map(([x, z]) => [x, z]),
   ];
   const doorwayRoad = ribbon(doorway.points, pathWidth(doorway));
+  const bankAt = (point: Point): Point => {
+    const road = projectRoute(point, rotundaStreet.points);
+    const side = Math.sign(
+      (point[0] - road.point[0]) * road.normal[0] +
+        (point[1] - road.point[1]) * road.normal[1],
+    );
+    const offset = side * (rotundaStreet.cutHalfWidth - 0.65);
+    return [
+      road.point[0] + road.normal[0] * offset,
+      road.point[1] + road.normal[1] * offset,
+    ];
+  };
   const easternBorder = easternWalk.points.slice(0, 5).map((point): Point => {
     const wall = projectRoute(point, rotundaWall.points);
-    if (wall.distance > 4) return point;
+    if (wall.distance > 4) return bankAt(point);
     const road = projectRoute(wall.point, rotundaStreet.points).point;
     const dx = road[0] - wall.point[0],
       dz = road[1] - wall.point[1];
@@ -534,7 +546,7 @@ export const leopoldInteriorPaving = (() => {
     ];
   };
   const westernBorder = [
-    ...westernWalk.points,
+    ...westernWalk.points.map(bankAt),
     ...rotundaStreet.points
       .slice()
       .reverse()

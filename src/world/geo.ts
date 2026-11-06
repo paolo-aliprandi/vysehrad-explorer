@@ -3057,11 +3057,13 @@ export const rotundaStreet = (() => {
       ...edges.map((edge) => edge[1]).reverse(),
     ]);
   };
-  const polygon = outline(width / 2 + 5);
+  const cutHalfWidth = width / 2 + 5;
+  const polygon = outline(cutHalfWidth);
   return {
     feature,
     points: feature.points,
     width,
+    cutHalfWidth,
     levels: feature.points.map((point) => unretainedElevation(...point)),
     polygon,
     pavingPolygon: outline(width / 2),
@@ -4609,11 +4611,19 @@ export function gateOpenings(feature: Feature) {
 
 export const gateBuildings = [...buildings, gardenPortal]
   .filter((f) => f.tags.historic === 'city_gate')
-  .map((feature) => ({
-    feature,
-    ...gateFrame(feature),
-    openings: gateOpenings(feature),
-  }));
+  .map((feature) => {
+    const frame = gateFrame(feature);
+    return {
+      feature,
+      ...frame,
+      // Leopold's mapped wing envelope includes open ground beside the facade.
+      footprint:
+        feature.id === 51718887
+          ? framePolygon(frame, frame.width, Math.max(2.2, frame.depth))
+          : feature.points,
+      openings: gateOpenings(feature),
+    };
+  });
 
 export const casemateDoor = (() => {
   const { point, normal, wall } = casemateEntrance;
@@ -5944,7 +5954,7 @@ export function blocked(
   if (
     gateBuildings.some(
       (g) =>
-        inside(point, g.feature.points) &&
+        inside(point, g.footprint) &&
         !(onUpper && g.feature.id === brickGateId),
     ) &&
     !gatePassage(point, height)
@@ -6045,6 +6055,10 @@ for (const [index, [u, v]] of [
   });
 
 // Keep surveyed seats; additions are confined to the pub garden.
+const leopoldInteriorFurnitureStart = projectRoute(
+  naHradbachStreet.points[naHradbachStreet.points.length - 1],
+  rotundaStreet.points,
+).along;
 for (const detail of siteDetails) {
   const bench = detail.tags.amenity === 'bench',
     lamp = detail.tags.highway === 'street_lamp';
@@ -6075,6 +6089,24 @@ for (const detail of siteDetails) {
           nearest.point[1] - detail.point[1],
         );
   const candidates: Point[] = [detail.point];
+  if (lamp) {
+    const road = projectRoute(detail.point, rotundaStreet.points);
+    if (
+      road.along > leopoldInteriorFurnitureStart &&
+      road.distance > rotundaStreet.width / 2 &&
+      inside(detail.point, rotundaStreet.polygon)
+    ) {
+      const side = Math.sign(
+        (detail.point[0] - road.point[0]) * road.normal[0] +
+          (detail.point[1] - road.point[1]) * road.normal[1],
+      );
+      const offset = side * (rotundaStreet.cutHalfWidth - 1.1);
+      candidates[0] = [
+        road.point[0] + road.normal[0] * offset,
+        road.point[1] + road.normal[1] * offset,
+      ];
+    }
+  }
   if (bench)
     for (let radius = 0.5; radius <= 4; radius += 0.5)
       for (let step = 0; step < 16; step++) {

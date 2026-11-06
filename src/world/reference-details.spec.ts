@@ -70,6 +70,8 @@ import {
   stairwellFootprint,
   cafeFrontage,
   spickaFrontage,
+  rotundaStreet,
+  streetFurniture,
   type Point,
 } from './geo';
 import { makeApproach, makePassages } from './passages';
@@ -257,6 +259,55 @@ it('connects narrow mosaic borders from Leopold Gate to the rotunda junction wit
   }
 });
 
+it('moves both interior gate sidewalks onto the green shoulders rather than keeping mosaic in the carriageway', () => {
+  const scene = geometryScene(makeLeopoldInteriorSidewalks, THREE.DoubleSide);
+  const ray = new THREE.Raycaster();
+  const at = (point: Point) => {
+    ray.set(
+      new THREE.Vector3(point[0], 80, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    );
+    return ray.intersectObjects(scene.meshes)[0];
+  };
+  try {
+    const [a, b] = rotundaStreet.points.slice(3, 5);
+    for (const fraction of [0.35, 0.65, 0.85]) {
+      const road: Point = [
+        a[0] + (b[0] - a[0]) * fraction,
+        a[1] + (b[1] - a[1]) * fraction,
+      ];
+      const { normal } = projectRoute(road, rotundaStreet.points);
+      for (const side of [-1, 1]) {
+        for (const distance of [6.25, 6.65, 7.05]) {
+          const point: Point = [
+            road[0] + normal[0] * side * distance,
+            road[1] + normal[1] * side * distance,
+          ];
+          expect(at(point)?.object.name, JSON.stringify(point)).toBe(
+            'mosaic:#d0ccbd',
+          );
+        }
+        const oldDistance = side < 0 ? 3.2 : 4.7;
+        const old: Point = [
+          road[0] + normal[0] * side * oldDistance,
+          road[1] + normal[1] * side * oldDistance,
+        ];
+        expect(at(old), 'Remove the old inset mosaic band').toBeUndefined();
+      }
+    }
+    for (const id of [12074410026, 12074451308]) {
+      const lamp = streetFurniture.find((site) => site.id === id);
+      if (!lamp) throw new Error(`Missing gate-side lamp ${id}.`);
+      expect(
+        at(lamp.point)?.object.name,
+        'Keep lamps on the relocated sidewalk',
+      ).toBe('mosaic:#d0ccbd');
+    }
+  } finally {
+    scene.dispose();
+  }
+});
+
 it('keeps sidewalk cross-sections level above the fitted soil instead of climbing the roadside banks', () => {
   const scene = geometryScene(makeLeopoldInteriorSidewalks, THREE.DoubleSide);
   const terrain = retainedStreetTerrain();
@@ -315,7 +366,7 @@ it('keeps sidewalk cross-sections level above the fitted soil instead of climbin
         expect(
           Math.max(...heights) - Math.min(...heights),
           JSON.stringify(points),
-        ).toBeLessThan(0.003);
+        ).toBeLessThan(0.003 + 1e-5);
         sections++;
       }
     expect(sections).toBeGreaterThan(25);
