@@ -257,6 +257,88 @@ it('connects narrow mosaic borders from Leopold Gate to the rotunda junction wit
   }
 });
 
+it('keeps sidewalk cross-sections level above the fitted soil instead of climbing the roadside banks', () => {
+  const scene = geometryScene(makeLeopoldInteriorSidewalks, THREE.DoubleSide);
+  const terrain = retainedStreetTerrain();
+  const ray = new THREE.Raycaster();
+  try {
+    let sections = 0;
+    for (const side of leopoldInteriorPaving.sidewalks)
+      for (const curb of side.curb.filter((_point, i) => i % 8 === 4)) {
+        const road = projectRoute(curb, side.feature.points);
+        const a = side.feature.points[road.segment],
+          b = side.feature.points[road.segment + 1];
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (Math.min(road.fraction, 1 - road.fraction) * length < 1.5) continue;
+        const sign = Math.sign(
+          (curb[0] - road.point[0]) * road.normal[0] +
+            (curb[1] - road.point[1]) * road.normal[1],
+        );
+        const points = [0.18, 0.65, 1.12].map(
+          (offset): Point => [
+            curb[0] + road.normal[0] * sign * offset,
+            curb[1] + road.normal[1] * sign * offset,
+          ],
+        );
+        if (
+          points.some(
+            (point) =>
+              projectRoute(point, side.feature.points).segment !== road.segment,
+          )
+        )
+          continue;
+        if (
+          !points.every((point) =>
+            side.polygons.some(
+              (polygon) =>
+                inside(point, polygon[0]) &&
+                !polygon.slice(1).some((hole) => inside(point, hole)),
+            ),
+          )
+        )
+          continue;
+        const heights = points.map((point) => {
+          ray.set(
+            new THREE.Vector3(point[0], 80, point[1]),
+            new THREE.Vector3(0, -1, 0),
+          );
+          const hit = ray.intersectObjects(scene.meshes)[0];
+          expect(hit?.object.name, JSON.stringify(point)).toBe(
+            'mosaic:#d0ccbd',
+          );
+          expect(
+            hit.point.y - terrain.heightAt(point),
+            `Soil below ${JSON.stringify(point)}`,
+          ).toBeGreaterThan(0.055);
+          return hit.point.y;
+        });
+        expect(
+          Math.max(...heights) - Math.min(...heights),
+          JSON.stringify(points),
+        ).toBeLessThan(0.003);
+        sections++;
+      }
+    expect(sections).toBeGreaterThan(25);
+    for (const point of [
+      [60.5, 96],
+      [60.2, 102],
+      [60.7, 110],
+    ] as Point[]) {
+      ray.set(
+        new THREE.Vector3(point[0], 80, point[1]),
+        new THREE.Vector3(0, -1, 0),
+      );
+      expect(
+        ray.intersectObjects(scene.meshes)[0]?.object.name,
+        'Continue the western rotunda border',
+      ).toBe('mosaic:#d0ccbd');
+    }
+  } finally {
+    scene.dispose();
+    for (const geometry of terrain.geometries) geometry.dispose();
+  }
+});
+
 it('raises patterned Leopold sidewalks two centimetres above the road, leaving the gate and carriageway open', () => {
   const scene = geometryScene(makeLeopoldCurbs, THREE.DoubleSide);
   const street = leopoldSidewalks.street;

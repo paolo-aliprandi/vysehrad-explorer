@@ -19,6 +19,7 @@ import {
   retainedStreetCorridors,
   retainedStreetSurfaceElevation,
   rotundaStreet,
+  naHradbachStreet,
   aveMariaCourtCuts,
   aveMariaFrontage,
   karlachBorderBeds,
@@ -528,9 +529,11 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
 
 export function pavingGeometry(surface: PavingSurface) {
   const { feature } = surface;
-  const road = [...retainedStreetCorridors, rotundaStreet].find(
-    (area) => area.feature.id === feature.id,
-  );
+  const road = [
+    ...retainedStreetCorridors,
+    rotundaStreet,
+    naHradbachStreet,
+  ].find((area) => area.feature.id === feature.id);
   const vertices: number[] = [];
   for (const polygon of surface.polygons) {
     const rings = polygon.map((ring) => ring.map(([x, z]): Point => [x, z]));

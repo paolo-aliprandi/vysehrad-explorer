@@ -2779,6 +2779,16 @@ export function elevation(x: number, z: number) {
   const ground = unretainedElevation(x, z);
   const section = retainedStreetSection([x, z]);
   if (section) return retainedStreetElevation(section, ground);
+  const point: Point = [x, z];
+  if (
+    x >= naHradbachStreet.minX &&
+    x <= naHradbachStreet.maxX &&
+    z >= naHradbachStreet.minZ &&
+    z <= naHradbachStreet.maxZ &&
+    inside(point, naHradbachStreet.polygon) &&
+    projectRoute(point, rotundaStreet.points).distance > rotundaStreet.width / 2
+  )
+    return streetGrade(naHradbachStreet, point);
   if (
     x >= rotundaStreet.minX &&
     x <= rotundaStreet.maxX &&
@@ -2786,17 +2796,7 @@ export function elevation(x: number, z: number) {
     z <= rotundaStreet.maxZ &&
     inside([x, z], rotundaStreet.polygon)
   ) {
-    const projection = projectRoute([x, z], rotundaStreet.points);
-    const start = rotundaStreet.levels[projection.segment];
-    const level =
-      start +
-      (rotundaStreet.levels[projection.segment + 1] - start) *
-        projection.fraction;
-    return (
-      ground +
-      (level - ground) *
-        (1 - smooth(projection.distance - rotundaStreet.width / 2 - 4))
-    );
+    return streetGrade(rotundaStreet, point);
   }
   const bank = retainedStreetBanks.find(
     (bank) =>
@@ -3071,9 +3071,55 @@ export const rotundaStreet = (() => {
     maxZ: Math.max(...polygon.map((point) => point[1])),
   };
 })();
+export function streetGrade(
+  street: { points: readonly Point[]; levels: readonly number[] },
+  point: Point,
+) {
+  const projection = projectRoute(point, street.points);
+  const start = street.levels[projection.segment];
+  return (
+    start +
+    (street.levels[projection.segment + 1] - start) * projection.fraction
+  );
+}
+export const naHradbachStreet = (() => {
+  const feature = paths.find((path) => path.id === 370193790);
+  if (!feature) throw new Error('Missing Na hradbach approach.');
+  const width = pathWidth(feature);
+  const edges = feature.points.map((point) => {
+    const { normal } = projectRoute(point, feature.points);
+    return [-1, 1].map(
+      (side): Point => [
+        point[0] + normal[0] * side * (width / 2 + 1.3),
+        point[1] + normal[1] * side * (width / 2 + 1.3),
+      ],
+    );
+  });
+  const polygon = streetOutline([
+    ...edges.map((edge) => edge[0]),
+    ...edges.map((edge) => edge[1]).reverse(),
+  ]);
+  const levels = feature.points.map((point) => unretainedElevation(...point));
+  levels[levels.length - 1] = streetGrade(
+    rotundaStreet,
+    feature.points[feature.points.length - 1],
+  );
+  return {
+    feature,
+    points: feature.points,
+    width,
+    levels,
+    polygon,
+    minX: Math.min(...polygon.map((point) => point[0])),
+    maxX: Math.max(...polygon.map((point) => point[0])),
+    minZ: Math.min(...polygon.map((point) => point[1])),
+    maxZ: Math.max(...polygon.map((point) => point[1])),
+  };
+})();
 export const retainedStreetAreas = [
   ...retainedStreetCorridors,
   retainedStreetAccess,
+  naHradbachStreet,
   rotundaStreet,
   ...retainedStreetBanks,
 ];
@@ -3081,6 +3127,13 @@ export function retainedStreetSurfaceElevation(
   area: { polygon: readonly Point[] },
   point: Point,
 ) {
+  if (area === rotundaStreet) {
+    const section = retainedStreetSection(point);
+    return section
+      ? retainedStreetElevation(section, unretainedElevation(...point))
+      : streetGrade(rotundaStreet, point);
+  }
+  if (area === naHradbachStreet) return streetGrade(naHradbachStreet, point);
   // Keep shared cell-corner samples on the graded side of the retaining cut.
   const sample = inside(point, area.polygon)
     ? point
@@ -3567,7 +3620,10 @@ export function featureElevation(feature: Feature, point: Point) {
     const gallery = riversideGallerySupport(point);
     if (gallery) return gallery.floor + (feature.id === 78879996 ? 0.18 : 0);
   }
-  if (feature.id === rotundaStreet.feature.id) return elevation(...point);
+  if (feature.id === rotundaStreet.feature.id)
+    return streetGrade(rotundaStreet, point);
+  if (feature.id === naHradbachStreet.feature.id)
+    return streetGrade(naHradbachStreet, point);
   if (pevnostiIds.includes(feature.id)) return originalElevation(...point);
   return lowerGatePathIds.has(feature.id) ||
     posternIds.has(feature.id) ||

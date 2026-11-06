@@ -37,6 +37,7 @@ import {
   cafeFrontage,
   spickaFrontage,
   rotundaStreet,
+  naHradbachStreet,
   pathWidth,
   gateOpenings,
   featureElevation,
@@ -503,7 +504,6 @@ export const leopoldInteriorPaving = (() => {
   const ring = (polygon: readonly Point[]): Polygon => [
     polygon.map(([x, z]) => [x, z]),
   ];
-  const branchRoad = ribbon(branch.points, pathWidth(branch));
   const doorwayRoad = ribbon(doorway.points, pathWidth(doorway));
   const easternBorder = easternWalk.points.slice(0, 5).map((point): Point => {
     const wall = projectRoute(point, rotundaWall.points);
@@ -518,9 +518,36 @@ export const leopoldInteriorPaving = (() => {
       wall.point[1] + (dz / distance) * inset,
     ];
   });
+  const lastEastern = projectRoute(
+    easternBorder[easternBorder.length - 1],
+    rotundaStreet.points,
+  );
+  const westernEnd = projectRoute(
+    westernWalk.points[westernWalk.points.length - 1],
+    rotundaStreet.points,
+  ).along;
+  const westAt = (point: Point): Point => {
+    const { normal } = projectRoute(point, rotundaStreet.points);
+    return [
+      point[0] + normal[0] * (rotundaStreet.width / 2 + 0.65),
+      point[1] + normal[1] * (rotundaStreet.width / 2 + 0.65),
+    ];
+  };
+  const westernBorder = [
+    ...westernWalk.points,
+    ...rotundaStreet.points
+      .slice()
+      .reverse()
+      .filter((point) => {
+        const { along } = projectRoute(point, rotundaStreet.points);
+        return along < westernEnd - 1 && along > lastEastern.along + 1;
+      })
+      .map(westAt),
+    westAt(lastEastern.point),
+  ];
   const sides = [
     { feature: rotundaStreet.feature, points: easternBorder },
-    { feature: rotundaStreet.feature, points: westernWalk.points },
+    { feature: rotundaStreet.feature, points: westernBorder },
     ...[-1, 1].map((side) => ({
       feature: branch,
       points: ribbonEdges(
@@ -568,7 +595,17 @@ export const leopoldInteriorPaving = (() => {
     );
     return [...face, ...roadward.reverse()];
   });
-  const crossings = [branchRoad, doorwayRoad, arches[0], arches[1], arches[2]];
+  const crossingPaths = [24376646, 1234078049].map((id) => {
+    const path = paths.find((feature) => feature.id === id);
+    if (!path) throw new Error(`Missing rotunda crossing ${id}.`);
+    return ribbon(path.points, pathWidth(path));
+  });
+  const crossings = [
+    naHradbachStreet.polygon,
+    doorwayRoad,
+    ...arches,
+    ...crossingPaths,
+  ];
   const sidewalks = sides.map((side) => ({
     ...side,
     polygons: polygonBoolean(
@@ -624,6 +661,7 @@ export const leopoldInteriorPaving = (() => {
         side.polygons.map((polygon) => polygon[0]),
       ),
       ...arches,
+      ...roads.flatMap((road) => road.polygons),
       ...entrance,
       ...stairStrips.map((polygon) => polygon[0]),
     ],
