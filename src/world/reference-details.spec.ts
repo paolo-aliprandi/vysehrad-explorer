@@ -308,6 +308,43 @@ it('moves both interior gate sidewalks onto the green shoulders rather than keep
   }
 });
 
+it('rounds both rotunda junction corners without leaving mosaic spurs in the carriageway', () => {
+  const scene = geometryScene(makeLeopoldInteriorSidewalks, THREE.DoubleSide);
+  const terrain = retainedStreetTerrain();
+  const ray = new THREE.Raycaster();
+  const at = (point: Point) => {
+    ray.set(
+      new THREE.Vector3(point[0], 80, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    );
+    return ray.intersectObjects(scene.meshes)[0];
+  };
+  try {
+    for (const point of [
+      [69, 114.6],
+      [68.9, 112],
+      [70.7, 114.6],
+      [74.4, 120.4],
+      [76, 118.2],
+    ] as Point[]) {
+      const hit = at(point);
+      expect(hit?.object.name, JSON.stringify(point)).toBe('mosaic:#d0ccbd');
+      expect(hit.point.y - terrain.heightAt(point)).toBeGreaterThan(0.055);
+      expect(blocked(point)).toBe(false);
+    }
+    for (const point of [
+      [69, 116.5],
+      [71.1, 121.3],
+      [75.2, 110.5],
+      [78, 119.5],
+    ] as Point[])
+      expect(at(point), JSON.stringify(point)).toBeUndefined();
+  } finally {
+    scene.dispose();
+    for (const geometry of terrain.geometries) geometry.dispose();
+  }
+});
+
 it('keeps sidewalk cross-sections level above the fitted soil instead of climbing the roadside banks', () => {
   const scene = geometryScene(makeLeopoldInteriorSidewalks, THREE.DoubleSide);
   const terrain = retainedStreetTerrain();
@@ -315,7 +352,7 @@ it('keeps sidewalk cross-sections level above the fitted soil instead of climbin
   try {
     let sections = 0;
     for (const side of leopoldInteriorPaving.sidewalks)
-      for (const curb of side.curb.filter((_point, i) => i % 8 === 4)) {
+      for (const curb of side.curb.filter((_point, i) => i % 6 === 3)) {
         const road = projectRoute(curb, side.feature.points);
         const a = side.feature.points[road.segment],
           b = side.feature.points[road.segment + 1];

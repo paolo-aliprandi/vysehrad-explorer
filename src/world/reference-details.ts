@@ -618,19 +618,157 @@ export const leopoldInteriorPaving = (() => {
     ...arches,
     ...crossingPaths,
   ];
+  const corner = (
+    start: Point,
+    controls: readonly [Point, Point, Point, Point, Point, Point],
+    outer: Point[],
+    roadward: Point[],
+  ) => {
+    const curve = new THREE.CurvePath<THREE.Vector2>();
+    const [a, b, middle, c, d, end] = controls;
+    curve.add(
+      new THREE.CubicBezierCurve(
+        new THREE.Vector2(...start),
+        new THREE.Vector2(...a),
+        new THREE.Vector2(...b),
+        new THREE.Vector2(...middle),
+      ),
+    );
+    curve.add(
+      new THREE.CubicBezierCurve(
+        new THREE.Vector2(...middle),
+        new THREE.Vector2(...c),
+        new THREE.Vector2(...d),
+        new THREE.Vector2(...end),
+      ),
+    );
+    const curb: Point[] = curve.getSpacedPoints(32).map(({ x, y }) => [x, y]);
+    return {
+      curb,
+      polygon: [...curb, ...outer],
+      mask: [start, ...roadward, end, ...outer],
+    };
+  };
+  const northStart = projectRoute([68.4, 108], sides[0].curb).point;
+  const northEnd = projectRoute([78, 111], sides[2].curb).point;
+  const southStart = projectRoute([79, 127], sides[0].curb).point;
+  const southEnd = projectRoute([81, 115], sides[3].curb).point;
+  const outerAt = (point: Point, side: (typeof sides)[number]): Point => {
+    const { normal } = projectRoute(point, side.curb);
+    const road = projectRoute(point, side.feature.points).point;
+    const sign = Math.sign(
+      (point[0] - road[0]) * normal[0] + (point[1] - road[1]) * normal[1],
+    );
+    return [
+      point[0] + normal[0] * sign * 1.3,
+      point[1] + normal[1] * sign * 1.3,
+    ];
+  };
+  const corners = [
+    corner(
+      northStart,
+      [
+        [northStart[0], 112.9],
+        [68.2, 115.4],
+        [69.7, 115.4],
+        [71.2, 115.4],
+        [northEnd[0] - 2, northEnd[1] + 1.3],
+        northEnd,
+      ],
+      [
+        outerAt(northEnd, sides[2]),
+        [71.15, 114.65],
+        [69.72, 108.7],
+        outerAt(northStart, sides[0]),
+      ],
+      [
+        [65, 108],
+        [65, 120],
+        [75, 120],
+      ],
+    ),
+    corner(
+      southStart,
+      [
+        [southStart[0] - 1.5, southStart[1] - 2.4],
+        [72.7, 121.4],
+        [73.7, 119.9],
+        [74.7, 118.4],
+        [southEnd[0] - 2, southEnd[1] + 1.3],
+        southEnd,
+      ],
+      [
+        outerAt(southEnd, sides[3]),
+        [75.4, 119.4],
+        outerAt(southStart, sides[0]),
+      ],
+      [
+        [68, 128],
+        [67, 118],
+        [76, 115],
+      ],
+    ),
+  ];
+  const mainRoads = sides
+    .filter((side) => side.feature === rotundaStreet.feature)
+    .map((side) => [ring(side.road)]);
   const sidewalks = sides.map((side) => ({
     ...side,
     polygons: polygonBoolean(
       'difference',
       [ring(side.polygon)],
+      ...corners.map((corner) => [ring(corner.mask)]),
       ...(side.feature === rotundaStreet.feature
         ? crossings.map((polygon) => [ring(polygon)])
-        : [[ring(rotundaStreet.pavingPolygon)], [ring(doorwayRoad)]]),
+        : [
+            [ring(rotundaStreet.pavingPolygon)],
+            ...mainRoads,
+            [ring(doorwayRoad)],
+          ]),
     ),
   }));
+  for (const corner of corners) {
+    for (const feature of [rotundaStreet.feature, branch]) {
+      const polygons = polygonBoolean(
+        feature === branch ? 'intersection' : 'difference',
+        [ring(corner.polygon)],
+        [ring(naHradbachStreet.polygon)],
+      );
+      sidewalks.push({
+        feature,
+        curb: corner.curb,
+        polygon: corner.polygon,
+        road: [],
+        polygons: polygonBoolean(
+          'difference',
+          polygons,
+          ...[doorwayRoad, ...crossingPaths].map((polygon) => [ring(polygon)]),
+        ),
+      });
+    }
+  }
+  const roadRuns = [
+    ...sides.map((side) => ({ feature: side.feature, polygons: [side.road] })),
+    ...corners.map((corner) => ({
+      feature: rotundaStreet.feature,
+      polygons: [corner.mask],
+    })),
+    { feature: rotundaStreet.feature, polygons: [rotundaStreet.pavingPolygon] },
+  ];
   const roads = [
     { feature: passage, polygons: arches },
-    ...sides.map((side) => ({ feature: side.feature, polygons: [side.road] })),
+    ...roadRuns.flatMap((road) =>
+      road.feature === rotundaStreet.feature
+        ? [rotundaStreet.feature, branch].map((feature) => ({
+            feature,
+            polygons: polygonBoolean(
+              feature === branch ? 'intersection' : 'difference',
+              road.polygons.map(ring),
+              [ring(naHradbachStreet.polygon)],
+            ).map((polygon) => polygon[0].map(([x, z]): Point => [x, z])),
+          }))
+        : [road],
+    ),
   ];
   const stairCenter = center(stairwellFootprint);
   const stairAlong = projectRoute(

@@ -2449,6 +2449,47 @@ it('matches rendered stair treads to their discrete walking surfaces', () => {
   geometries.forEach((geometry) => geometry.dispose());
 });
 
+it('gives the photographed Wenceslas horse a raised foreleg and a forked eagle standard', () => {
+  const statue = sculptures.find((site) => site.id === 1200790222);
+  if (!statue) throw new Error('Missing equestrian Saint Wenceslas.');
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const meshes: THREE.Mesh[] = [];
+  makeMonuments((color, geometry) => {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = color;
+    meshes.push(mesh);
+  });
+  const ground = elevation(...statue.point);
+  const across = (y: number, z: number, distance = 1.2) => {
+    const origin = new THREE.Vector3(-1.2, 1.6 + y, z)
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), statue.angle)
+      .add(new THREE.Vector3(statue.point[0], ground, statue.point[1]));
+    const direction = new THREE.Vector3(1, 0, 0).applyAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      statue.angle,
+    );
+    return new THREE.Raycaster(origin, direction, 0, distance).intersectObjects(
+      meshes,
+    )[0];
+  };
+  try {
+    expect(
+      across(0.3, 0.625),
+      'Clear air under the lifted foreleg',
+    ).toBeUndefined();
+    expect(across(0.8, 1.02), 'The raised hoof remains visible').toBeDefined();
+    expect(across(3.88, 1.44)?.object.name, 'Black eagle on the standard').toBe(
+      '#3b4540',
+    );
+    expect(across(3.8, 0.99)?.object.name, 'Pale flag around the eagle').toBe(
+      '#dedbcd',
+    );
+  } finally {
+    for (const mesh of meshes) mesh.geometry.dispose();
+    material.dispose();
+  }
+});
+
 it('renders two sculpted figures above the Libuse and Premysl pedestal', () => {
   const sculpture = sculptures.find((monument) => monument.id === 1200812873);
   if (!sculpture) throw new Error('Missing Libuse and Premysl.');

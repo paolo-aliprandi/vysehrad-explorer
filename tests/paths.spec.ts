@@ -74,7 +74,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       const ground=g.featureElevation(side.feature,probe);
       return [{point:probe,hit:cast([probe[0],80,probe[1]],[0,-1,0],50),ground:soilAt(probe),blocked:g.blocked(probe,g.standingElevation(probe,ground))}];
     }));
-    const crossSections=leopoldInteriorPaving.sidewalks.flatMap(side=>side.curb.filter((_point,index)=>index%8===4).flatMap(curb=>{
+    const crossSections=leopoldInteriorPaving.sidewalks.flatMap(side=>side.curb.filter((_point,index)=>index%6===3).flatMap(curb=>{
       const road=g.projectRoute(curb,side.feature.points),a=side.feature.points[road.segment],b=side.feature.points[road.segment+1];
       if(Math.min(road.fraction,1-road.fraction)*Math.hypot(b[0]-a[0],b[1]-a[1])<1.5)return [];
       const sign=Math.sign((curb[0]-road.point[0])*road.normal[0]+(curb[1]-road.point[1])*road.normal[1]);
@@ -91,6 +91,16 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
         return {point,color:distance>6 ? 'd0ccbd' : 'b2b5ae',hit:cast([point[0],80,point[1]],[0,-1,0],50)};
       }));
     });
+    const junction=[
+      ...[[69,114.6],[68.9,112],[70.7,114.6],[74.4,120.4],[76,118.2]].map(point=>({point,color:'d0ccbd'})),
+      ...[[69,116.5],[71.1,121.3],[75,117.5],[75.4,117],[73.3779,120.1137],[73.2085,120.1401],[73.5907,120.1468]].map(point=>({point,color:'b2b5ae'})),
+    ].map(probe=>({...probe,hit:cast([probe.point[0],80,probe.point[1]],[0,-1,0],50),ground:soilAt(probe.point),blocked:g.blocked(probe.point)}));
+    const statue=g.sculptures.find(site=>site.id===1200790222),statueGround=g.elevation(...statue.point);
+    const statueAt=(y,z)=>{
+      const x=-1.2,a=statue.angle;
+      return cast([statue.point[0]+x*Math.cos(a)+z*Math.sin(a),statueGround+1.6+y,statue.point[1]-x*Math.sin(a)+z*Math.cos(a)],[Math.cos(a),0,-Math.sin(a)],1.2);
+    };
+    const wenceslas={underHoof:statueAt(.3,.625),hoof:statueAt(.8,1.02),eagle:statueAt(3.88,1.44),flag:statueAt(3.8,.99)};
     const gate=g.buildings.find(feature=>feature.id===51718887),frame=g.gateFrame(gate);
     const arches=g.gateOpenings(gate).flatMap(opening=>[-1.8,0,1.8].map(z=>{
       const point=[frame.center[0]+Math.cos(frame.angle)*opening.offset+Math.sin(frame.angle)*z,frame.center[1]-Math.sin(frame.angle)*opening.offset+Math.cos(frame.angle)*z],ground=g.elevation(...point);
@@ -126,7 +136,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       shield:cast([site.shield.point[0]+Math.sin(site.shield.angle)*2,site.shield.height,site.shield.point[1]+Math.cos(site.shield.angle)*2],[-Math.sin(site.shield.angle),0,-Math.cos(site.shield.angle)],3),
       curbs:curbPoints.map(point=>({hit:down(point),paving:g.featureElevation(street,point)+.055})),
       sidewalks,
-      interior,crossSections,westernContinuation,gateRelocation,arches,stairSurround,
+      interior,crossSections,westernContinuation,gateRelocation,junction,wenceslas,arches,stairSurround,
       vratislava:cafeWalks.map(point=>({point,hit:cast([point[0],80,point[1]],[0,-1,0],50),ground:g.elevation(...point),blocked:g.blocked(point,g.elevation(...point))})),
       extensions:leopoldSidewalks.runs.flatMap((run,index)=>run.curb.filter((point,i)=>i%4===0&&(index===0 ? point[0]>134&&point[1]>178 : point[0]>130&&point[1]>196)).flatMap(point=>{
         const road=g.projectRoute(point,leopoldSidewalks.street.points).point,dx=point[0]-road[0],dz=point[1]-road[1],length=Math.hypot(dx,dz);
@@ -189,6 +199,18 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     expect(probe.hit.color, JSON.stringify(probe)).toBe('d0ccbd');
   for (const probe of photoFixes.gateRelocation)
     expect(probe.hit.color, JSON.stringify(probe)).toBe(probe.color);
+  for (const probe of photoFixes.junction) {
+    expect(probe.hit.color, JSON.stringify(probe)).toBe(probe.color);
+    expect(
+      probe.hit.height - probe.ground,
+      JSON.stringify(probe),
+    ).toBeGreaterThan(0.035);
+    expect(probe.blocked, JSON.stringify(probe)).toBe(false);
+  }
+  expect(photoFixes.wenceslas.underHoof.color).toBeUndefined();
+  expect(photoFixes.wenceslas.hoof.color).toBeDefined();
+  expect(photoFixes.wenceslas.eagle.color).toBe('3b4540');
+  expect(photoFixes.wenceslas.flag.color).toBe('dedbcd');
   for (const probe of photoFixes.arches) {
     expect(probe.hit.color, JSON.stringify(probe)).toBe('b2b5ae');
     expect(probe.hit.height - probe.ground, JSON.stringify(probe)).toBeCloseTo(

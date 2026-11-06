@@ -12,6 +12,7 @@ type Figure = {
   x: number;
   z?: number;
   seated?: boolean;
+  mounted?: boolean;
   robe?: boolean;
   beard?: boolean;
   crown?: boolean;
@@ -296,9 +297,13 @@ export function makeMonuments(add: AddGeometry) {
         sphere([0, shoulder - 0.85, 0], [0.32, 0.22, 0.25]);
         for (const side of [-1, 1]) {
           const knee: Vertex = pose.seated
-            ? [side * 0.25, 0.62, 0.65]
+            ? [side * (pose.mounted ? 0.58 : 0.25), 0.62, 0.65]
             : [side * 0.2, 0.56, 0.04];
-          const foot: Vertex = [side * 0.24, 0.13, pose.seated ? 0.68 : 0.1];
+          const foot: Vertex = [
+            side * (pose.mounted ? 0.62 : 0.24),
+            0.13,
+            pose.seated ? 0.68 : 0.1,
+          ];
           limb([[side * 0.19, shoulder - 0.9, 0], knee, foot], 0.14);
           sphere(foot, [0.14, 0.09, 0.28]);
         }
@@ -550,18 +555,217 @@ export function makeMonuments(add: AddGeometry) {
       });
       ellipsoid([-1.15, plinth + 0.85, 0.4], [0.42, 0.55, 0.1]);
     } else if (monument.id === 1200790222) {
-      ellipsoid([0, plinth + 1.15, 0], [0.48, 0.52, 1.05]);
-      beam([0, plinth + 1.25, 0.65], [0, plinth + 2.05, 0.9], 0.23);
-      ellipsoid([0, plinth + 2.05, 1.15], [0.25, 0.27, 0.43]);
-      for (const side of [-1, 1])
-        for (const z of [-0.7, 0.55])
-          beam(
-            [side * 0.33, plinth + 1.05, z],
-            [side * 0.38, plinth + 0.05, z + 0.1],
-            0.095,
+      const curve = (
+        points: readonly Vertex[],
+        radius: number,
+        color = stone,
+      ) =>
+        emit(
+          new THREE.TubeGeometry(
+            new THREE.CatmullRomCurve3(
+              points.map(([x, y, z]) => new THREE.Vector3(x, plinth + y, z)),
+            ),
+            24,
+            radius,
+            8,
+            false,
+          ),
+          color,
+        );
+      ellipsoid([0, plinth + 1.5, -0.1], [0.55, 0.64, 1.05]);
+      ellipsoid([0, plinth + 1.68, 0.64], [0.48, 0.71, 0.49]);
+      const neck = new THREE.Shape();
+      neck.moveTo(-0.4, 1.75);
+      neck.bezierCurveTo(-0.45, 2.4, -0.7, 3.05, -1.05, 3.05);
+      neck.bezierCurveTo(-1.4, 3.05, -1.48, 2.8, -1.3, 2.51);
+      neck.bezierCurveTo(-0.98, 2.16, -1.1, 1.52, -0.4, 1.75);
+      emit(
+        new THREE.ExtrudeGeometry(neck, {
+          depth: 0.42,
+          bevelEnabled: true,
+          bevelSize: 0.12,
+          bevelThickness: 0.08,
+          bevelSegments: 3,
+          curveSegments: 24,
+        })
+          .translate(0, plinth, -0.21)
+          .rotateY(Math.PI / 2),
+      );
+      emit(
+        new THREE.SphereGeometry(1, 24, 16)
+          .scale(0.26, 0.28, 0.45)
+          .rotateX(0.4)
+          .translate(0, plinth + 2.73, 1.29),
+      );
+      ellipsoid([0, plinth + 2.48, 1.55], [0.23, 0.2, 0.23]);
+      for (const side of [-1, 1]) {
+        emit(
+          new THREE.ConeGeometry(0.09, 0.36, 12)
+            .rotateX(-0.2)
+            .translate(side * 0.18, plinth + 3.08, 1.03),
+        );
+        ellipsoid(
+          [side * 0.245, plinth + 2.81, 1.3],
+          [0.025, 0.025, 0.045],
+          '#756f60',
+        );
+        for (let i = 0; i < 7; i++)
+          curve(
+            [
+              [side * 0.13, 3.03 - i * 0.1, 0.99 - i * 0.065],
+              [side * 0.3, 2.95 - i * 0.13, 0.84 - i * 0.065],
+              [side * 0.31, 2.82 - i * 0.14, 0.92 - i * 0.07],
+            ],
+            0.045,
+            detailStone,
           );
-      beam([0, plinth + 1.3, -0.9], [0, plinth + 0.5, -1.35], 0.09);
-      figure({ x: 0, seated: true, robe: true, crown: true }, 1.4);
+        const leg: Vertex[] =
+          side < 0
+            ? [
+                [-0.34, 1.65, 0.65],
+                [-0.4, 1.15, 1.18],
+                [-0.43, 0.85, 0.95],
+              ]
+            : [
+                [0.34, 1.6, 0.65],
+                [0.39, 0.75, 0.84],
+                [0.4, 0.12, 1.03],
+              ];
+        for (let i = 1; i < leg.length; i++) {
+          const a = leg[i - 1],
+            b = leg[i];
+          beam(
+            [a[0], plinth + a[1], a[2]],
+            [b[0], plinth + b[1], b[2]],
+            i === 1 ? 0.145 : 0.105,
+          );
+          ellipsoid([b[0], plinth + b[1], b[2]], [0.12, 0.13, 0.13]);
+        }
+        const hoof = leg[2];
+        block(
+          0.24,
+          0.17,
+          0.32,
+          hoof[0],
+          plinth + hoof[1] - 0.04,
+          hoof[2] + 0.07,
+          detailStone,
+        );
+        curve(
+          [
+            [side * 0.36, 1.45, -0.72],
+            [side * 0.41, 0.65, -0.84],
+            [side * 0.43, 0.14, -1.03],
+          ],
+          0.12,
+        );
+        block(0.24, 0.17, 0.32, side * 0.43, plinth + 0.1, -0.96, detailStone);
+        curve(
+          [
+            [side * 0.27, 2.85, 1.1],
+            [side * 0.28, 2.47, 1.52],
+            [side * 0.26, 2.4, 1.55],
+          ],
+          0.018,
+          '#52605a',
+        );
+        curve(
+          [
+            [side * 0.26, 2.44, 1.55],
+            [side * 0.48, 2.3, 0.85],
+            [side * 0.25, 2.8, 0.35],
+          ],
+          0.016,
+          '#52605a',
+        );
+      }
+      curve(
+        [
+          [0, 1.63, -1],
+          [0.12, 1.35, -1.25],
+          [0.18, 0.62, -1.45],
+          [0.05, 0.25, -1.29],
+        ],
+        0.13,
+        detailStone,
+      );
+      ellipsoid([0, plinth + 2.03, -0.12], [0.54, 0.12, 0.65], detailStone);
+      figure(
+        {
+          x: 0,
+          seated: true,
+          mounted: true,
+          cloak: true,
+          beard: true,
+          left: [
+            [-0.5, 1.65, 0.27],
+            [-0.65, 1.8, 0.65],
+          ],
+          right: [
+            [0.42, 1.2, 0.4],
+            [0.25, 1.3, 0.35],
+          ],
+        },
+        1.5,
+      );
+      ellipsoid([0, plinth + 3.68, -0.035], [0.23, 0.1, 0.22], detailStone);
+      beam(
+        [-0.65, plinth + 0.65, 0.5],
+        [-0.65, plinth + 4.25, 0.85],
+        0.025,
+        '#52605a',
+      );
+      const flag = new THREE.Shape();
+      flag.moveTo(0, 0);
+      flag.bezierCurveTo(0.5, -0.12, 0.92, 0.15, 1.4, 0.03);
+      flag.lineTo(1.05, -0.23);
+      flag.lineTo(1.45, -0.44);
+      flag.bezierCurveTo(0.92, -0.3, 0.45, -0.62, 0, -0.5);
+      flag.closePath();
+      emit(
+        new THREE.ExtrudeGeometry(flag, {
+          depth: 0.014,
+          bevelEnabled: false,
+          curveSegments: 20,
+        })
+          .rotateY(-Math.PI / 2)
+          .translate(-0.65, plinth + 4.1, 0.84),
+        '#dedbcd',
+        'plaster',
+      );
+      const eagle = new THREE.Shape();
+      eagle.moveTo(0.55, -0.1);
+      for (const [x, y] of [
+        [0.65, -0.05],
+        [0.68, -0.12],
+        [0.86, -0.08],
+        [0.98, -0.1],
+        [0.84, -0.18],
+        [0.99, -0.18],
+        [0.81, -0.25],
+        [0.7, -0.25],
+        [0.77, -0.39],
+        [0.62, -0.34],
+        [0.52, -0.43],
+        [0.51, -0.28],
+        [0.35, -0.31],
+        [0.22, -0.29],
+        [0.38, -0.23],
+        [0.2, -0.2],
+        [0.36, -0.18],
+        [0.22, -0.12],
+        [0.42, -0.13],
+        [0.55, -0.18],
+      ])
+        eagle.lineTo(x, y);
+      eagle.closePath();
+      emit(
+        new THREE.ExtrudeGeometry(eagle, { depth: 0.022, bevelEnabled: false })
+          .rotateY(-Math.PI / 2)
+          .translate(-0.646, plinth + 4.1, 0.84),
+        '#3b4540',
+        'plaster',
+      );
     } else if (monument.id === 1200790218) {
       for (const x of [-1.04, 1.04])
         block(0.24, 2.3, 0.5, x, plinth + 1.15, 0.2);

@@ -10,6 +10,7 @@ import {
   rampartTerrace,
   stairwellFootprint,
   rotundaStreet,
+  naHradbachStreet,
   elevation,
   gateFrame,
   gateOpenings,
@@ -81,6 +82,24 @@ function steepTriangles(geometry: THREE.BufferGeometry) {
 }
 
 describe('rationalized paving', () => {
+  it('joins the branch and main street on one cross-level landing without a soil riser', () => {
+    let probes = 0;
+    for (let x = 65; x <= 76; x += 0.5)
+      for (let z = 113; z <= 127; z += 0.5) {
+        const point: Point = [x, z];
+        if (
+          !inside(point, rotundaStreet.polygon) ||
+          !inside(point, naHradbachStreet.polygon)
+        )
+          continue;
+        expect(
+          featureElevation(rotundaStreet.feature, point),
+          JSON.stringify(point),
+        ).toBeCloseTo(featureElevation(naHradbachStreet.feature, point), 5);
+        probes++;
+      }
+    expect(probes).toBeGreaterThan(50);
+  });
   it('paves all Leopold side arches at their walking floor and keeps the rotunda grass triangle clear', () => {
     const gate = buildings.find((feature) => feature.id === 51718887);
     if (!gate) throw new Error('Missing Leopold Gate.');
@@ -124,6 +143,27 @@ describe('rationalized paving', () => {
         new THREE.Vector3(0, -1, 0),
       );
       expect(ray.intersectObjects(meshes)).toHaveLength(0);
+      for (const point of [
+        [69, 116.5],
+        [71.1, 121.3],
+        [75, 117.5],
+        [75.4, 117],
+        [73.3779, 120.1137],
+        [73.2085, 120.1401],
+        [73.5907, 120.1468],
+      ] as Point[]) {
+        ray.set(
+          new THREE.Vector3(point[0], 60, point[1]),
+          new THREE.Vector3(0, -1, 0),
+        );
+        const hit = ray.intersectObjects(meshes)[0];
+        expect(
+          hit,
+          'Cobble fills removed junction spurs and seams',
+        ).toBeDefined();
+        expect(hit.point.y - elevation(...point)).toBeGreaterThan(0.04);
+        expect(hit.point.y - elevation(...point)).toBeLessThan(0.09);
+      }
       const [a, b] = rotundaStreet.points.slice(3, 5);
       for (const fraction of [0.35, 0.65, 0.85]) {
         const road: Point = [

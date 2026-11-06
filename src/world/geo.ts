@@ -3059,12 +3059,37 @@ export const rotundaStreet = (() => {
   };
   const cutHalfWidth = width / 2 + 5;
   const polygon = outline(cutHalfWidth);
+  const levels = feature.points.map((point) => unretainedElevation(...point));
+  const junction = levels[3];
+  const departure = (fraction: number): Point => [
+    feature.points[3][0] +
+      (feature.points[4][0] - feature.points[3][0]) * fraction,
+    feature.points[3][1] +
+      (feature.points[4][1] - feature.points[3][1]) * fraction,
+  ];
   return {
     feature,
     points: feature.points,
     width,
     cutHalfWidth,
-    levels: feature.points.map((point) => unretainedElevation(...point)),
+    levels,
+    // Both roads meet on one landing, rather than exposing soil between grades.
+    profile: {
+      points: [
+        ...feature.points.slice(0, 4),
+        departure(0.24),
+        departure(0.34),
+        ...feature.points.slice(4),
+      ],
+      levels: [
+        ...levels.slice(0, 2),
+        junction,
+        junction,
+        junction,
+        junction + (levels[4] - junction) * 0.34,
+        ...levels.slice(4),
+      ],
+    },
     polygon,
     pavingPolygon: outline(width / 2),
     minX: Math.min(...polygon.map((point) => point[0])),
@@ -3074,14 +3099,19 @@ export const rotundaStreet = (() => {
   };
 })();
 export function streetGrade(
-  street: { points: readonly Point[]; levels: readonly number[] },
+  street: {
+    points: readonly Point[];
+    levels: readonly number[];
+    profile?: { points: readonly Point[]; levels: readonly number[] };
+  },
   point: Point,
 ) {
-  const projection = projectRoute(point, street.points);
-  const start = street.levels[projection.segment];
+  const profile = street.profile ?? street;
+  const projection = projectRoute(point, profile.points);
+  const start = profile.levels[projection.segment];
   return (
     start +
-    (street.levels[projection.segment + 1] - start) * projection.fraction
+    (profile.levels[projection.segment + 1] - start) * projection.fraction
   );
 }
 export const naHradbachStreet = (() => {
@@ -3102,10 +3132,8 @@ export const naHradbachStreet = (() => {
     ...edges.map((edge) => edge[1]).reverse(),
   ]);
   const levels = feature.points.map((point) => unretainedElevation(...point));
-  levels[levels.length - 1] = streetGrade(
-    rotundaStreet,
-    feature.points[feature.points.length - 1],
-  );
+  for (let i = levels.length - 3; i < levels.length; i++)
+    levels[i] = streetGrade(rotundaStreet, feature.points[i]);
   return {
     feature,
     points: feature.points,
