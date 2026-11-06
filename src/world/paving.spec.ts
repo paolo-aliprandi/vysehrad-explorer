@@ -11,6 +11,10 @@ import {
   stairwellFootprint,
   rotundaStreet,
   elevation,
+  gateFrame,
+  gateOpenings,
+  buildings,
+  foundation,
   type Point,
 } from './geo';
 import {
@@ -19,6 +23,7 @@ import {
   pavingStyle,
   pavingSurfaces,
 } from './paving';
+import { makeLeopoldInteriorSidewalks } from './reference-details';
 import {
   drapedPolygon as groundPolygon,
   samplePolyline,
@@ -76,6 +81,54 @@ function steepTriangles(geometry: THREE.BufferGeometry) {
 }
 
 describe('rationalized paving', () => {
+  it('paves all Leopold side arches at their walking floor and keeps the rotunda grass triangle clear', () => {
+    const gate = buildings.find((feature) => feature.id === 51718887);
+    if (!gate) throw new Error('Missing Leopold Gate.');
+    const frame = gateFrame(gate);
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const meshes = pavingSurfaces([
+      way(5016653),
+      way(494921191),
+      way(494921195),
+      way(494921206),
+      way(494921200),
+      way(494921203),
+      way(370193790),
+      way(139507049),
+    ]).map((surface) => new THREE.Mesh(pavingGeometry(surface), material));
+    const ray = new THREE.Raycaster();
+    try {
+      for (const opening of gateOpenings(gate))
+        for (const z of [-1.8, 0, 1.8]) {
+          const point: Point = [
+            frame.center[0] +
+              Math.cos(frame.angle) * opening.offset +
+              Math.sin(frame.angle) * z,
+            frame.center[1] -
+              Math.sin(frame.angle) * opening.offset +
+              Math.cos(frame.angle) * z,
+          ];
+          ray.set(
+            new THREE.Vector3(point[0], 60, point[1]),
+            new THREE.Vector3(0, -1, 0),
+          );
+          const hit = ray.intersectObjects(meshes)[0];
+          expect(hit, JSON.stringify(point)).toBeDefined();
+          expect(hit.point.y - elevation(...point)).toBeCloseTo(0.055, 2);
+          expect(hit.point.y).toBeGreaterThan(foundation(gate) - 0.1);
+        }
+      ray.set(new THREE.Vector3(74.5, 60, 108), new THREE.Vector3(0, -1, 0));
+      expect(ray.intersectObjects(meshes)).toHaveLength(0);
+      ray.set(
+        new THREE.Vector3(69.25, 60, 106.76358),
+        new THREE.Vector3(0, -1, 0),
+      );
+      expect(ray.intersectObjects(meshes)).toHaveLength(0);
+    } finally {
+      meshes.forEach((mesh) => mesh.geometry.dispose());
+      material.dispose();
+    }
+  });
   it('keeps kiosk road-edge cells below the paving instead of sampling the raised garden outside the cut', () => {
     const terrain = retainedStreetTerrain();
     const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
@@ -102,7 +155,7 @@ describe('rationalized paving', () => {
     terrain.geometries.forEach((geometry) => geometry.dispose());
     material.dispose();
   });
-  it('keeps the main Leopold and cathedral streets cobbled and only the separate rotunda branch gravel', () => {
+  it('keeps Leopold, the rotunda branch and cathedral streets cobbled while preserving separate gravel park paths', () => {
     const roads = [
       4646722, 5016653, 587280816, 494921190, 494921191, 370193790, 494921186,
       163474148, 542561044,
@@ -115,7 +168,7 @@ describe('rationalized paving', () => {
           .every(
             (s) =>
               s.style.kind ===
-              ([370193790, 494921186, 163474148, 542561044].includes(road.id)
+              ([494921186, 163474148, 542561044].includes(road.id)
                 ? 'gravel'
                 : 'cobble'),
           ),
@@ -167,6 +220,11 @@ describe('rationalized paving', () => {
     )
       .filter((surface) => surface.feature.id === rotundaStreet.feature.id)
       .map((surface) => new THREE.Mesh(pavingGeometry(surface), material));
+    makeLeopoldInteriorSidewalks((_color, geometry, kind) => {
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = kind ?? '';
+      paving.push(mesh);
+    });
     try {
       for (const point of samplePolyline(rotundaStreet.points, 0.7).slice(
         1,
@@ -204,7 +262,10 @@ describe('rationalized paving', () => {
         const ground = ray.intersectObject(soil)[0];
         expect(road, JSON.stringify(point)).toBeDefined();
         expect(ground).toBeDefined();
-        expect(road.point.y - ground.point.y).toBeCloseTo(0.055, 4);
+        expect(road.point.y - ground.point.y).toBeCloseTo(
+          road.object.name ? 0.075 : 0.055,
+          road.object.name ? 2 : 4,
+        );
       }
     } finally {
       soil.geometry.dispose();

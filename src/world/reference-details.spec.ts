@@ -14,6 +14,8 @@ import {
   makeGardenHeraldry,
   makeLeopoldCurbs,
   makeVratislavaSidewalks,
+  makeLeopoldInteriorSidewalks,
+  leopoldInteriorPaving,
   leopoldSidewalks,
 } from './reference-details';
 import {
@@ -72,7 +74,11 @@ import {
 } from './geo';
 import { makeApproach, makePassages } from './passages';
 import { makeMonuments } from './monuments';
-import { clipTerrainAtArcades, drapedPolygon } from './surfaces';
+import {
+  clipTerrainAtArcades,
+  drapedPolygon,
+  retainedStreetTerrain,
+} from './surfaces';
 import {
   makePanoramaLookouts,
   makeAveMariaWall,
@@ -151,6 +157,103 @@ it('paints the cemetery labyrinth on asphalt north of the private garden fence w
     expect(ray.intersectObject(asphalt)).toHaveLength(0);
   } finally {
     scene.dispose();
+  }
+});
+
+it('connects narrow mosaic borders from Leopold Gate to the rotunda junction without paving the green triangle or blocking crossings', () => {
+  const scene = geometryScene(makeLeopoldInteriorSidewalks, THREE.DoubleSide);
+  const terrain = retainedStreetTerrain();
+  const ray = new THREE.Raycaster();
+  const at = (point: Point) => {
+    ray.set(
+      new THREE.Vector3(point[0], 80, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    );
+    return ray.intersectObjects(scene.meshes)[0];
+  };
+  try {
+    let probes = 0;
+    for (const side of leopoldInteriorPaving.sidewalks)
+      for (const point of side.curb.filter(
+        (_point, index) => index % 8 === 4,
+      )) {
+        const projection = projectRoute(point, side.feature.points);
+        const dx = point[0] - projection.point[0],
+          dz = point[1] - projection.point[1];
+        const distance = Math.hypot(dx, dz);
+        const probe: Point = [
+          point[0] + (dx / distance) * 0.45,
+          point[1] + (dz / distance) * 0.45,
+        ];
+        if (
+          !side.polygons.some(
+            (polygon) =>
+              inside(probe, polygon[0]) &&
+              !polygon.slice(1).some((hole) => inside(probe, hole)),
+          )
+        )
+          continue;
+        const hit = at(probe);
+        expect(hit?.object.name, JSON.stringify(probe)).toBe('mosaic:#d0ccbd');
+        expect(
+          hit.point.y -
+            (side.feature.id === 5016653
+              ? terrain.heightAt(probe)
+              : featureElevation(side.feature, probe)),
+          JSON.stringify(probe),
+        ).toBeCloseTo(0.075, 2);
+        probes++;
+      }
+    expect(probes).toBeGreaterThan(20);
+    expect(at([69.5, 106.7])?.object.name).toBe('mosaic:#d0ccbd');
+    for (const point of [
+      [74.5, 108],
+      [75.5, 111],
+      [80.06, 112.19],
+      [76.82, 100.72],
+    ] as Point[])
+      expect(at(point), JSON.stringify(point)).toBeUndefined();
+    expect(leopoldInteriorPaving.stairStrips.length).toBeGreaterThan(0);
+    let stairProbes = 0;
+    for (const point of leopoldSidewalks.runs[0].curb.filter(
+      (point, index) => index % 8 === 0 && point[0] > 210 && point[0] < 240,
+    )) {
+      const projection = projectRoute(point, leopoldSidewalks.street.points);
+      const dx = point[0] - projection.point[0],
+        dz = point[1] - projection.point[1];
+      const length = Math.hypot(dx, dz);
+      for (const distance of [5.2, 7.6]) {
+        const probe: Point = [
+          projection.point[0] + (dx / length) * distance,
+          projection.point[1] + (dz / length) * distance,
+        ];
+        if (
+          !leopoldInteriorPaving.stairStrips.some(
+            (polygon) =>
+              inside(probe, polygon[0]) &&
+              !polygon.slice(1).some((hole) => inside(probe, hole)),
+          )
+        )
+          continue;
+        const hit = at(probe);
+        expect(hit?.object.name, JSON.stringify(probe)).toBe('mosaic:#d0ccbd');
+        expect(hit.point.y - pevnostiGrade(probe).level).toBeCloseTo(0.075, 2);
+        stairProbes++;
+      }
+    }
+    expect(stairProbes).toBeGreaterThan(6);
+    for (const point of stairwellFootprint
+      .slice(0, -1)
+      .map(
+        (point): Point => [
+          point[0] * 0.8 + center(stairwellFootprint)[0] * 0.2,
+          point[1] * 0.8 + center(stairwellFootprint)[1] * 0.2,
+        ],
+      ))
+      expect(at(point), 'Preserve stairwell excavation').toBeUndefined();
+  } finally {
+    scene.dispose();
+    terrain.geometries.forEach((geometry) => geometry.dispose());
   }
 });
 

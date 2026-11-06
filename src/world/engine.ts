@@ -100,6 +100,7 @@ import {
   makeCanonGables,
   makeInformationCentre,
   leopoldSidewalks,
+  leopoldInteriorPaving,
 } from './reference-details';
 import { makeNuselskyBridge } from './bridge';
 import { makeRiversideGallery } from './gallery';
@@ -1735,6 +1736,7 @@ export class World {
             informationCentre.sidewalk,
             cemeteryLabyrinth.courtyard,
             ...leopoldSidewalks.polygons,
+            ...leopoldInteriorPaving.polygons,
           ].some((paving) => inside(point, paving)) ||
           panoramaDecks.some((deck) => inside(point, deck.points)) ||
           aveMariaCourtCuts.some((cut) => inside(point, cut)) ||

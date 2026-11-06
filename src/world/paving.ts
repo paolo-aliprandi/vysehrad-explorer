@@ -30,7 +30,7 @@ import {
   type Point,
 } from './geo';
 import { drapedPolygon, ribbonEdges, samplePolyline } from './surfaces';
-import { leopoldSidewalks } from './reference-details';
+import { leopoldSidewalks, leopoldInteriorPaving } from './reference-details';
 
 type PavingKind = 'cobble' | 'gravel';
 export type PavingSurface = {
@@ -96,6 +96,8 @@ function streetBuildings(feature: Feature) {
 
 export function pavingStyle(feature: Feature): PavingSurface['style'] {
   if (isSidewalk(feature)) return { kind: 'cobble', color: '#b2b5ae' };
+  if ([370193790, 139507049, 494921203].includes(feature.id))
+    return { kind: 'cobble', color: '#b2b5ae' };
   if (
     [
       370193790, 494921186, 255297801, 163474148, 163474150, 784512319,
@@ -409,6 +411,19 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
     );
   for (const feature of ordered) {
     let full = pavingFootprint(feature);
+    const interior = leopoldInteriorPaving.roads.filter(
+      (road) => road.feature.id === feature.id,
+    );
+    if (interior.length)
+      full = polygonBoolean(
+        'union',
+        full,
+        interior.flatMap((road) =>
+          road.polygons.map(
+            (polygon): Polygon => [polygon.map(([x, z]) => [x, z])],
+          ),
+        ),
+      );
     if (leopoldSidewalks.streets.some((street) => street.id === feature.id))
       full = polygonBoolean(
         'union',
@@ -425,6 +440,12 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
       ? undefined
       : additions.get(feature.id);
     if (sidewalks?.length) full = polygonBoolean('union', full, sidewalks);
+    if (feature.points.some(([x, z]) => x > 55 && x < 110 && z > 80 && z < 155))
+      full = polygonBoolean(
+        'difference',
+        full,
+        leopoldInteriorPaving.sidewalks.flatMap((side) => side.polygons),
+      );
     if (feature.points.some(([x, z]) => x > -120 && x < 20 && z > 20 && z < 60))
       full = polygonBoolean('difference', full, karlachBorderBeds);
     if (projectRoute(aveMariaFrontage.point, feature.points).distance < 20)
@@ -521,7 +542,10 @@ export function pavingGeometry(surface: PavingSurface) {
         : (x, z) => featureElevation(feature, [x, z]),
       rings.slice(1),
       !!road,
-      [494921190, 494921198, 494921210, 370193785].includes(feature.id),
+      [
+        494921190, 494921198, 494921210, 370193785, 494921191, 5016653,
+        370193790, 139507049,
+      ].includes(feature.id),
     );
     const positions = source.attributes.position;
     const a = new THREE.Vector3(),

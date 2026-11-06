@@ -36,6 +36,10 @@ import {
   stairwellFootprint,
   cafeFrontage,
   spickaFrontage,
+  rotundaStreet,
+  pathWidth,
+  gateOpenings,
+  featureElevation,
   type Point,
   type Feature,
 } from './geo';
@@ -46,6 +50,7 @@ import {
   ribbonEdges,
   samplePolyline,
 } from './surfaces';
+import { polygonBoolean } from './polygons';
 
 type Vertex = readonly [number, number, number];
 type Kind = Parameters<AddGeometry>[2];
@@ -463,6 +468,254 @@ export function makeVratislavaSidewalks(add: AddGeometry) {
     ),
     'mosaic',
   );
+}
+
+export const leopoldInteriorPaving = (() => {
+  const gate = buildings.find((feature) => feature.id === 51718887);
+  const passage = paths.find((feature) => feature.id === 494921191);
+  const easternWalk = paths.find((feature) => feature.id === 494921200);
+  const westernWalk = paths.find((feature) => feature.id === 494921203);
+  const branch = paths.find((feature) => feature.id === 370193790);
+  const doorway = paths.find((feature) => feature.id === 139507049);
+  const rotundaWall = walls.find((feature) => feature.id === 139508659);
+  if (
+    !gate ||
+    !passage ||
+    !easternWalk ||
+    !westernWalk ||
+    !branch ||
+    !doorway ||
+    !rotundaWall
+  )
+    throw new Error('Missing Leopold-to-rotunda paving references.');
+  const frame = gateFrame(gate);
+  const at = (x: number, z: number): Point => [
+    frame.center[0] + Math.cos(frame.angle) * x + Math.sin(frame.angle) * z,
+    frame.center[1] - Math.sin(frame.angle) * x + Math.cos(frame.angle) * z,
+  ];
+  const ribbon = (points: readonly Point[], width: number) => {
+    const edges = ribbonEdges(samplePolyline(points, 0.8), width);
+    return [
+      ...edges.map((edge) => edge.left),
+      ...edges.map((edge) => edge.right).reverse(),
+    ];
+  };
+  const ring = (polygon: readonly Point[]): Polygon => [
+    polygon.map(([x, z]) => [x, z]),
+  ];
+  const branchRoad = ribbon(branch.points, pathWidth(branch));
+  const doorwayRoad = ribbon(doorway.points, pathWidth(doorway));
+  const easternBorder = easternWalk.points.slice(0, 5).map((point): Point => {
+    const wall = projectRoute(point, rotundaWall.points);
+    if (wall.distance > 4) return point;
+    const road = projectRoute(wall.point, rotundaStreet.points).point;
+    const dx = road[0] - wall.point[0],
+      dz = road[1] - wall.point[1];
+    const distance = Math.hypot(dx, dz);
+    const inset = wallThickness(rotundaWall, wall.point) / 2 + 0.675;
+    return [
+      wall.point[0] + (dx / distance) * inset,
+      wall.point[1] + (dz / distance) * inset,
+    ];
+  });
+  const sides = [
+    { feature: rotundaStreet.feature, points: easternBorder },
+    { feature: rotundaStreet.feature, points: westernWalk.points },
+    ...[-1, 1].map((side) => ({
+      feature: branch,
+      points: ribbonEdges(
+        samplePolyline(branch.points, 0.8),
+        pathWidth(branch) + 1.3,
+      ).map((edge) => (side < 0 ? edge.left : edge.right)),
+    })),
+  ].map(({ feature, points }) => {
+    const edges = ribbonEdges(samplePolyline(points, 0.8), 1.3);
+    const curb = edges.map((edge) =>
+      projectRoute(edge.left, feature.points).distance <
+      projectRoute(edge.right, feature.points).distance
+        ? edge.left
+        : edge.right,
+    );
+    const outer = edges.map((edge, i) =>
+      curb[i] === edge.left ? edge.right : edge.left,
+    );
+    return {
+      feature,
+      curb,
+      polygon: [...curb, ...outer.reverse()],
+      road: [
+        ...curb,
+        ...curb
+          .map((point) => projectRoute(point, feature.points).point)
+          .reverse(),
+      ],
+    };
+  });
+  const arches = gateOpenings(gate).map(({ offset, halfWidth }) => [
+    at(offset - halfWidth, -frame.depth / 2 - 0.65),
+    at(offset + halfWidth, -frame.depth / 2 - 0.65),
+    at(offset + halfWidth, frame.depth / 2 + 0.65),
+    at(offset - halfWidth, frame.depth / 2 + 0.65),
+  ]);
+  const entrance = leopoldSidewalks.runs.map((run) => {
+    const face = run.frontage.slice(0, 2);
+    const edges = ribbonEdges(samplePolyline(face, 0.8), 0.76);
+    const roadward = edges.map((edge) =>
+      projectRoute(edge.left, leopoldSidewalks.street.points).distance <
+      projectRoute(edge.right, leopoldSidewalks.street.points).distance
+        ? edge.left
+        : edge.right,
+    );
+    return [...face, ...roadward.reverse()];
+  });
+  const crossings = [branchRoad, doorwayRoad, arches[0], arches[1], arches[2]];
+  const sidewalks = sides.map((side) => ({
+    ...side,
+    polygons: polygonBoolean(
+      'difference',
+      [ring(side.polygon)],
+      ...(side.feature === rotundaStreet.feature
+        ? crossings.map((polygon) => [ring(polygon)])
+        : [[ring(rotundaStreet.pavingPolygon)], [ring(doorwayRoad)]]),
+    ),
+  }));
+  const roads = [
+    { feature: passage, polygons: arches },
+    ...sides.map((side) => ({ feature: side.feature, polygons: [side.road] })),
+  ];
+  const stairCenter = center(stairwellFootprint);
+  const stairAlong = projectRoute(
+    stairCenter,
+    leopoldSidewalks.street.points,
+  ).along;
+  const stairCurb = leopoldSidewalks.runs[0].curb.filter(
+    (point) =>
+      Math.abs(
+        projectRoute(point, leopoldSidewalks.street.points).along - stairAlong,
+      ) < 18,
+  );
+  const stairOffset = (distance: number) =>
+    stairCurb.map((point): Point => {
+      const projection = projectRoute(point, leopoldSidewalks.street.points);
+      const dx = point[0] - projection.point[0],
+        dz = point[1] - projection.point[1];
+      const length = Math.hypot(dx, dz);
+      return [
+        projection.point[0] + (dx / length) * distance,
+        projection.point[1] + (dz / length) * distance,
+      ];
+    });
+  const stairOuter = stairOffset(8.05);
+  const plantingBed = [...stairOffset(5.65), ...stairOffset(6.75).reverse()];
+  const stairStrips = polygonBoolean(
+    'difference',
+    [ring([...stairCurb, ...stairOuter.reverse()])],
+    [ring(leopoldSidewalks.runs[0].polygon)],
+    [ring(stairwellFootprint)],
+    [ring(plantingBed)],
+  );
+  return {
+    sidewalks,
+    roads,
+    entrance,
+    stairStrips,
+    polygons: [
+      ...sidewalks.flatMap((side) =>
+        side.polygons.map((polygon) => polygon[0]),
+      ),
+      ...arches,
+      ...entrance,
+      ...stairStrips.map((polygon) => polygon[0]),
+    ],
+  };
+})();
+
+export function makeLeopoldInteriorSidewalks(add: AddGeometry) {
+  for (const side of leopoldInteriorPaving.sidewalks) {
+    for (const polygon of side.polygons)
+      add(
+        '#d0ccbd',
+        drapedPolygon(
+          polygon[0],
+          0.075,
+          (x, z) => featureElevation(side.feature, [x, z]),
+          polygon.slice(1),
+          true,
+          true,
+        ),
+        'mosaic',
+      );
+    let run: Point[] = [];
+    const emit = () => {
+      if (run.length > 1) {
+        const geometry = continuousWall(
+          run,
+          0.14,
+          () => ({ bottom: 0.03, top: 0.075 }),
+          false,
+        );
+        const positions = geometry.attributes.position;
+        for (let i = 0; i < positions.count; i++)
+          positions.setY(
+            i,
+            positions.getY(i) +
+              featureElevation(side.feature, [
+                positions.getX(i),
+                positions.getZ(i),
+              ]),
+          );
+        geometry.computeVertexNormals();
+        add('#a7a89d', geometry, 'stone');
+      }
+      run = [];
+    };
+    for (const point of side.curb) {
+      const projection = projectRoute(point, side.feature.points);
+      const dx = point[0] - projection.point[0],
+        dz = point[1] - projection.point[1];
+      const length = Math.hypot(dx, dz);
+      const probe: Point = [
+        point[0] + (dx / length) * 0.2,
+        point[1] + (dz / length) * 0.2,
+      ];
+      if (
+        side.polygons.some(
+          (polygon) =>
+            inside(probe, polygon[0]) &&
+            !polygon.slice(1).some((hole) => inside(probe, hole)),
+        )
+      )
+        run.push(point);
+      else emit();
+    }
+    emit();
+  }
+  for (const polygon of leopoldInteriorPaving.entrance)
+    add(
+      '#d0ccbd',
+      drapedPolygon(
+        polygon,
+        0.075,
+        (x, z) => pevnostiGrade([x, z]).level,
+        [],
+        false,
+        true,
+      ),
+      'mosaic',
+    );
+  for (const polygon of leopoldInteriorPaving.stairStrips)
+    add(
+      '#d0ccbd',
+      drapedPolygon(
+        polygon[0],
+        0.075,
+        (x, z) => pevnostiGrade([x, z]).level,
+        polygon.slice(1),
+        false,
+        true,
+      ),
+      'mosaic',
+    );
 }
 
 export function makeCemeteryLabyrinth(add: AddGeometry) {
@@ -2169,6 +2422,7 @@ export function makeReferenceDetails(add: AddGeometry) {
   makeGardenHeraldry(add);
   makeLeopoldCurbs(add);
   makeVratislavaSidewalks(add);
+  makeLeopoldInteriorSidewalks(add);
   makeCitadela(add);
   makeGardenReferences(add);
   makeGardenKiosk(add);

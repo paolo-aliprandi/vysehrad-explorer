@@ -55,7 +55,32 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     };
     const down=point=>cast([point[0],g.elevation(...point)+5,point[1]],[0,-1,0]);
     const street=g.paths.find(path=>path.id===494921190),point=street.points[1].map((p,i)=>(p+street.points[2][i])/2);
-    const {leopoldSidewalks}=await import('/src/world/reference-details.ts');
+    const {leopoldSidewalks,leopoldInteriorPaving}=await import('/src/world/reference-details.ts');
+    const soil=w.blockers.filter(mesh=>mesh.name==='Terrain'||mesh.name==='Terrain rock');
+    const soilAt=point=>{
+      w.raycaster.set(w.position.clone().set(point[0]*1.5,120,point[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=100;
+      return w.raycaster.intersectObjects(soil,false)[0]?.point.y/1.5;
+    };
+    const interior=leopoldInteriorPaving.sidewalks.flatMap(side=>side.curb.filter((_point,index)=>index%8===4).flatMap(point=>{
+      const projection=g.projectRoute(point,side.feature.points),dx=point[0]-projection.point[0],dz=point[1]-projection.point[1],distance=Math.hypot(dx,dz);
+      const probe=[point[0]+dx/distance*.45,point[1]+dz/distance*.45];
+      if(!side.polygons.some(polygon=>g.inside(probe,polygon[0])&&!polygon.slice(1).some(hole=>g.inside(probe,hole))))return [];
+      const ground=g.featureElevation(side.feature,probe);
+      return [{point:probe,hit:cast([probe[0],80,probe[1]],[0,-1,0],50),ground:soilAt(probe),blocked:g.blocked(probe,g.standingElevation(probe,ground))}];
+    }));
+    const gate=g.buildings.find(feature=>feature.id===51718887),frame=g.gateFrame(gate);
+    const arches=g.gateOpenings(gate).flatMap(opening=>[-1.8,0,1.8].map(z=>{
+      const point=[frame.center[0]+Math.cos(frame.angle)*opening.offset+Math.sin(frame.angle)*z,frame.center[1]-Math.sin(frame.angle)*opening.offset+Math.cos(frame.angle)*z],ground=g.elevation(...point);
+      return {point,ground,hit:cast([point[0],ground+1,point[1]],[0,-1,0],2)};
+    }));
+    const stairSurround=leopoldSidewalks.runs[0].curb.filter((point,index)=>index%8===0&&point[0]>210&&point[0]<240).flatMap(point=>{
+      const projection=g.projectRoute(point,leopoldSidewalks.street.points),dx=point[0]-projection.point[0],dz=point[1]-projection.point[1],length=Math.hypot(dx,dz);
+      return [5.2,7.6].flatMap(distance=>{
+        const probe=[projection.point[0]+dx/length*distance,projection.point[1]+dz/length*distance];
+        if(!leopoldInteriorPaving.stairStrips.some(polygon=>g.inside(probe,polygon[0])&&!polygon.slice(1).some(hole=>g.inside(probe,hole))))return [];
+        return [{point:probe,hit:cast([probe[0],80,probe[1]],[0,-1,0],50),ground:g.pevnostiGrade(probe).level}];
+      });
+    });
     const cafe=g.cafeFrontage();
     const cafeAt=(u,v)=>[cafe.center[0]+cafe.axis[0]*u-cafe.axis[1]*v,cafe.center[1]+cafe.axis[1]*u+cafe.axis[0]*v];
     const cafeWalks=[cafeAt(-cafe.width/2-.95,0),cafeAt(cafe.width/2+.95,0),cafeAt(0,-cafe.depth/2-.95),g.spickaFrontage.at(-7,3.45),g.spickaFrontage.at(7,3.45),g.spickaFrontage.at(-7,-1.35),g.spickaFrontage.at(7,-1.35)];
@@ -78,6 +103,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       shield:cast([site.shield.point[0]+Math.sin(site.shield.angle)*2,site.shield.height,site.shield.point[1]+Math.cos(site.shield.angle)*2],[-Math.sin(site.shield.angle),0,-Math.cos(site.shield.angle)],3),
       curbs:curbPoints.map(point=>({hit:down(point),paving:g.featureElevation(street,point)+.055})),
       sidewalks,
+      interior,arches,stairSurround,
       vratislava:cafeWalks.map(point=>({point,hit:cast([point[0],80,point[1]],[0,-1,0],50),ground:g.elevation(...point),blocked:g.blocked(point,g.elevation(...point))})),
       extensions:leopoldSidewalks.runs.flatMap((run,index)=>run.curb.filter((point,i)=>i%4===0&&(index===0 ? point[0]>134&&point[1]>178 : point[0]>130&&point[1]>196)).flatMap(point=>{
         const road=g.projectRoute(point,leopoldSidewalks.street.points).point,dx=point[0]-road[0],dz=point[1]-road[1],length=Math.hypot(dx,dz);
@@ -111,6 +137,28 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     expect(curb.hit.height - curb.paving).toBeCloseTo(0.02, 2);
   }
   expect(photoFixes.distinctMotif).toBe(true);
+  expect(photoFixes.interior.length).toBeGreaterThan(20);
+  for (const probe of photoFixes.interior) {
+    expect.soft(probe.hit.color, JSON.stringify(probe)).toBe('d0ccbd');
+    expect
+      .soft(probe.hit.height - probe.ground, JSON.stringify(probe))
+      .toBeCloseTo(0.075, 2);
+    expect.soft(probe.blocked, JSON.stringify(probe)).toBe(false);
+  }
+  for (const probe of photoFixes.arches) {
+    expect(probe.hit.color, JSON.stringify(probe)).toBe('b2b5ae');
+    expect(probe.hit.height - probe.ground, JSON.stringify(probe)).toBeCloseTo(
+      0.055,
+      2,
+    );
+  }
+  expect(photoFixes.stairSurround.length).toBeGreaterThan(6);
+  for (const probe of photoFixes.stairSurround) {
+    expect.soft(probe.hit.color, JSON.stringify(probe)).toBe('d0ccbd');
+    expect
+      .soft(probe.hit.height - probe.ground, JSON.stringify(probe))
+      .toBeCloseTo(0.075, 2);
+  }
   for (const sidewalk of photoFixes.sidewalks) {
     expect(sidewalk.hit.color).toBe('d0ccbd');
     expect(sidewalk.hit.height - sidewalk.paving).toBeCloseTo(0.02, 3);
@@ -250,7 +298,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
     }
     const street=points.flatMap(point=>{
       w.raycaster.set(w.position.clone().set(point[0]*1.5,180,point[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=300;
-      const road=w.raycaster.intersectObjects(group.children,false)[0];
+      const road=w.raycaster.intersectObjects([...group.children,...w.scene.children.filter(mesh=>mesh.isMesh&&!mesh.isInstancedMesh&&mesh.material===w.surfaceMaterials.get('mosaic','#d0ccbd'))],false)[0];
       if(!road)return [{point,missing:true}];
       const earth=w.raycaster.intersectObjects(terrain,false)[0];
       return [{point,road:road.point.y/1.5,earth:earth?.point.y/1.5}];
@@ -286,7 +334,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   expect(streetMaterials).toEqual([
     ['Paving: cobble'],
     ['Paving: cobble'],
-    ['Paving: gravel'],
+    ['Paving: cobble'],
     ['Paving: gravel'],
     ['Paving: gravel'],
   ]);
