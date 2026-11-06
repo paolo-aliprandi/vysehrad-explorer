@@ -826,24 +826,47 @@ export const cathedralPaving = (() => {
   const street = retainedStreetCorridors.find(
     (street) => street.feature.id === 587280816,
   );
-  if (!street) throw new Error('Missing chapter street sidewalk reference.');
+  const house = buildings.find((building) => building.id === 365342400);
+  if (!street || !house)
+    throw new Error(
+      'Missing chapter street or cathedral-square house reference.',
+    );
   const ring = (polygon: readonly Point[]): Polygon => [
     polygon.map(([x, z]) => [x, z]),
   ];
-  const frontage = (outer: Point[]) => {
-    const curb = samplePolyline(outer, 0.8).map((point): Point => {
+  const frontage = (outer: Point[], building?: Feature) => {
+    const edge = samplePolyline(outer, 0.8);
+    const curb = edge.map((point): Point => {
       const road = projectRoute(point, cathedralForecourt.points);
-      return [
+      const curb: Point = [
         point[0] + ((road.point[0] - point[0]) * 1.3) / road.distance,
         point[1] + ((road.point[1] - point[1]) * 1.3) / road.distance,
       ];
+      if (!building) return curb;
+      const wall = projectRoute(curb, building.points);
+      if (wall.distance >= 1.45) return curb;
+      if (wall.distance < 1e-6 || inside(curb, building.points))
+        throw new Error(
+          'The cathedral-square curb has no clear house frontage.',
+        );
+      return [
+        wall.point[0] + ((curb[0] - wall.point[0]) * 1.45) / wall.distance,
+        wall.point[1] + ((curb[1] - wall.point[1]) * 1.45) / wall.distance,
+      ];
     });
+    const boundary = building
+      ? [
+          ...outer.slice(0, 3),
+          ...building.points.slice(11, 21),
+          ...outer.slice(-1),
+        ]
+      : outer;
     return {
       feature: cathedralForecourt.feature,
       curb,
       polygons: polygonBoolean(
         'intersection',
-        [ring([...outer, ...[...curb].reverse()])],
+        [ring([...boundary, ...[...curb].reverse()])],
         [ring(cathedralForecourt.polygon)],
       ),
     };
@@ -859,18 +882,21 @@ export const cathedralPaving = (() => {
       [-218.58, -9.22],
       [-215.15, -8.97],
     ]),
-    frontage([
-      [-254.65, 3.4],
-      [-250.4, 6.1],
-      [-246.7, 8.7],
-      [-243.15, 11.55],
-      [-233.55, 11.95],
-      [-233.2, 16.1],
-      [-233.3, 24.5],
-      [-234.05, 28.3],
-      [-228.4, 30.4],
-      [-224.25, 30.55],
-    ]),
+    frontage(
+      [
+        [-254.65, 3.4],
+        [-250.4, 6.1],
+        [-246.7, 8.7],
+        [-243.15, 11.55],
+        [-233.55, 11.95],
+        [-233.2, 16.1],
+        [-233.3, 24.5],
+        [-234.05, 28.3],
+        [-228.4, 30.4],
+        [-224.25, 30.55],
+      ],
+      house,
+    ),
   ];
   const samples = samplePolyline(street.points, 0.8).filter(
     (point) => point[0] > -114.1 && point[0] < 30,
@@ -975,10 +1001,9 @@ export const cathedralPaving = (() => {
     polygon: cathedralForecourt.polygon,
     sidewalks,
     grade: (feature: Feature, point: Point) =>
-      streetGrade(
-        feature.id === street.feature.id ? street : cathedralForecourt,
-        point,
-      ),
+      feature.id === street.feature.id
+        ? streetGrade(street, point)
+        : cathedralForecourt.grade(point),
   };
 })();
 

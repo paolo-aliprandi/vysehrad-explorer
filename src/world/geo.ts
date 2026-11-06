@@ -2792,7 +2792,7 @@ export function elevation(x: number, z: number) {
     z < 32 &&
     inside([x, z], cathedralForecourt.polygon)
   )
-    return streetGrade(cathedralForecourt, [x, z]);
+    return cathedralForecourt.grade([x, z]);
   const section = retainedStreetSection([x, z]);
   if (section) return retainedStreetElevation(section, ground);
   const point: Point = [x, z];
@@ -3162,6 +3162,68 @@ export const naHradbachStreet = (() => {
     maxZ: Math.max(...polygon.map((point) => point[1])),
   };
 })();
+export const cathedralApron = (() => {
+  const doors = [
+    [454748868, -0.5],
+    [454748869, 7.9],
+    [454748870, 16.6],
+  ].map(([id, z]) => {
+    const part = parts.find((part) => part.id === id);
+    if (!part) throw new Error(`The basilica entrance ${id} is missing.`);
+    return {
+      ...westFacade(modelBuildingPart(part), z),
+      id,
+      width: id === 454748869 ? 4.6 : 2.9,
+      height: id === 454748869 ? 6.5 : 4.8,
+    };
+  });
+  const face = doors[1];
+  const at = (u: number, v: number): Point => [
+    face.point[0] + Math.cos(face.angle) * u + Math.sin(face.angle) * v,
+    face.point[1] - Math.sin(face.angle) * u + Math.cos(face.angle) * v,
+  ];
+  const doorPositions = doors.map((door) => ({
+    u:
+      (door.point[0] - face.point[0]) * Math.cos(face.angle) -
+      (door.point[1] - face.point[1]) * Math.sin(face.angle),
+    v:
+      (door.point[0] - face.point[0]) * Math.sin(face.angle) +
+      (door.point[1] - face.point[1]) * Math.cos(face.angle),
+  }));
+  const left = Math.min(...doorPositions.map((door) => door.u)) - 3.1;
+  const right = Math.max(...doorPositions.map((door) => door.u)) + 3.1;
+  const front = Math.max(...doorPositions.map((door) => door.v)) + 7.3;
+  const outer = [
+    at(left, 0.25),
+    at(right, 0.25),
+    at(right, front - 0.8),
+    at(right - 0.8, front),
+    at(left + 0.8, front),
+    at(left, front - 0.8),
+  ];
+  const inset = [
+    at(left + 0.26, 0.5),
+    at(right - 0.26, 0.5),
+    at(right - 0.26, front - 0.92),
+    at(right - 0.92, front - 0.26),
+    at(left + 0.92, front - 0.26),
+    at(left + 0.26, front - 0.92),
+  ];
+  return {
+    doors,
+    at,
+    left,
+    right,
+    front,
+    doorPositions,
+    outer,
+    inset,
+    polygon: [at(left, -0.5), at(right, -0.5), ...outer.slice(2)],
+    level:
+      Math.max(...doors.map((door) => unretainedElevation(...door.point))) +
+      0.02,
+  };
+})();
 export const cathedralForecourt = (() => {
   const street = paths.find((path) => path.id === 27762644);
   const approach = paths.find((path) => path.id === 1234076195);
@@ -3182,26 +3244,41 @@ export const cathedralForecourt = (() => {
     [-218.2, -9.3],
     [-212.7, -9],
     [-212.8, -6.5],
-    [-218, -6.8],
-    [-218, 24.5],
+    cathedralApron.at(cathedralApron.left, -0.1),
+    cathedralApron.at(cathedralApron.right, -0.1),
     [-216.6, 25.9],
     [-216.8, 31],
     [-228.5, 30.89],
     [-234.2, 28.66],
+    [-234.1, 24.6],
     [-233.6, 24.61],
+    [-233.49, 20.33],
     [-233.37, 16.05],
+    [-233.88, 16.04],
     [-233.77, 11.74],
+    [-243.05, 11.48],
     [-243.23, 11.35],
     [-246.81, 8.58],
     [-250.55, 5.94],
     [-254.94, 3.34],
     [-252, -10.6],
   ];
+  const levels = points.map((point) => unretainedElevation(...point));
   return {
     feature: { ...street, points },
     points,
-    levels: points.map((point) => unretainedElevation(...point)),
+    levels,
     polygon,
+    grade: (point: Point) => {
+      const base = streetGrade({ points, levels }, point);
+      const distance = inside(point, cathedralApron.polygon)
+        ? 0
+        : projectRoute(point, [
+            ...cathedralApron.polygon,
+            cathedralApron.polygon[0],
+          ]).distance;
+      return base + (cathedralApron.level - base) * (1 - smooth(distance / 3));
+    },
   };
 })();
 export const retainedStreetAreas = [
@@ -3223,8 +3300,7 @@ export function retainedStreetSurfaceElevation(
       : streetGrade(rotundaStreet, point);
   }
   if (area === naHradbachStreet) return streetGrade(naHradbachStreet, point);
-  if (area === cathedralForecourt)
-    return streetGrade(cathedralForecourt, point);
+  if (area === cathedralForecourt) return cathedralForecourt.grade(point);
   // Keep shared cell-corner samples on the graded side of the retaining cut.
   const sample = inside(point, area.polygon)
     ? point
@@ -3699,7 +3775,7 @@ export function featureElevation(feature: Feature, point: Point) {
     point[1] < 32 &&
     inside(point, cathedralForecourt.polygon)
   )
-    return streetGrade(cathedralForecourt, point);
+    return cathedralForecourt.grade(point);
   if ([494921190, 494921198, 494921210, 370193785].includes(feature.id))
     return pevnostiGrade(point).level;
   if (feature.id === gardenExitAccess.feature.id) {
@@ -4607,22 +4683,10 @@ export const cathedralDoorLeaf = {
   depth: 0.18,
   offset: 0.045,
 };
-export const cathedralPortals = [
-  [454748868, -0.5],
-  [454748869, 7.9],
-  [454748870, 16.6],
-].map(([id, z]) => {
-  const part = parts.find((part) => part.id === id);
-  if (!part) throw new Error(`The basilica entrance ${id} is missing.`);
-  const face = westFacade(modelBuildingPart(part), z);
-  return {
-    ...face,
-    id,
-    width: id === 454748869 ? 4.6 : 2.9,
-    height: id === 454748869 ? 6.5 : 4.8,
-    threshold: elevation(...face.point) + 0.059,
-  };
-});
+export const cathedralPortals = cathedralApron.doors.map((door) => ({
+  ...door,
+  threshold: elevation(...door.point) + 0.075,
+}));
 
 function buildingClearance(feature: Feature, point: Point) {
   if (feature.id === -89545110) return 0.45;

@@ -98,6 +98,7 @@ import {
 import { makeMonuments, makeCemeteryCornerShrine } from './monuments';
 import { makePassages, makeApproach, makeRiversideDoorways } from './passages';
 import { roof } from './engine';
+import { makeCathedralSidewalks } from './reference-details';
 import { pavingGeometry, pavingSurfaces, upperPromenadePaving } from './paving';
 import {
   makeStreetFrontage,
@@ -509,6 +510,105 @@ it('paves the main cathedral doorway and joins its forecourt to the mapped appro
   material.dispose();
 });
 
+it('keeps the complete ornate cathedral foreground on one raised level with smooth street access', () => {
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const meshes: THREE.Mesh[] = [];
+  makeCathedralForecourt((color, geometry) => {
+    if (color === '#deded6') meshes.push(new THREE.Mesh(geometry, material));
+    else geometry.dispose();
+  });
+  const face = cathedralEntrance;
+  const heights: number[] = [];
+  try {
+    for (const u of [-9, 0, 9])
+      for (const v of [1.4, 4, 6.8]) {
+        const point: Point = [
+          face.point[0] + Math.cos(face.angle) * u + Math.sin(face.angle) * v,
+          face.point[1] - Math.sin(face.angle) * u + Math.cos(face.angle) * v,
+        ];
+        const ray = new THREE.Raycaster(
+          new THREE.Vector3(point[0], 80, point[1]),
+          new THREE.Vector3(0, -1, 0),
+        );
+        const hit = ray.intersectObjects(meshes)[0];
+        expect(hit, JSON.stringify(point)).toBeDefined();
+        heights.push(hit.point.y);
+        expect(hit.point.y - elevation(...point)).toBeCloseTo(0.075, 3);
+        expect(blocked(point)).toBe(false);
+      }
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(0.001);
+    for (const door of cathedralEntrance.doors)
+      expect(door.threshold).toBeCloseTo(heights[0], 3);
+    const approach = Array.from(
+      { length: 41 },
+      (_, i): Point => [
+        face.point[0] + Math.sin(face.angle) * (7.5 + i * 0.1),
+        face.point[1] + Math.cos(face.angle) * (7.5 + i * 0.1),
+      ],
+    );
+    for (let i = 1; i < approach.length; i++)
+      expect(
+        Math.abs(
+          standingElevation(approach[i]) - standingElevation(approach[i - 1]),
+        ),
+      ).toBeLessThan(0.04);
+  } finally {
+    meshes.forEach((mesh) => mesh.geometry.dispose());
+    material.dispose();
+  }
+});
+
+it('joins the chapter house skirting to the sidewalk without grass gaps beneath its frontage', () => {
+  const house = buildings.find((building) => building.id === 365342400);
+  if (!house) throw new Error('Missing cathedral-square house.');
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  const trim: THREE.Mesh[] = [],
+    mosaic: THREE.Mesh[] = [];
+  decorateBuilding(house, foundation(house), 6, (color, geometry) => {
+    if (color === '#c5bba5') trim.push(new THREE.Mesh(geometry, material));
+    else geometry.dispose();
+  });
+  makeCathedralSidewalks((_color, geometry, kind) => {
+    if (kind === 'mosaic') mosaic.push(new THREE.Mesh(geometry, material));
+    else geometry.dispose();
+  });
+  try {
+    for (const [a, b] of [
+      [12, 13],
+      [15, 17],
+      [19, 20],
+    ].map(([a, b]) => [house.points[a], house.points[b]]))
+      for (const fraction of [0.1, 0.5]) {
+        const wall: Point = [
+          a[0] + (b[0] - a[0]) * fraction,
+          a[1] + (b[1] - a[1]) * fraction,
+        ];
+        const road = projectRoute(wall, cathedralForecourt.points);
+        const nx = (road.point[0] - wall[0]) / road.distance,
+          nz = (road.point[1] - wall[1]) / road.distance;
+        const point: Point = [wall[0] + nx * 0.03, wall[1] + nz * 0.03];
+        const ray = new THREE.Raycaster(
+          new THREE.Vector3(point[0], 80, point[1]),
+          new THREE.Vector3(0, -1, 0),
+        );
+        const floor = ray.intersectObjects(mosaic)[0];
+        expect(floor, JSON.stringify(point)).toBeDefined();
+        ray.set(
+          new THREE.Vector3(wall[0] + nx, floor.point.y + 0.08, wall[1] + nz),
+          new THREE.Vector3(-nx, 0, -nz),
+        );
+        ray.far = 1.2;
+        expect(
+          ray.intersectObjects(trim)[0],
+          JSON.stringify(wall),
+        ).toBeDefined();
+      }
+  } finally {
+    [...trim, ...mosaic].forEach((mesh) => mesh.geometry.dispose());
+    material.dispose();
+  }
+});
+
 it('grounds all three closed cathedral door leaves on their actual mosaic thresholds', () => {
   for (const [index, id] of [454748868, 454748869, 454748870].entries()) {
     const feature = features.find((feature) => feature.id === id);
@@ -528,7 +628,7 @@ it('grounds all three closed cathedral door leaves on their actual mosaic thresh
         geometry.dispose();
       },
     );
-    expect(door.threshold).toBeCloseTo(elevation(...door.point) + 0.059, 6);
+    expect(door.threshold).toBeCloseTo(elevation(...door.point) + 0.075, 6);
     expect(Math.min(...leafBottoms)).toBeCloseTo(door.threshold, 4);
     const approach: Point = [
       door.point[0] + Math.sin(door.angle) * 1.4,

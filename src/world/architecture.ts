@@ -39,7 +39,7 @@ import {
   streetFurniture,
   cathedralPortals,
   cathedralForecourt,
-  streetGrade,
+  cathedralApron,
   cathedralDoorLeaf,
   aveMariaFrontage,
   aveMariaCourtCuts,
@@ -862,38 +862,8 @@ export const cathedralEntrance = (() => {
 })();
 
 export function makeCathedralForecourt(add: AddGeometry) {
-  const face = cathedralEntrance;
-  const at = (u: number, v: number): Point => [
-    face.point[0] + Math.cos(face.angle) * u + Math.sin(face.angle) * v,
-    face.point[1] - Math.sin(face.angle) * u + Math.cos(face.angle) * v,
-  ];
-  const doorPositions = face.doors.map((door) => ({
-    u:
-      (door.point[0] - face.point[0]) * Math.cos(face.angle) -
-      (door.point[1] - face.point[1]) * Math.sin(face.angle),
-    v:
-      (door.point[0] - face.point[0]) * Math.sin(face.angle) +
-      (door.point[1] - face.point[1]) * Math.cos(face.angle),
-  }));
-  const left = Math.min(...doorPositions.map((door) => door.u)) - 3.1;
-  const right = Math.max(...doorPositions.map((door) => door.u)) + 3.1;
-  const front = Math.max(...doorPositions.map((door) => door.v)) + 7.3;
-  const outer = [
-    at(left, 0.25),
-    at(right, 0.25),
-    at(right, front - 0.8),
-    at(right - 0.8, front),
-    at(left + 0.8, front),
-    at(left, front - 0.8),
-  ];
-  const inset = [
-    at(left + 0.26, 0.5),
-    at(right - 0.26, 0.5),
-    at(right - 0.26, front - 0.92),
-    at(right - 0.92, front - 0.26),
-    at(left + 0.92, front - 0.26),
-    at(left + 0.26, front - 0.92),
-  ];
+  const { at, doorPositions, left, right, front, outer, inset, level } =
+    cathedralApron;
   const route = paths.find((path) => path.id === 27762644);
   const approach = route?.points.at(-1);
   const previous = route?.points.at(-2);
@@ -927,33 +897,24 @@ export function makeCathedralForecourt(add: AddGeometry) {
     kind: MaterialKind,
     holes: Point[][] = [],
   ) => {
-    const shape: Polygon = [polygon, ...holes].map((ring) =>
-      ring.map(([x, z]) => [x, z]),
+    add(
+      color,
+      drapedPolygon(polygon, offset, () => level, holes, true, true),
+      kind,
     );
-    const plaza: Polygon = [cathedralForecourt.polygon.map(([x, z]) => [x, z])];
-    for (const graded of [true, false]) {
-      const pieces = graded
-        ? polygonClipping.intersection(shape, plaza)
-        : polygonClipping.difference(shape, plaza);
-      for (const piece of pieces)
-        add(
-          color,
-          drapedPolygon(
-            piece[0],
-            offset,
-            graded
-              ? (x, z) => streetGrade(cathedralForecourt, [x, z])
-              : unretainedElevation,
-            piece.slice(1),
-            graded,
-            true,
-          ),
-          kind,
-        );
-    }
   };
-  pave('#deded6', outer, 0.059, 'mosaic');
-  pave('#535952', outer, 0.062, 'stone', [inset]);
+  pave('#deded6', outer, 0.075, 'mosaic');
+  pave('#535952', outer, 0.078, 'stone', [inset]);
+  add(
+    '#535952',
+    continuousWall(
+      [...outer, outer[0]],
+      0.12,
+      () => ({ bottom: level + 0.015, top: level + 0.078 }),
+      false,
+    ),
+    'stone',
+  );
   for (const door of doorPositions) {
     const star = Array.from({ length: 16 }, (_, index) => {
       const angle = (index * Math.PI) / 8;
@@ -963,7 +924,7 @@ export function makeCathedralForecourt(add: AddGeometry) {
         3.35 + Math.sin(angle) * radius,
       );
     });
-    pave('#4a514b', star, 0.066, 'stone');
+    pave('#4a514b', star, 0.082, 'stone');
   }
   for (const v of [2.2, 4.6])
     pave(
@@ -974,7 +935,7 @@ export function makeCathedralForecourt(add: AddGeometry) {
         at(right - 0.3, v + 0.08),
         at(left + 0.3, v + 0.08),
       ],
-      0.061,
+      0.077,
       'stone',
     );
 }
@@ -1276,13 +1237,22 @@ export function decorateBuilding(
           rectangularWindow(add, p, ground + floor, angle, 1.1, 1.65);
       }
     const trimLevels = tower ? [1, 17, 30, wallHeight] : [0.35, wallHeight];
+    const plazaFrontage =
+      feature.id === 365342400 &&
+      inside(
+        [mid[0] + nx * 0.2, mid[1] + nz * 0.2],
+        cathedralForecourt.polygon,
+      );
     for (const level of trimLevels) {
       if (portalFacade && level < 7) continue;
       const trimHeight = level === 0.35 ? 0.45 : 0.22;
       const plinth = !church && level === 0.35;
       const trimLevel = (point: Point) =>
         plinth
-          ? upperElevation(...point) + 0.025 + trimHeight / 2
+          ? (plazaFrontage
+              ? cathedralForecourt.grade(point) + 0.075
+              : upperElevation(...point) + 0.025) +
+            trimHeight / 2
           : ground + level;
       const doors = [
         ...(entrance

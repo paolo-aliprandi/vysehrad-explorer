@@ -114,6 +114,20 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       .map(point=>({point,hit:mosaicAt(point)}));
     const cathedralFacades=[[-102.8149,38.7425],[-79.0654,44.2305],[-64.5655,47.6105]]
       .map(point=>({point,hit:mosaicAt(point),ground:soilAt(point)}));
+    const apron=w.scene.children.filter(mesh=>mesh.isMesh&&!mesh.isInstancedMesh&&mesh.material===w.surfaceMaterials.get('mosaic','#deded6'));
+    const churchApron=[-9,0,9].flatMap(u=>[1.4,4,6.8].map(v=>{
+      const point=g.cathedralApron.at(u,v);
+      w.raycaster.set(w.position.clone().set(point[0]*1.5,120,point[1]*1.5),w.position.clone().set(0,-1,0));w.raycaster.far=100;
+      return {point,height:w.raycaster.intersectObjects(apron,false)[0]?.point.y/1.5,ground:soilAt(point),blocked:g.blocked(point)};
+    }));
+    const churchWedge=[[-215,-5],[-216,-5],[-217,-5],[-216,-6]].map(point=>({point,hit:cast([point[0],80,point[1]],[0,-1,0],50),ground:soilAt(point),blocked:g.blocked(point)}));
+    const house=g.buildings.find(building=>building.id===365342400);
+    const houseTrim=[[12,13],[15,17],[19,20]].flatMap(([a,b])=>[.1,.5].map(t=>{
+      const wall=[house.points[a][0]+(house.points[b][0]-house.points[a][0])*t,house.points[a][1]+(house.points[b][1]-house.points[a][1])*t];
+      const road=g.projectRoute(wall,g.cathedralForecourt.points),nx=(road.point[0]-wall[0])/road.distance,nz=(road.point[1]-wall[1])/road.distance;
+      const point=[wall[0]+nx*.03,wall[1]+nz*.03],floor=mosaicAt(point);
+      return {point,floor,trim:cast([wall[0]+nx,floor.height+.08,wall[1]+nz],[-nx,0,-nz],1.2)};
+    }));
     const gate=g.buildings.find(feature=>feature.id===51718887),frame=g.gateFrame(gate);
     const arches=g.gateOpenings(gate).flatMap(opening=>[-1.8,0,1.8].map(z=>{
       const point=[frame.center[0]+Math.cos(frame.angle)*opening.offset+Math.sin(frame.angle)*z,frame.center[1]-Math.sin(frame.angle)*opening.offset+Math.cos(frame.angle)*z],ground=g.elevation(...point);
@@ -142,7 +156,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       return {hit:down(band),paving:g.featureElevation(street,band)+.055};
     });
     return {
-      colors:Object.fromEntries([['lion','#918b79'],['shield','#a5a18e'],['curb','#a7a89d']].map(([key,color])=>[key,w.surfaceMaterials.get('stone',color).color.getHexString()])),
+      colors:Object.fromEntries([['lion','#918b79'],['shield','#a5a18e'],['curb','#a7a89d'],['plinth','#c5bba5']].map(([key,color])=>[key,w.surfaceMaterials.get('stone',color).color.getHexString()])),
       asphalt:down(lab.point),labGround:g.elevation(...lab.point),labBlocked:g.blocked(lab.point,g.elevation(...lab.point)),
       paint:down([lab.point[0],lab.point[1]+1.15]),
       lions:site.faces.map(face=>cast([face.point[0]+face.normal[0]*2,site.crest-2.25,face.point[1]+face.normal[1]*2],[-face.normal[0],0,-face.normal[1]],3)),
@@ -165,6 +179,7 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
       }),
       pads:g.visitorFrontagePads.map(pad=>({level:pad.level,samples:pad.building.points.map(point=>g.elevation(...point))})),
       cathedralFacades,
+      churchApron,churchWedge,houseTrim,
       distinctMotif:w.surfaceMaterials.get('mosaic','#d0ccbd').map!==w.surfaceMaterials.get('cobble','#b2b5ae').map,
       road:down(point),roadBlocked:g.blocked(point,g.elevation(...point))
     };
@@ -249,6 +264,27 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   for (const probe of photoFixes.cathedralFacades) {
     expect(probe.hit.color, JSON.stringify(probe)).toBe('d0ccbd');
     expect(probe.hit.height - probe.ground).toBeGreaterThan(0.055);
+  }
+  const apronHeights = photoFixes.churchApron.map((probe) => probe.height);
+  expect(Math.max(...apronHeights) - Math.min(...apronHeights)).toBeLessThan(
+    0.001,
+  );
+  for (const probe of photoFixes.churchApron) {
+    expect(probe.height - probe.ground, JSON.stringify(probe)).toBeGreaterThan(
+      0.055,
+    );
+    expect(probe.blocked).toBe(false);
+  }
+  for (const probe of photoFixes.churchWedge) {
+    expect(probe.hit.color, JSON.stringify(probe)).toBe('b2b5ae');
+    expect(probe.hit.height - probe.ground).toBeGreaterThan(0.04);
+    expect(probe.blocked).toBe(false);
+  }
+  for (const probe of photoFixes.houseTrim) {
+    expect(probe.floor.color, JSON.stringify(probe)).toBe('d0ccbd');
+    expect(probe.trim.color, JSON.stringify(probe)).toBe(
+      photoFixes.colors.plinth,
+    );
   }
   for (const probe of photoFixes.arches) {
     expect(probe.hit.color, JSON.stringify(probe)).toBe('b2b5ae');

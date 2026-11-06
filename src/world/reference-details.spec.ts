@@ -467,6 +467,10 @@ it('fills the marked cathedral frontage with continuous cobbles rather than isol
       [-229, 17],
       [-229, 25],
       [-240, 8],
+      [-215, -5],
+      [-216, -5],
+      [-217, -5],
+      [-216, -6],
     ] as Point[]) {
       ray.set(
         new THREE.Vector3(point[0], 80, point[1]),

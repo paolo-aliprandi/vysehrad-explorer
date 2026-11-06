@@ -21,6 +21,7 @@ import {
   rotundaStreet,
   naHradbachStreet,
   cathedralForecourt,
+  cathedralApron,
   aveMariaCourtCuts,
   aveMariaFrontage,
   karlachBorderBeds,
@@ -463,6 +464,7 @@ export function pavingSurfaces(features: readonly Feature[]): PavingSurface[] {
         'difference',
         full,
         cathedralPaving.sidewalks.flatMap((side) => side.polygons),
+        [[cathedralApron.outer.map(([x, z]) => [x, z])]],
       );
     if (projectRoute(aveMariaFrontage.point, feature.points).distance < 20)
       full = polygonBoolean(
