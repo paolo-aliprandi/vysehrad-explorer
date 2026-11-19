@@ -5,6 +5,9 @@ import { pointsOfInterest } from '../world/points-of-interest';
 
 vi.mock('../world/engine', () => ({
   World: class {
+    static async create() {
+      return new this();
+    }
     setDiscoveries = vi.fn();
     setCasemateNotes = vi.fn();
     setActive = vi.fn();

@@ -1,9 +1,53 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { prepareBatchGeometry, spatialBatches, worldUVs } from './materials';
+import {
+  compactGeometry,
+  prepareBatchGeometry,
+  spatialBatches,
+  worldUVs,
+} from './materials';
 
 describe('indexed material batches', () => {
+  it('compacts repeated road triangles without changing paving positions, UVs or collision, and packs mobile normals', () => {
+    const source = new THREE.PlaneGeometry(24, 24, 24, 24)
+      .rotateX(-Math.PI / 2)
+      .toNonIndexed();
+    worldUVs(source, 'cobble');
+    const expected = source.clone();
+    const compact = compactGeometry(source, true);
+    const rendered = compact.toNonIndexed();
+    expect(compact.attributes.position.count).toBeLessThan(
+      expected.attributes.position.count / 3,
+    );
+    for (const name of ['position', 'uv'])
+      expect(rendered.getAttribute(name).array).toEqual(
+        expected.getAttribute(name).array,
+      );
+    expect(compact.attributes.normal.array).toBeInstanceOf(Int16Array);
+    const tile = new THREE.PlaneGeometry(1, 1).toNonIndexed();
+    worldUVs(tile, 'cobble');
+    const small = compactGeometry(tile, true);
+    const combined = mergeGeometries([compact, small]);
+    expect(combined).not.toBeNull();
+    for (let i = 0; i < rendered.attributes.normal.count; i++)
+      for (let component = 0; component < 3; component++)
+        expect(
+          rendered.attributes.normal.getComponent(i, component),
+        ).toBeCloseTo(expected.attributes.normal.getComponent(i, component), 4);
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(1.25, 10, 2.25),
+      new THREE.Vector3(0, -1, 0),
+    );
+    expect(
+      ray.intersectObject(new THREE.Mesh(compact, material))[0].point,
+    ).toEqual(ray.intersectObject(new THREE.Mesh(expected, material))[0].point);
+    [compact, expected, rendered, small, combined].forEach((geometry) =>
+      geometry?.dispose(),
+    );
+    material.dispose();
+  });
   it('culls distant cells while retaining complete geometry crossing a cell boundary', () => {
     const near = new THREE.BoxGeometry(2, 2, 2).translate(1, 0, 1);
     const far = new THREE.BoxGeometry(2, 2, 2).translate(200, 0, 200);

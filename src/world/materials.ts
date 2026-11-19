@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 export type MaterialKind =
   | 'plaster'
@@ -426,10 +427,7 @@ export function spatialBatches(geometries: THREE.BufferGeometry[]) {
   return [...cells.values()];
 }
 
-export function prepareBatchGeometry(
-  geometry: THREE.BufferGeometry,
-  kind: MaterialKind,
-) {
+function indexGeometry(geometry: THREE.BufferGeometry) {
   if (!geometry.index) {
     const count = geometry.attributes.position.count;
     const indices =
@@ -437,8 +435,63 @@ export function prepareBatchGeometry(
     for (let i = 0; i < count; i++) indices[i] = i;
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
   }
+}
+
+export function prepareBatchGeometry(
+  geometry: THREE.BufferGeometry,
+  kind: MaterialKind,
+) {
+  indexGeometry(geometry);
   if (kind !== 'fresco' || !geometry.getAttribute('uv'))
     worldUVs(geometry, kind);
+  return geometry;
+}
+
+export function compactGeometry(
+  geometry: THREE.BufferGeometry,
+  mobile = false,
+) {
+  const count = geometry.attributes.position.count;
+  if (count >= 256 && (!geometry.index || geometry.index.count === count)) {
+    const compact = mergeVertices(geometry, 0.000001);
+    geometry.dispose();
+    geometry = compact;
+  }
+  indexGeometry(geometry);
+  if (mobile) {
+    const normals = geometry.getAttribute('normal');
+    if (normals && !(normals.array instanceof Int16Array)) {
+      const packed = new Int16Array(normals.count * 3);
+      for (let i = 0; i < normals.count; i++) {
+        packed[i * 3] = Math.round(
+          THREE.MathUtils.clamp(normals.getX(i), -1, 1) * 32767,
+        );
+        packed[i * 3 + 1] = Math.round(
+          THREE.MathUtils.clamp(normals.getY(i), -1, 1) * 32767,
+        );
+        packed[i * 3 + 2] = Math.round(
+          THREE.MathUtils.clamp(normals.getZ(i), -1, 1) * 32767,
+        );
+      }
+      geometry.setAttribute(
+        'normal',
+        new THREE.Int16BufferAttribute(packed, 3, true),
+      );
+    }
+    const colors = geometry.getAttribute('color');
+    if (colors && !(colors.array instanceof Uint8Array)) {
+      const packed = new Uint8Array(colors.count * colors.itemSize);
+      for (let i = 0; i < colors.count; i++)
+        for (let channel = 0; channel < colors.itemSize; channel++)
+          packed[i * colors.itemSize + channel] = Math.round(
+            THREE.MathUtils.clamp(colors.getComponent(i, channel), 0, 1) * 255,
+          );
+      geometry.setAttribute(
+        'color',
+        new THREE.Uint8BufferAttribute(packed, colors.itemSize, true),
+      );
+    }
+  }
   return geometry;
 }
 

@@ -160,10 +160,10 @@
   object-fit: cover;
   animation: welcome-aerial 24s linear infinite;
 }
-.welcome-aerials img:nth-child(2) {
+.welcome-aerials picture:nth-child(2) img {
   animation-delay: -16s;
 }
-.welcome-aerials img:nth-child(3) {
+.welcome-aerials picture:nth-child(3) img {
   animation-delay: -8s;
 }
 @keyframes welcome-aerial {
@@ -181,7 +181,7 @@
   .welcome-aerials img {
     animation: none;
   }
-  .welcome-aerials img:not(:first-child) {
+  .welcome-aerials picture:not(:first-child) {
     display: none;
   }
 }

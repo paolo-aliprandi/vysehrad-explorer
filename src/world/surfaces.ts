@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MeshBVH } from 'three-mesh-bvh';
 import polygonClipping, { type Polygon } from 'polygon-clipping';
 import { polygonBoolean } from './polygons';
 import {
@@ -321,12 +322,14 @@ export function retainedStreetTerrain() {
       road,
     );
   });
-  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-  const meshes = geometries.map((geometry) => {
-    geometry.computeBoundingBox();
-    return new THREE.Mesh(geometry, material);
+  const floors = geometries.map((geometry) => {
+    // Keep the original floor positions when excavation replaces the rendered attributes.
+    const query = new THREE.BufferGeometry();
+    query.setAttribute('position', geometry.attributes.position);
+    query.setIndex(geometry.index?.clone() ?? null);
+    return new MeshBVH(query);
   });
-  const ray = new THREE.Raycaster();
+  const ray = new THREE.Ray();
   const triangle = new THREE.Triangle();
   const query = new THREE.Vector3();
   const nearest = new THREE.Vector3();
@@ -340,7 +343,12 @@ export function retainedStreetTerrain() {
       new THREE.Vector3(point[0], 200, point[1]),
       new THREE.Vector3(0, -1, 0),
     );
-    const hit = ray.intersectObjects(meshes, false)[0];
+    let hit: THREE.Intersection | null = null;
+    for (const floor of floors) {
+      const candidate = floor.raycastFirst(ray, THREE.DoubleSide);
+      if (candidate && (!hit || candidate.distance < hit.distance))
+        hit = candidate;
+    }
     if (hit) {
       cache.set(key, hit.point.y);
       return hit.point.y;
@@ -349,7 +357,7 @@ export function retainedStreetTerrain() {
     let distance = 0.002 ** 2;
     let height: number | undefined;
     query.set(point[0], 0, point[1]);
-    for (const geometry of geometries) {
+    for (const { geometry } of floors) {
       const bounds = geometry.boundingBox;
       if (
         !bounds ||
@@ -360,10 +368,13 @@ export function retainedStreetTerrain() {
       )
         continue;
       const positions = geometry.attributes.position;
-      for (let i = 0; i < positions.count; i += 3) {
-        triangle.a.set(positions.getX(i), 0, positions.getZ(i));
-        triangle.b.set(positions.getX(i + 1), 0, positions.getZ(i + 1));
-        triangle.c.set(positions.getX(i + 2), 0, positions.getZ(i + 2));
+      for (let i = 0; i < (geometry.index?.count ?? positions.count); i += 3) {
+        const a = geometry.index?.getX(i) ?? i,
+          b = geometry.index?.getX(i + 1) ?? i + 1,
+          c = geometry.index?.getX(i + 2) ?? i + 2;
+        triangle.a.set(positions.getX(a), 0, positions.getZ(a));
+        triangle.b.set(positions.getX(b), 0, positions.getZ(b));
+        triangle.c.set(positions.getX(c), 0, positions.getZ(c));
         if (triangle.getArea() < 1e-12) continue;
         triangle.closestPointToPoint(query, nearest);
         const squared = query.distanceToSquared(nearest);
@@ -371,9 +382,9 @@ export function retainedStreetTerrain() {
         triangle.getBarycoord(nearest, weights);
         distance = squared;
         height =
-          weights.x * positions.getY(i) +
-          weights.y * positions.getY(i + 1) +
-          weights.z * positions.getY(i + 2);
+          weights.x * positions.getY(a) +
+          weights.y * positions.getY(b) +
+          weights.z * positions.getY(c);
       }
     }
     if (height !== undefined) {

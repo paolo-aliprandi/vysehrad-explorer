@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { indexPolygon } from './polygon';
 import {
   kioskSites,
   kioskReply,
@@ -71,6 +72,7 @@ import {
   prepareBatchGeometry,
   spatialBatches,
   worldUVs,
+  compactGeometry,
   type MaterialKind,
 } from './materials';
 import {
@@ -247,6 +249,7 @@ type Callbacks = {
   onCasemateNote: (id: string) => void;
   onError: (message: string) => void;
   onMessage?: (message: string) => void;
+  onProgress?: (message: string) => void;
 };
 
 const palettes = ['#ded5bf', '#e4d3b2', '#d9c9bc', '#d9d3c7', '#e6dec9'];
@@ -492,7 +495,7 @@ export class World {
     0.3,
     2500 * environmentScale,
   );
-  private renderer: THREE.WebGLRenderer;
+  private renderer!: THREE.WebGLRenderer;
   private sunlight = new THREE.DirectionalLight('#ffe2b9', 2.8);
   private ambient = new THREE.HemisphereLight('#c8dcea', '#75805c', 1.2);
   private sky = paintedSky();
@@ -501,7 +504,7 @@ export class World {
   private sunDirection = new THREE.Vector3(-220, 340, 180).normalize();
   private avatar = new THREE.Group();
   private walker = new THREE.Group();
-  private drone: ReturnType<typeof makeDrone>;
+  private drone!: ReturnType<typeof makeDrone>;
   private limbs: { pivot: THREE.Group; phase: number; arm: boolean }[] = [];
   private walkBlend = 0;
   private contactShadow: THREE.Mesh<
@@ -509,8 +512,8 @@ export class World {
     THREE.MeshBasicMaterial
   > | null = null;
   private markers: { id: string; ring: THREE.Mesh; light: THREE.Mesh }[] = [];
-  private site: ReturnType<typeof makeSiteDetails>;
-  private referenceLabels: ReturnType<typeof makeReferenceLabels>;
+  private site!: ReturnType<typeof makeSiteDetails>;
+  private referenceLabels!: ReturnType<typeof makeReferenceLabels>;
   private batches = new Map<
     string,
     { kind: MaterialKind; color: string; geometries: THREE.BufferGeometry[] }
@@ -536,9 +539,9 @@ export class World {
     angle: number;
     previous: THREE.Vector3;
   } | null = null;
-  private npc: THREE.Group;
+  private npc!: THREE.Group;
   private kioskConversations = new Map<string, number>();
-  private audio: WorldAudio;
+  private audio!: WorldAudio;
   private gardenGuests: THREE.Group[] = [];
   private visitors: {
     model: THREE.Group;
@@ -546,10 +549,12 @@ export class World {
     stroll: VisitorStroll;
     pace: number;
   }[] = [];
-  private interior: ReturnType<typeof makeCathedralInterior>;
-  private casemates: ReturnType<typeof makeCasemateInterior>;
-  private artillery: ReturnType<typeof makeCasemateInterior>;
-  private chapels: Record<ChapelKind, ReturnType<typeof makeChapelInterior>>;
+  private interior?: ReturnType<typeof makeCathedralInterior>;
+  private casemates?: ReturnType<typeof makeCasemateInterior>;
+  private artillery?: ReturnType<typeof makeCasemateInterior>;
+  private chapels: Partial<
+    Record<ChapelKind, ReturnType<typeof makeChapelInterior>>
+  > = {};
   private foundCasemateNotes = new Set<string>();
   private indoorReturn: {
     kind: 'cathedral' | 'casemates' | 'artillery' | ChapelKind;
@@ -572,7 +577,7 @@ export class World {
   private controller = idleController;
   private mode: GameMode = 'chill';
   private adventure = new Adventure();
-  private adventureModels: ReturnType<typeof makeAdventureModels>;
+  private adventureModels!: ReturnType<typeof makeAdventureModels>;
   private knight = new THREE.Group();
   private explorerHat: THREE.Object3D[] = [];
   private heldWeapons: Partial<Record<Weapon, THREE.Group>> = {};
@@ -600,11 +605,11 @@ export class World {
     model: THREE.Group;
   })[] = [];
   private landedArrowModels = new Map<string, THREE.Group>();
-  private fireSeat: { point: Point; angle: number };
+  private fireSeat!: { point: Point; angle: number };
   private raycaster = new THREE.Raycaster();
   private movementRay = new THREE.Raycaster();
   private keys = new Set<string>();
-  private observer: ResizeObserver;
+  private observer?: ResizeObserver;
   private frame = 0;
   private lastTime = 0;
   private updateTime = 0;
@@ -623,11 +628,50 @@ export class World {
   private flying = false;
   private fps = 60;
   private clock = 0;
+  private readonly mobile = window.matchMedia('(pointer: coarse)').matches;
 
   constructor(
     private host: HTMLElement,
     private callbacks: Callbacks,
+    deferred = false,
   ) {
+    if (!deferred) {
+      const steps = this.initialize();
+      let step = steps.next();
+      while (!step.done) step = steps.next();
+    }
+  }
+
+  static async create(
+    host: HTMLElement,
+    callbacks: Callbacks,
+    signal: AbortSignal,
+  ) {
+    signal.throwIfAborted();
+    const world = new World(host, callbacks, true);
+    try {
+      const steps = world.initialize();
+      let yieldedAt = performance.now();
+      while (true) {
+        signal.throwIfAborted();
+        const step = steps.next();
+        if (step.done) break;
+        callbacks.onProgress?.(step.value);
+        if (performance.now() - yieldedAt >= 32) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          yieldedAt = performance.now();
+        }
+      }
+      signal.throwIfAborted();
+      return world;
+    } catch (cause) {
+      world.dispose();
+      throw cause;
+    }
+  }
+
+  private *initialize(): Generator<string, void> {
+    yield 'Preparing the 3D view…';
     this.audio = new WorldAudio((message) =>
       this.callbacks.onMessage?.(message),
     );
@@ -636,14 +680,16 @@ export class World {
     this.scene.updateMatrix();
     this.scene.matrixAutoUpdate = false;
     this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference: 'high-performance',
+      antialias: !this.mobile,
+      powerPreference: this.mobile ? 'low-power' : 'high-performance',
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    this.renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio, this.mobile ? 1 : 1.75),
+    );
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.02;
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = !this.mobile;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.domElement.setAttribute(
       'aria-label',
@@ -668,9 +714,10 @@ export class World {
     this.sunlight.shadow.normalBias = 0.055;
     this.sunlight.shadow.bias = -0.00006;
     this.sunlight.shadow.radius = 1.5;
-    this.makeTerrain();
+    yield* this.makeTerrain();
     this.scene.add(makePragueSkyline(this.surfaceMaterials));
-    this.makeFeatures();
+    yield* this.makeFeatures();
+    yield 'Adding historic details…';
     makeGate(
       gardenPortal,
       elevation(...center(gardenPortal.points)),
@@ -681,11 +728,13 @@ export class World {
     makeReferenceDetails(this.batch.bind(this));
     this.referenceLabels = makeReferenceLabels();
     this.scene.add(this.referenceLabels.group);
+    yield 'Restoring the gardens…';
     makeCemetery(this.batch.bind(this));
     makeEnclosureDetails(this.batch.bind(this));
     makeNuselskyBridge(this.batch.bind(this));
     makeRiversideGallery(this.batch.bind(this));
     this.makeTrees();
+    yield 'Planting the grounds…';
     this.makeMeadow();
     makeStreetFurniture(this.batch.bind(this));
     this.site = makeSiteDetails(this.batch.bind(this));
@@ -778,23 +827,8 @@ export class World {
       this.gardenGuests.push(guest);
       this.scene.add(guest);
     }
-    this.interior = makeCathedralInterior(this.surfaceMaterials);
-    this.casemates = makeCasemateInterior(this.surfaceMaterials);
-    this.artillery = makeCasemateInterior(this.surfaceMaterials, true);
-    this.chapels = {
-      rotunda: makeChapelInterior('rotunda', this.surfaceMaterials),
-      lawrence: makeChapelInterior('lawrence', this.surfaceMaterials),
-      john: makeChapelInterior('john', this.surfaceMaterials),
-    };
-    this.scene.add(
-      this.npc,
-      this.interior.group,
-      this.casemates.group,
-      this.artillery.group,
-      this.chapels.rotunda.group,
-      this.chapels.lawrence.group,
-      this.chapels.john.group,
-    );
+    this.scene.add(this.npc);
+    yield 'Preparing exploration…';
     this.outdoorActivities = [
       ...benches.filter(
         (bench) =>
@@ -861,21 +895,11 @@ export class World {
       fireSeatPoint[1],
     );
     this.batch('#827765', fireLog, 'bark');
+    yield 'Assembling the scenery…';
     this.flushBatches();
     this.raycaster.firstHitOnly = true;
     this.movementRay.firstHitOnly = true;
-    for (const mesh of [
-      ...this.blockers,
-      ...this.interior.blockers,
-      ...this.casemates.blockers,
-      ...this.artillery.blockers,
-      ...Object.values(this.chapels).flatMap((chapel) => chapel.blockers),
-    ]) {
-      if (!(mesh instanceof THREE.Mesh) || mesh.geometry.index?.count === 0)
-        continue;
-      mesh.geometry.boundsTree ??= new MeshBVH(mesh.geometry);
-      mesh.raycast = acceleratedRaycast;
-    }
+    yield* this.accelerateSteps(this.blockers);
     this.drone = makeDrone(this.surfaceMaterials);
     this.makeAvatar();
     this.makeMarkers();
@@ -892,18 +916,18 @@ export class World {
     });
     this.setTime('cycle');
     this.observer = new ResizeObserver(() => this.resize());
-    this.observer.observe(host);
+    this.observer.observe(this.host);
     this.resize();
     window.addEventListener('keydown', this.keyDown);
     window.addEventListener('keyup', this.keyUp);
     window.addEventListener('blur', this.clearInput);
     document.addEventListener('visibilitychange', this.clearInput);
-    host.addEventListener('pointerdown', this.pointerDown);
-    host.addEventListener('pointermove', this.pointerMove);
-    host.addEventListener('pointerup', this.pointerUp);
-    host.addEventListener('pointercancel', this.pointerUp);
-    host.addEventListener('lostpointercapture', this.pointerLost);
-    host.addEventListener('wheel', this.wheel, { passive: false });
+    this.host.addEventListener('pointerdown', this.pointerDown);
+    this.host.addEventListener('pointermove', this.pointerMove);
+    this.host.addEventListener('pointerup', this.pointerUp);
+    this.host.addEventListener('pointercancel', this.pointerUp);
+    this.host.addEventListener('lostpointercapture', this.pointerLost);
+    this.host.addEventListener('wheel', this.wheel, { passive: false });
     this.renderer.domElement.addEventListener(
       'webglcontextlost',
       this.contextLost,
@@ -921,10 +945,44 @@ export class World {
       return;
     }
     prepareBatchGeometry(geometry, kind);
+    geometry = compactGeometry(geometry, this.mobile);
     const key = `${kind}|${color}`;
     const existing = this.batches.get(key) ?? { kind, color, geometries: [] };
     existing.geometries.push(geometry);
     this.batches.set(key, existing);
+  }
+
+  private accelerate(objects: THREE.Object3D[]) {
+    const steps = this.accelerateSteps(objects);
+    let step = steps.next();
+    while (!step.done) step = steps.next();
+  }
+
+  private *accelerateSteps(objects: THREE.Object3D[]): Generator<string, void> {
+    let completed = 0;
+    for (const mesh of objects) {
+      if (completed++ % 12 === 0) yield 'Preparing walkable paths…';
+      if (!(mesh instanceof THREE.Mesh) || mesh.geometry.index?.count === 0)
+        continue;
+      mesh.geometry.boundsTree ??= new MeshBVH(mesh.geometry);
+      mesh.raycast = acceleratedRaycast;
+    }
+  }
+
+  private prepareInterior<
+    T extends { group: THREE.Group; blockers: THREE.Object3D[] },
+  >(interior: T): T {
+    interior.group.traverse((object) => {
+      if (object instanceof THREE.Mesh)
+        object.geometry = compactGeometry(object.geometry, this.mobile);
+      if (object instanceof THREE.PointLight) {
+        object.intensity *= environmentScale ** object.decay;
+        object.distance *= environmentScale;
+      }
+    });
+    this.accelerate(interior.blockers);
+    this.scene.add(interior.group);
+    return interior;
   }
 
   private flushBatches() {
@@ -978,7 +1036,8 @@ export class World {
     if (rock) this.batch('#a29a87', rock, 'rock');
   }
 
-  private makeTerrain() {
+  private *makeTerrain(): Generator<string, void> {
+    yield 'Shaping the terrain…';
     const terrain = new THREE.PlaneGeometry(
       1700,
       1500,
@@ -1073,6 +1132,7 @@ export class World {
       gardenBanks,
       ...streetBeds,
     ]) {
+      yield 'Shaping the terrain…';
       const positions = surface.attributes.position;
       const colors = [];
       for (let i = 0; i < positions.count; i++) {
@@ -1113,7 +1173,7 @@ export class World {
       if (rock) {
         worldUVs(rock, 'rock');
         const rocky = new THREE.Mesh(
-          rock,
+          compactGeometry(rock, this.mobile),
           this.surfaceMaterials.get('rock', '#a29a87'),
         );
         rocky.receiveShadow = true;
@@ -1121,6 +1181,7 @@ export class World {
         this.scene.add(rocky);
         this.blockers.push(rocky);
       }
+      mesh.geometry = compactGeometry(surface, this.mobile);
       this.scene.add(mesh);
       mesh.receiveShadow = true;
       this.blockers.push(mesh);
@@ -1142,11 +1203,13 @@ export class World {
     this.scene.add(river);
   }
 
-  private makeFeatures() {
+  private *makeFeatures(): Generator<string, void> {
     makePassages(this.batch.bind(this));
     makeApproach(this.batch.bind(this));
     makePanoramaLookouts(this.batch.bind(this));
+    let completed = 0;
     for (const feature of features) {
+      if (completed++ % 16 === 0) yield 'Building the landscape…';
       const { tags, points } = feature;
       if (points.length < 4) continue;
       if (
@@ -1180,6 +1243,7 @@ export class World {
     }
     const rotunda = buildings.find((feature) => feature.id === 560209917);
     for (const feature of [...buildings, ...parts]) {
+      if (completed++ % 16 === 0) yield 'Reconstructing the buildings…';
       if (feature.id === 459551122) continue;
       if (feature.id === 49811196) continue;
       if (riversideGallery.portalBuildingIds.has(feature.id)) continue;
@@ -1251,8 +1315,9 @@ export class World {
           });
       } else this.makeBuilding(feature);
     }
-    this.makePaving();
+    yield* this.makePaving();
     for (const feature of walls) {
+      if (completed++ % 16 === 0) yield 'Restoring the fortress walls…';
       if (cemeteryArcadeWallIds.has(feature.id)) continue;
       if (gardenLatticeWallIds.has(feature.id)) {
         makeStulcovaGardenWall(feature.points, this.batch.bind(this));
@@ -1364,7 +1429,8 @@ export class World {
     }
   }
 
-  private makePaving() {
+  private *makePaving(): Generator<string, void> {
+    yield 'Connecting streets and sidewalks…';
     const group = new THREE.Group();
     group.name = 'Paving';
     const batches = new Map<
@@ -1375,18 +1441,20 @@ export class World {
       }
     >();
     for (const surface of pavingSurfaces([...paths, upperPromenadePaving])) {
+      yield 'Connecting streets and sidewalks…';
       const geometry = pavingGeometry(surface);
       if (!geometry.attributes.position.count) {
         geometry.dispose();
         continue;
       }
       worldUVs(geometry, surface.style.kind);
+      const compact = compactGeometry(geometry, this.mobile);
       const key = surface.style.kind;
       const batch = batches.get(key) ?? {
         style: surface.style,
         geometries: [],
       };
-      batch.geometries.push(geometry);
+      batch.geometries.push(compact);
       batches.set(key, batch);
     }
     for (const { style, geometries } of batches.values()) {
@@ -1688,6 +1756,17 @@ export class World {
   }
 
   private makeMeadow() {
+    const paving = [
+      citadela.courtyard,
+      informationCentre.apron,
+      informationCentre.sidewalk,
+      cemeteryLabyrinth.courtyard,
+      ...leopoldSidewalks.polygons,
+      ...leopoldInteriorPaving.polygons,
+      ...panoramaDecks.map((deck) => deck.points),
+      ...aveMariaCourtCuts,
+    ];
+    paving.forEach(indexPolygon);
     const footprint = (feature: Feature) => ({
       feature,
       minX: Math.min(...feature.points.map(([x]) => x)),
@@ -1727,8 +1806,9 @@ export class World {
       };
     });
     const points: Point[] = [];
-    for (let x = -290; x < 210; x += 2.1)
-      for (let z = -200; z < 320; z += 2.1) {
+    const spacing = this.mobile ? 4.2 : 2.1;
+    for (let x = -290; x < 210; x += spacing)
+      for (let z = -200; z < 320; z += spacing) {
         const noise = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453;
         const jitter = noise - Math.floor(noise);
         const point: Point = [
@@ -1742,16 +1822,7 @@ export class World {
               !patch.feature.holes.some((hole) => inside(point, hole)),
           ) ||
           excluded.some((area) => contains(point, area)) ||
-          [
-            citadela.courtyard,
-            informationCentre.apron,
-            informationCentre.sidewalk,
-            cemeteryLabyrinth.courtyard,
-            ...leopoldSidewalks.polygons,
-            ...leopoldInteriorPaving.polygons,
-          ].some((paving) => inside(point, paving)) ||
-          panoramaDecks.some((deck) => inside(point, deck.points)) ||
-          aveMariaCourtCuts.some((cut) => inside(point, cut)) ||
+          paving.some((polygon) => inside(point, polygon)) ||
           retainedStreetSection(point) ||
           exposedRocks.some((rock) => inside(point, rock.points)) ||
           routes.some(
@@ -2102,7 +2173,7 @@ export class World {
         .filter((note) => ids.includes(note.id))
         .map((note) => note.id),
     );
-    for (const [id, marker] of this.casemates.markers)
+    for (const [id, marker] of this.casemates?.markers ?? [])
       marker.visible = !this.foundCasemateNotes.has(id);
   }
   setFlying(flying: boolean) {
@@ -2623,15 +2694,31 @@ export class World {
     this.enterInterior('cathedral');
   }
   private get activeInterior() {
-    return this.indoorReturn?.kind === 'casemates'
-      ? this.casemates
-      : this.indoorReturn?.kind === 'artillery'
-        ? this.artillery
-        : this.indoorReturn?.kind === 'rotunda' ||
-            this.indoorReturn?.kind === 'lawrence' ||
-            this.indoorReturn?.kind === 'john'
-          ? this.chapels[this.indoorReturn.kind]
-          : this.interior;
+    return this.getInterior(this.indoorReturn?.kind ?? 'cathedral');
+  }
+  private getInterior(
+    kind: 'cathedral' | 'casemates' | 'artillery' | ChapelKind,
+  ) {
+    if (kind === 'cathedral')
+      return (this.interior ??= this.prepareInterior(
+        makeCathedralInterior(this.surfaceMaterials),
+      ));
+    if (kind === 'artillery')
+      return (this.artillery ??= this.prepareInterior(
+        makeCasemateInterior(this.surfaceMaterials, true),
+      ));
+    if (kind === 'casemates') {
+      if (!this.casemates) {
+        this.casemates = this.prepareInterior(
+          makeCasemateInterior(this.surfaceMaterials),
+        );
+        this.setCasemateNotes([...this.foundCasemateNotes]);
+      }
+      return this.casemates;
+    }
+    return (this.chapels[kind] ??= this.prepareInterior(
+      makeChapelInterior(kind, this.surfaceMaterials),
+    ));
   }
   private interiorBlocked(point: Point) {
     return this.indoorReturn?.kind === 'casemates'
@@ -2651,6 +2738,7 @@ export class World {
     kind: 'cathedral' | 'casemates' | 'artillery' | ChapelKind,
     uphill = false,
   ) {
+    const interior = this.getInterior(kind);
     this.indoorReturn = {
       kind,
       position: this.position.clone(),
@@ -2662,13 +2750,13 @@ export class World {
     for (const child of this.scene.children)
       if (
         child !== this.avatar &&
-        child !== this.activeInterior.group &&
+        child !== interior.group &&
         !(child instanceof THREE.Light)
       ) {
         this.exteriorVisibility.set(child, child.visible);
         child.visible = false;
       }
-    this.activeInterior.group.visible = true;
+    interior.group.visible = true;
     this.applyDaylight();
     this.position.set(
       uphill ? 38 : 0,
@@ -3821,9 +3909,9 @@ export class World {
 
   dispose() {
     this.disposed = true;
-    this.audio.dispose();
+    this.audio?.dispose();
     cancelAnimationFrame(this.frame);
-    this.observer.disconnect();
+    this.observer?.disconnect();
     window.removeEventListener('keydown', this.keyDown);
     window.removeEventListener('keyup', this.keyUp);
     window.removeEventListener('blur', this.clearInput);
@@ -3834,7 +3922,7 @@ export class World {
     this.host.removeEventListener('pointercancel', this.pointerUp);
     this.host.removeEventListener('lostpointercapture', this.pointerLost);
     this.host.removeEventListener('wheel', this.wheel);
-    this.renderer.domElement.removeEventListener(
+    this.renderer?.domElement.removeEventListener(
       'webglcontextlost',
       this.contextLost,
     );
@@ -3848,14 +3936,17 @@ export class World {
         materials.forEach((material) => material.dispose());
       }
     });
-    this.renderer.dispose();
+    for (const batch of this.batches.values())
+      batch.geometries.forEach((geometry) => geometry.dispose());
+    this.batches.clear();
+    this.renderer?.dispose();
     this.surfaceMaterials.dispose();
-    this.site.dispose();
-    this.referenceLabels.dispose();
-    this.interior.dispose();
+    this.site?.dispose();
+    this.referenceLabels?.dispose();
+    this.interior?.dispose();
     this.stoneGeometry.dispose();
     this.contactShadow?.material.map?.dispose();
-    this.renderer.forceContextLoss();
-    this.renderer.domElement.remove();
+    this.renderer?.forceContextLoss();
+    this.renderer?.domElement.remove();
   }
 }

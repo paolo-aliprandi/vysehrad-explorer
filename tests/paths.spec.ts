@@ -43,6 +43,19 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   expect(
     await inspect('return w.scene.getObjectByName("Paving").children.length;'),
   ).toBe(2);
+  expect(
+    await inspect(`
+    return {
+      antialias:w.renderer.getContext().getContextAttributes().antialias,
+      shadows:w.renderer.shadowMap.enabled,
+      interiors:[!!w.interior,!!w.casemates,!!w.artillery,Object.keys(w.chapels).length],
+    };
+  `),
+  ).toEqual({
+    antialias: true,
+    shadows: true,
+    interiors: [false, false, false, 0],
+  });
   const sanatorium = await inspect(`
     const {riversideSanatorium:site}=await import('/src/world/riverside-sanatorium.ts');
     const g=await import('/src/world/geo.ts');

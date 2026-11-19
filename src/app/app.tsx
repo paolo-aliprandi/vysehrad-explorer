@@ -347,6 +347,9 @@ export function App() {
   const host = useRef<HTMLDivElement>(null);
   const world = useRef<World | null>(null);
   const [ready, setReady] = useState(false);
+  const [loadingStage, setLoadingStage] = useState(
+    'Assembling your little world…',
+  );
   const [error, setError] = useState('');
   const [started, setStarted] = useState(false);
   const [flying, setFlying] = useState(false);
@@ -446,18 +449,30 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
+    const loading = new AbortController();
     let instance: World | undefined;
     import('../world/engine')
-      .then(({ World }) => {
+      .then(async ({ World }) => {
         if (cancelled || !host.current) return;
         try {
-          instance = new World(host.current, {
-            onUpdate: setSnapshot,
-            onDiscover,
-            onCasemateNote,
-            onError: setError,
-            onMessage: setToast,
-          });
+          instance = await World.create(
+            host.current,
+            {
+              onUpdate: setSnapshot,
+              onDiscover,
+              onCasemateNote,
+              onError: setError,
+              onMessage: setToast,
+              onProgress: (message) => {
+                if (!cancelled) setLoadingStage(message);
+              },
+            },
+            loading.signal,
+          );
+          if (cancelled) {
+            instance.dispose();
+            return;
+          }
           world.current = instance;
           setReady(true);
           try {
@@ -468,6 +483,7 @@ export function App() {
             setUndergroundNotes(notes);
             instance.setCasemateNotes(notes);
           } catch (cause) {
+            if (cancelled) return;
             console.warn('Could not read discovery progress:', cause);
             setStorageWarning(
               'Saved progress could not be read. Discoveries will work for this visit.',
@@ -490,6 +506,7 @@ export function App() {
       });
     return () => {
       cancelled = true;
+      loading.abort();
       instance?.dispose();
       world.current = null;
     };
@@ -821,16 +838,21 @@ export function App() {
       {!started && (
         <div className="welcome-aerials" aria-hidden="true">
           {welcomeAerials.map((view, index) => (
-            <img
-              key={view}
-              src={`${baseUrl}images/welcome-${view}.jpg`}
-              srcSet={`${baseUrl}images/welcome-${view}.jpg 1200w, ${baseUrl}images/welcome-${view}-large.jpg 3840w`}
-              sizes="100vw"
-              alt=""
-              width="1200"
-              height="750"
-              fetchPriority={index === 0 ? 'high' : 'low'}
-            />
+            <picture key={view}>
+              <source
+                media="(max-width: 800px)"
+                srcSet={`${baseUrl}images/welcome-${view}.jpg`}
+              />
+              <img
+                src={`${baseUrl}images/welcome-${view}.jpg`}
+                srcSet={`${baseUrl}images/welcome-${view}.jpg 1200w, ${baseUrl}images/welcome-${view}-large.jpg 3840w`}
+                sizes="100vw"
+                alt=""
+                width="1200"
+                height="750"
+                fetchPriority={index === 0 ? 'high' : 'low'}
+              />
+            </picture>
           ))}
         </div>
       )}
@@ -1068,7 +1090,7 @@ export function App() {
               disabled={!ready}
               onClick={start}
             >
-              {ready ? 'Enter Vyšehrad' : 'Assembling your little world…'}
+              {ready ? 'Enter Vyšehrad' : loadingStage}
               <Icon name="arrow" />
             </button>
             <span className="entry-footnote">

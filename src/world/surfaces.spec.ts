@@ -41,6 +41,32 @@ import {
 import { makeCemeteryArcade } from './architecture';
 
 describe('connected world surfaces', () => {
+  it('keeps construction-height queries on the original floor when excavation replaces rendered positions', () => {
+    const terrain = retainedStreetTerrain();
+    const positions = terrain.geometries[0].attributes.position;
+    const point: Point = [
+      (positions.getX(0) + positions.getX(1) + positions.getX(2)) / 3,
+      (positions.getZ(0) + positions.getZ(1) + positions.getZ(2)) / 3,
+    ];
+    const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(point[0], 200, point[1]),
+      new THREE.Vector3(0, -1, 0),
+    );
+    const expected = ray.intersectObjects(
+      terrain.geometries.map((geometry) => new THREE.Mesh(geometry, material)),
+    )[0].point.y;
+    for (const geometry of terrain.geometries)
+      geometry.setAttribute(
+        'position',
+        geometry.attributes.position
+          .clone()
+          .applyMatrix4(new THREE.Matrix4().makeTranslation(0, 20, 0)),
+      );
+    expect(terrain.heightAt(point)).toBeCloseTo(expected, 6);
+    terrain.geometries.forEach((geometry) => geometry.dispose());
+    material.dispose();
+  });
   it('seals the raised bank beside Ave Maria without closing the stair opening', () => {
     const terrain = retainedStreetTerrain();
     const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });

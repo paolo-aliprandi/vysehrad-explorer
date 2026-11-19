@@ -1,6 +1,8 @@
 import dataset from '../data/world.json';
 import terrain from '../data/terrain.json';
 import polygonClipping, { type Pair, type Polygon } from 'polygon-clipping';
+import { inside, indexPolygon } from './polygon';
+export { inside } from './polygon';
 
 export type Point = readonly [number, number];
 export type Feature = {
@@ -265,20 +267,6 @@ export function center(points: readonly Point[]): Point {
     ring.reduce((sum, p) => sum + p[0], 0) / ring.length,
     ring.reduce((sum, p) => sum + p[1], 0) / ring.length,
   ];
-}
-
-export function inside(point: Point, polygon: readonly Point[]): boolean {
-  let result = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, zi] = polygon[i];
-    const [xj, zj] = polygon[j];
-    const aboveI = zi > point[1];
-    const aboveJ = zj > point[1];
-    const crosses = aboveI !== aboveJ;
-    if (crosses && point[0] < ((xj - xi) * (point[1] - zi)) / (zj - zi) + xi)
-      result = !result;
-  }
-  return result;
 }
 
 export function segmentDistance(p: Point, a: Point, b: Point): number {
@@ -685,6 +673,9 @@ walls.push({
 const chapelRearFence = walls.find((wall) => wall.id === 644962722);
 if (!chapelRearFence) throw new Error('Missing rear chapel garden fence.');
 chapelRearFence.points = [chapelRearFence.points[0], aveMariaPoint(-6.5, -8.8)];
+// Survey coordinates are now fixed; index immutable rings for repeated terrain queries.
+for (const feature of features)
+  for (const ring of [feature.points, ...feature.holes]) indexPolygon(ring);
 export const casemateEntrance = (() => {
   const wall = walls.find((feature) => feature.id === 377578901);
   if (!wall) throw new Error('The surveyed casemate entrance wall is missing.');
@@ -1820,6 +1811,7 @@ export const courtBankBounds = {
     ) * 5,
 };
 export const courtBankBoundary = rampartBoundary;
+indexPolygon(courtBankBoundary);
 const rockPoints = exposedRocks.flatMap((rock) => rock.points);
 if (!rockPoints.length)
   throw new Error('The mapped riverside bare-rock area is missing.');
@@ -1949,14 +1941,12 @@ export function projectRoute(point: Point, points: readonly Point[]) {
         ((point[0] - a[0]) * dx + (point[1] - a[1]) * dz) / (length * length),
       ),
     );
-    const candidate: Point = [a[0] + dx * t, a[1] + dz * t];
-    const separation = Math.hypot(
-      point[0] - candidate[0],
-      point[1] - candidate[1],
-    );
+    const x = a[0] + dx * t,
+      z = a[1] + dz * t;
+    const separation = (point[0] - x) ** 2 + (point[1] - z) ** 2;
     if (separation < distance) {
       distance = separation;
-      projected = candidate;
+      projected = [x, z];
       nearestAlong = along + length * t;
       segment = i - 1;
       fraction = t;
@@ -1965,7 +1955,7 @@ export function projectRoute(point: Point, points: readonly Point[]) {
     along += length;
   }
   return {
-    distance,
+    distance: Math.sqrt(distance),
     point: projected,
     along: nearestAlong,
     length: along,
@@ -5897,8 +5887,8 @@ export function wallOpening(
     ((!coverAt(point) || height < upperElevation(...point) - 0.8) &&
       gateNodes.some(
         (p) =>
-          !inside(p, taborGateNodeExclusion) &&
-          Math.hypot(p[0] - point[0], p[1] - point[1]) < 1.7,
+          Math.hypot(p[0] - point[0], p[1] - point[1]) < 1.7 &&
+          !inside(p, taborGateNodeExclusion),
       ))
   );
 }
