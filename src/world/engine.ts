@@ -8,6 +8,10 @@ import {
 } from './kiosks';
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 import { makePragueSkyline } from './skyline';
+import {
+  makeRiversideSanatorium,
+  riversideSanatorium,
+} from './riverside-sanatorium';
 import { makeDrone } from './drone';
 import { treeTrunkGeometry, treeCrownGeometry } from './trees';
 import {
@@ -1200,6 +1204,14 @@ export class World {
         this.makeBuilding(feature);
         continue;
       }
+      if (feature.id === riversideSanatorium.building.id) {
+        makeRiversideSanatorium(this.batch.bind(this), roof);
+        continue;
+      }
+      if (
+        riversideSanatorium.cupolas.some((cupola) => cupola.id === feature.id)
+      )
+        continue;
       const children = feature.tags.building
         ? parts.filter((p) => buildingContainsPart(feature, p))
         : [];

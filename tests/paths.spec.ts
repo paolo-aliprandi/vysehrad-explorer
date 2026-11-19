@@ -43,6 +43,39 @@ test('renders coherent paving at Charles IV, the rotunda street and ramparts, pr
   expect(
     await inspect('return w.scene.getObjectByName("Paving").children.length;'),
   ).toBe(2);
+  const sanatorium = await inspect(`
+    const {riversideSanatorium:site}=await import('/src/world/riverside-sanatorium.ts');
+    const g=await import('/src/world/geo.ts');
+    w.scene.updateMatrixWorld(true);
+    const meshes=w.scene.children.filter(mesh=>mesh.isMesh&&!mesh.isInstancedMesh);
+    const cast=(point,direction,far=80)=>{
+      w.raycaster.set(w.position.clone().set(...point).multiplyScalar(1.5),w.position.clone().set(...direction));
+      w.raycaster.far=far*1.5;
+      const hit=w.raycaster.intersectObjects(meshes,false)[0];
+      return {color:hit?.object.material.color.getHexString(),height:hit?.point.y/1.5};
+    };
+    const down=point=>cast([point[0],80,point[1]],[0,-1,0]);
+    const window=site.windows.find(window=>window.point[0]<-140&&window.normal[1]>.9);
+    const annex=g.buildings.find(building=>building.id===494921183);
+    return {
+      roofs:[[-150,240],[-125,240],[-100,245],[-78,280],[-58,284],[-30,292]].map(down),
+      cupolas:site.cupolas.map(c=>down([c.point[0]+c.radius*.6,c.point[1]])),
+      courtyards:[[-100,230],[-100,265]].map(down),
+      window:cast([window.point[0]+window.normal[0]*2+window.normal[1]*.25,site.ground+6.9,window.point[1]+window.normal[1]*2-window.normal[0]*.25],[-window.normal[0],0,-window.normal[1]],3),
+      annex:down(g.center(annex.points)),
+      annexTop:g.foundation(annex)+12.4,
+      eaves:site.eaves,
+    };
+  `);
+  for (const roof of sanatorium.roofs) expect(roof.color).toBe('934a39');
+  for (const cupola of sanatorium.cupolas) {
+    expect(cupola.color).toBe('77a58e');
+    expect(cupola.height).toBeGreaterThan(sanatorium.eaves + 5);
+  }
+  for (const courtyard of sanatorium.courtyards)
+    expect(['934a39', '77a58e']).not.toContain(courtyard.color);
+  expect(sanatorium.window.color).toBe('4e656d');
+  expect(sanatorium.annex.height).toBeCloseTo(sanatorium.annexTop, 2);
   const photoFixes = await inspect(`
     const g=await import('/src/world/geo.ts'),site=g.gardenHeraldry,lab=g.cemeteryLabyrinth;
     w.scene.updateMatrixWorld(true);

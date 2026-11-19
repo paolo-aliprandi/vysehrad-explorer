@@ -777,7 +777,7 @@ function archWindow(
   }
 }
 
-function rectangularWindow(
+export function rectangularWindow(
   add: AddGeometry,
   point: Point,
   y: number,
@@ -1148,7 +1148,7 @@ export function decorateBuilding(
     (frontage) => frontage.building.id === feature.id,
   );
   const front = (z: number) => buildingFront(feature, z);
-  let remaining = church ? 60 : 24;
+  let remaining = church ? 60 : feature.id === 494921183 ? 80 : 24;
   const faces = ring.slice(1).map((b, index) => [ring[index], b] as const);
   if (entrance)
     faces.sort(

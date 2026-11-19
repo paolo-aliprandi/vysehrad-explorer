@@ -2088,7 +2088,10 @@ export function foundation(feature: Feature): number {
         buildingContainsPart(platform.feature, feature)),
   );
   if (!parent) return rawElevation(...p);
-  if (cemeteryArcades.some((arcade) => arcade.feature.id === parent.feature.id))
+  if (
+    [28811361, 494921183].includes(parent.feature.id) ||
+    cemeteryArcades.some((arcade) => arcade.feature.id === parent.feature.id)
+  )
     return parent.level;
   const cached = supportedFoundations.get(parent.feature.id);
   if (cached !== undefined) return cached;
